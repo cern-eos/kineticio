@@ -196,10 +196,8 @@ private:
   };
 
   //----------------------------------------------------------------------------
-  //! LRU cache for KineticChunks with background flushing. Obtains chunks
-  //! from the drive automatically if not cached. Flushes chunks in the
-  //! background if requested. Is not threadsafe (KineticFileIo is called single
-  //! threaded...).
+  //! Simple LRU cache for KineticChunks. Is not threadsafe. Will obtain chunks
+  //! that are not in cache automatically from the backend.
   //----------------------------------------------------------------------------
   class KineticChunkCache {
 
@@ -227,11 +225,6 @@ private:
     void clear();
 
     //--------------------------------------------------------------------------
-    //! Add chunk number to the todo list of the background thread.
-    //--------------------------------------------------------------------------
-    void requestFlush(int chunk_number);
-
-    //--------------------------------------------------------------------------
     //! Constructor.
     //!
     //! @param parent reference to the enclosing KineticFileIo object
@@ -243,12 +236,6 @@ private:
     //! Destructor.
     //--------------------------------------------------------------------------
     ~KineticChunkCache();
-
-private:
-    //--------------------------------------------------------------------------
-    //! Function executed by the background flushing thread....
-    //--------------------------------------------------------------------------
-    void background();
 
 private:
     //! reference to the enclosing KineticFileIo object
@@ -263,22 +250,6 @@ private:
     //! the cache... could increase performance a little bit using
     //! <ListIterator, KineticChunk> elements
     std::unordered_map<int, std::shared_ptr<KineticChunk>> cache;
-
-    //! contains all chunk numbers scheduled for a background flush
-    std::queue<int> background_queue;
-
-    //! signal when a new item was queued for background flush
-    std::condition_variable background_trigger;
-
-    //! thread safe access to background_queue
-    std::mutex background_mutex;
-
-    //! background thread loops until run is set to false
-    bool background_run;
-
-    //! background thread sets shutdown to true on exit, signaling that the
-    //! cache destructor can safely complete
-    bool background_shutdown;
   };
 
 private:
@@ -294,7 +265,7 @@ private:
   //! the full kinetic path of the form kinetic:clusterID:name
   std::string obj_path;
 
-  //! the base name for data chunks of this object s
+  //! the base name for data chunks of this object
   std::string chunk_basename;
 
 private:

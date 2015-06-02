@@ -12,15 +12,15 @@
 #include <functional>
 #include "kinetic/kinetic.h"
 
-/* TODO: Do not use kinetic::KineticStatus directly, as it can't represent
- * cluster error states.
+/* TODO: Do not use kinetic::kinetic::KineticStatus directly, as it can't
+ * represent cluster error states. Would also allow to decouple ClusterInterface
+ * from kinetic/kinetic.h
  * enum KeyOperationStatus{
  *   OK,
  *   VERSION_MISSMATCH,
  *   OFFLINE
  * };
  */
-
 //------------------------------------------------------------------------------
 //! Interface to a kinetic cluster. Can be a drive, a simulator, or or a
 //! whole cluster of either.
@@ -56,35 +56,35 @@ public:
   //----------------------------------------------------------------------------
   //! Get the value and version associated with the supplied key.
   //
-  //! @param key in: the key
-  //! @param value out: stores the value upon success, not modified on erro
-  //! @param version out: stores the version upon success, not modified on error
-  //! @param in: skip_value if true only update the version, do not request the
-  //!        value from the backend
+  //! @param key the key
+  //! @param skip_value doesn't request the value from the backend if set.
+  //! @param version stores the version upon success, not modified on error
+  //! @param value stores the value upon success, not modified on error
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus get(
-                  const std::shared_ptr<const std::string>& key,
-                  std::shared_ptr<const std::string>& version,
-                  std::shared_ptr<std::string>& value,
-                  bool skip_value) = 0;
+    const std::shared_ptr<const std::string>& key,
+    bool skip_value,
+    std::shared_ptr<const std::string>& value,
+    std::shared_ptr<const std::string>& version) = 0;
 
   //----------------------------------------------------------------------------
   //! Write the supplied key-value pair to the Kinetic cluster.
   //!
-  //! @param key in: the key
-  //! @param value in: value to store
-  //! @param version  in: existing version expected in the cluster
-  //!                 out: newly created version on success
-  //! @param force    if set to true, possibly existing version in the cluster
-  //!                 will be overwritten without check
+  //! @param key the key
+  //! @param version existing version expected in the cluster
+  //! @param value value to store
+  //! @param force if set, possibly existing version in the cluster will be
+  //!   overwritten without check
+  //! @param version_out stores cluster generated version, on_drive upon success
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus put(
-                    const std::shared_ptr<const std::string>& key,
-                    std::shared_ptr<const std::string>& version,
-                    const std::shared_ptr<const std::string>& value,
-                    bool force) = 0;
+    const std::shared_ptr<const std::string>& key,
+    const std::shared_ptr<const std::string>& version,
+    const std::shared_ptr<const std::string>& value,
+    bool force,
+    std::shared_ptr<const std::string>& version_out) = 0;
 
   //----------------------------------------------------------------------------
   //! Delete the key on the cluster.
@@ -96,9 +96,9 @@ public:
   //! @return status of operation
    //---------------------------------------------------------------------------
   virtual kinetic::KineticStatus remove(
-                     const std::shared_ptr<const std::string>& key,
-                     const std::shared_ptr<const std::string>& version,
-                     bool force) = 0;
+    const std::shared_ptr<const std::string>& key,
+    const std::shared_ptr<const std::string>& version,
+    bool force) = 0;
 
   //----------------------------------------------------------------------------
   //! Obtain keys in the supplied range [start,...,end]
@@ -113,10 +113,10 @@ public:
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus range(
-          const std::shared_ptr<const std::string>& start_keys,
-          const std::shared_ptr<const std::string>& end_key,
-          int maxRequested,
-          std::unique_ptr< std::vector<std::string> >& keys) = 0;
+    const std::shared_ptr<const std::string>& start_key,
+    const std::shared_ptr<const std::string>& end_key,
+    int maxRequested,
+    std::unique_ptr< std::vector<std::string> >& keys) = 0;
 
   //----------------------------------------------------------------------------
   //! Destructor.

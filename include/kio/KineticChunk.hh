@@ -59,8 +59,7 @@ public:
   void truncate(off_t offset);
 
   //--------------------------------------------------------------------------
-  //! Flush flushes all changes to the backend. Does not incur IO if chunk is
-  //! not dirty.
+  //! Flush flushes all changes to the backend.
   //--------------------------------------------------------------------------
   void flush();
 
@@ -86,7 +85,7 @@ public:
   //! @param key the name of the chunk
   //! @param skip_initial_get if true assume that the key does not yet exist
   //--------------------------------------------------------------------------
-  explicit KineticChunk(std::shared_ptr<KineticClusterInterface> cluster,
+  explicit KineticChunk(const std::shared_ptr<KineticClusterInterface>& cluster,
                         const std::shared_ptr<const std::string> key,
                         bool skip_initial_get=false);
   ~KineticChunk();
@@ -109,7 +108,7 @@ private:
 
 private:
   //! cluster this chunk is (to be) stored on
-  const std::shared_ptr<KineticClusterInterface> cluster;
+  const std::shared_ptr<KineticClusterInterface>& cluster;
 
   //! the key of the chunk
   const std::shared_ptr<const std::string> key;
@@ -128,7 +127,7 @@ private:
   std::list<std::pair<off_t, size_t> > updates;
 
   //! thread-safety
-  std::recursive_mutex mutex;
+  mutable std::mutex mutex;
 };
 
 #endif

@@ -15,21 +15,23 @@ public:
   const kinetic::Limits& limits();
   //! See documentation in superclass.
   kinetic::KineticStatus get(const std::shared_ptr<const std::string>& key,
+      bool skip_value,
       std::shared_ptr<const std::string>& version,
-      std::shared_ptr<std::string>& value,
-      bool skip_value);
+      std::shared_ptr<const std::string>& value);
   //! See documentation in superclass.
-  kinetic::KineticStatus put(const std::shared_ptr<const std::string>& key,
-      std::shared_ptr<const std::string>& version,
-      const std::shared_ptr<const std::string>& value,
-      bool force);
-  //! See documentation in superclass.
+  kinetic::KineticStatus  put(
+    const std::shared_ptr<const std::string>& key,
+    const std::shared_ptr<const std::string>& version,
+    const std::shared_ptr<const std::string>& value,
+    bool force,
+    std::shared_ptr<const std::string>& version_out);
+   //! See documentation in superclass.
   kinetic::KineticStatus remove(const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
       bool force);
   //! See documentation in superclass.
   kinetic::KineticStatus range(
-      const std::shared_ptr<const std::string>& start_keys,
+      const std::shared_ptr<const std::string>& start_key,
       const std::shared_ptr<const std::string>& end_key,
       int maxRequested,
       std::unique_ptr< std::vector<std::string> >& keys);
@@ -39,7 +41,7 @@ public:
   //!
   //! @param connection_info host / port / key of target kinetic drive
   //--------------------------------------------------------------------------
-  explicit KineticSingletonCluster(const kinetic::ConnectionOptions &connection_info);
+  explicit KineticSingletonCluster(const kinetic::ConnectionOptions &con_info);
 
   //--------------------------------------------------------------------------
   //! Destructor.

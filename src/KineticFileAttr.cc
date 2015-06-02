@@ -1,10 +1,4 @@
 #include "KineticFileAttr.hh"
-
-#define eos_debug //printf
-#define eos_info //printf
-#define eos_warning //printf
-#define eos_err //printf
-
 #include "KineticClusterMap.hh"
 #include "PathUtil.hh"
 
@@ -29,15 +23,16 @@ bool KineticFileAttr::Get(const char* name, char* content, size_t& size)
   if(!cluster){
       return false;
   }
-  shared_ptr<const string> key(new string(path+"_attr_"+name));
-  shared_ptr<const string> version(new string());
-  shared_ptr<string> value(new string());
-  KineticStatus status = cluster->get(key, version, value, false);
+  shared_ptr<const string> version;
+  shared_ptr<const string> value;
+  auto status = cluster->get(
+          make_shared<const string>(path+"_attr_"+name),
+          false, version, value);
 
   /* Requested attribute doesn't exist or there was connection problem. */
   if(!status.ok())
       return false;
- 
+
   if(size > value->size())
     size = value->size();
   value->copy(content, size, 0);
@@ -58,11 +53,10 @@ bool KineticFileAttr::Set(const char * name, const char * content, size_t size)
   if(!cluster)
     return false;
 
-  shared_ptr<const string> key(new string(path+"_attr_"+name));
-  shared_ptr<const string> version(new string());
-  shared_ptr<string> value(new string(content, size));
-
-  KineticStatus status = cluster->put(key, version, value, true);
+  auto empty = make_shared<const string>();
+  auto status = cluster->put(
+          make_shared<const string>(path+"_attr_"+name),
+          empty, make_shared<const string>(string(content,size)), true, empty);
   if(!status.ok())
     return false;
   return true;
@@ -77,14 +71,15 @@ bool KineticFileAttr::Set(std::string key, std::string value)
  * in static OpenAttr function. */
 KineticFileAttr* KineticFileAttr::OpenAttr (const char* path)
 {
-  auto c = cmap().getCluster(path_util::extractID(path)); 
+  auto cluster = cmap().getCluster(path_util::extractID(path));
 
-  shared_ptr<const string> version(new string());
-  shared_ptr<string> value(new string());
-  if(!c->get(make_shared<const string>(path), version, value, true).ok())
+  shared_ptr<const string> empty;
+  auto status = cluster->get(make_shared<const string>(path), true, empty, empty);
+
+  if(!status.ok())
     return 0;
 
-  return new KineticFileAttr(path, c);
+  return new KineticFileAttr(path, cluster);
 }
 
 KineticFileAttr* KineticFileAttr::OpenAttribute (const char* path)

@@ -6,19 +6,18 @@
 
 using std::unique_ptr;
 using std::shared_ptr;
+using std::make_shared;
 using std::string;
-using std::chrono::milliseconds;
 using std::chrono::system_clock;
-using std::chrono::duration_cast;
 using kinetic::KineticStatus;
 using kinetic::StatusCode;
 
 const int KineticChunk::expiration_time = 1000;
 
 
-KineticChunk::KineticChunk(std::shared_ptr<KineticClusterInterface> c,
+KineticChunk::KineticChunk(const std::shared_ptr<KineticClusterInterface>& c,
     const std::shared_ptr<const std::string> k, bool skip_initial_get) :
-        cluster(c), key(k), version(new string()), value(new string()),
+        cluster(c), key(k), version(), value(make_shared<string>()),
         timestamp(), updates()
 {
   if(skip_initial_get == false)
@@ -27,23 +26,28 @@ KineticChunk::KineticChunk(std::shared_ptr<KineticClusterInterface> c,
 
 KineticChunk::~KineticChunk()
 {
+  // take the mutex in order to prevent object deconsturction while flush 
+  // operation is executed by non-owning thread.
+  std::lock_guard<std::mutex> lock(mutex);
 }
 
 bool KineticChunk::validateVersion()
 {
   /* See if check is unnecessary based on expiration. */
-  if(duration_cast<milliseconds>(system_clock::now() - timestamp).count() < expiration_time)
+  if(std::chrono::duration_cast<std::chrono::milliseconds>(
+          system_clock::now() - timestamp).count()
+          < expiration_time)
     return true;
 
   /* Check remote version & compare it to in-memory version. */
   shared_ptr<const string> remote_version;
-  shared_ptr<string> remote_value;
-  KineticStatus status = cluster->get(key,remote_version,remote_value,true);
+  shared_ptr<const string> remote_value;
+  KineticStatus status = cluster->get(key, true, remote_version, remote_value);
 
    /*If no version is set, the entry has never been flushed. In this case,
      not finding an entry with that key in the cluster is expected. */
-  if( (version->empty() && status.statusCode() == StatusCode::REMOTE_NOT_FOUND) ||
-      (status.ok() && remote_version && *version == *remote_version)
+  if( (!version && status.statusCode() == StatusCode::REMOTE_NOT_FOUND) ||
+      (status.ok() && remote_version && version && *version == *remote_version)
     ){
       /* In memory version equals remote version. Remember the time. */
       timestamp = system_clock::now();
@@ -54,8 +58,8 @@ bool KineticChunk::validateVersion()
 
 void KineticChunk::getRemoteValue()
 {
-  std::shared_ptr<string> rv;
-  KineticStatus status = cluster->get(key, version, rv, false);
+  std::shared_ptr<const string> remote_value;
+  auto status = cluster->get(key, false, version, remote_value);
 
   if(!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
     throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
@@ -67,27 +71,27 @@ void KineticChunk::getRemoteValue()
 
   /* Merge all updates done on the local data copy (data) into the freshly
      read-in data copy. */
+  shared_ptr<string> merged_value;
   if(status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
-    rv.reset(new std::string());
-  else
-    rv->resize(std::max(rv->size(), value->size()));
+    merged_value = make_shared<string>();
+  else{
+    merged_value = make_shared<string>(*remote_value);
+    merged_value->resize(std::max(remote_value->size(), value->size()));
+  }
 
   for (auto iter = updates.begin(); iter != updates.end(); ++iter){
     auto update = *iter;
     if(update.second)
-      rv->replace(update.first, update.second, value->c_str(), update.first, update.second);
+      merged_value->replace(update.first, update.second, value->c_str(), update.first, update.second);
     else
-      rv->resize(update.first);
+      merged_value->resize(update.first);
   }
-
-  /* The remote value with the merged in changes represents the up-to-date value
-   * swap it in. */
-  std::swap(rv, value);
+  value = merged_value;
 }
 
 void KineticChunk::read(char* const buffer, off_t offset, size_t length)
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
+  std::lock_guard<std::mutex> lock(mutex);
 
   if(buffer==NULL || offset<0 || offset+length > cluster->limits().max_value_size)
     throw KineticException(EINVAL,__FUNCTION__,__FILE__,__LINE__, "Invalid argument");
@@ -108,7 +112,7 @@ void KineticChunk::read(char* const buffer, off_t offset, size_t length)
 
 void KineticChunk::write(const char* const buffer, off_t offset, size_t length)
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
+  std::lock_guard<std::mutex> lock(mutex);
 
   if(buffer==NULL || offset<0 || offset+length>cluster->limits().max_value_size)
     throw KineticException(EINVAL,__FUNCTION__,__FILE__,__LINE__, "Invalid argument");
@@ -123,7 +127,7 @@ void KineticChunk::write(const char* const buffer, off_t offset, size_t length)
 
 void KineticChunk::truncate(off_t offset)
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
+  std::lock_guard<std::mutex> lock(mutex);
 
   if(offset<0 || offset>cluster->limits().max_value_size)
     throw KineticException(EINVAL,__FUNCTION__,__FILE__,__LINE__, "Invalid argument");
@@ -134,16 +138,12 @@ void KineticChunk::truncate(off_t offset)
 
 void KineticChunk::flush()
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
+  std::lock_guard<std::mutex> lock(mutex);
 
-  /* only flush a chunk if it is dirty */
-  if(!dirty())
-    return;
-
-  KineticStatus status = cluster->put(key,version,value,false);
+  auto status = cluster->put(key,version,value,false,version);
   while(status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH){
     getRemoteValue();
-    status = cluster->put(key,version,value,false);
+    status = cluster->put(key,version,value,false,version);
   }
 
   if (!status.ok())
@@ -159,14 +159,15 @@ void KineticChunk::flush()
 
 bool KineticChunk::dirty() const
 {
-  if(version->empty())
+  std::lock_guard<std::mutex> lock(mutex);
+  if(!version)
     return true;
   return !updates.empty();
 }
 
 int KineticChunk::size()
 {
-  std::lock_guard<std::recursive_mutex> lock(mutex);
+  std::lock_guard<std::mutex> lock(mutex);
 
   /* Ensure size is not too stale. */
   if(!validateVersion())
