@@ -4,36 +4,57 @@
 #include "KineticClusterMap.hh"
 #include "KineticSingletonCluster.hh"
 #include "KineticException.hh"
+#include <stdio.h>
 
 
 /* Read file located at path into string buffer and return it. */
 static std::string readfile(const char* path)
 {
   std::ifstream file(path);
+  /* Unlimted buffer size so reading in large cluster files works. */
+  file.rdbuf()->pubsetbuf(0, 0);
   std::stringstream buffer;
   buffer << file.rdbuf();
   return buffer.str();
 }
-enum filetype{location,security};
 
+/* Printing errors initializing static global object to stderr.*/
 KineticClusterMap::KineticClusterMap()
 {
   /* get file names */
   const char* location = getenv("KINETIC_DRIVE_LOCATION");
-  const char* security = getenv("KINETIC_DRIVE_SECURITY");
-  if(!location || !security)
+  if(!location){
+    fprintf(stderr,"KINETIC_DRIVE_LOCATION not set.\n");
     return;
+  }
+  const char* security = getenv("KINETIC_DRIVE_SECURITY");
+  if(!security){
+    fprintf(stderr,"KINETIC_DRIVE_SECURITY not set.\n");
+    return;
+  }
 
   /* get file contents */
   std::string location_data = readfile(location);
-  std::string security_data = readfile(security);
-  if(location_data.empty() || security_data.empty())
+  if(location_data.empty()){
+    fprintf(stderr,"File '%s' could not be read in.\n",location);
     return;
+  }
+
+  std::string security_data = readfile(security);
+  if(security_data.empty()){
+    fprintf(stderr,"File '%s' could not be read in.\n",security);
+    return;
+  }
 
   /* parse files */
-  if(parseJson(location_data, filetype::location) ||
-    parseJson(security_data, filetype::security) )
-    map.clear();
+  if(parseJson(location_data, filetype::location)){
+    fprintf(stderr,"Error while parsing location json file '%s\n",location);
+    return;
+  }
+  if(parseJson(security_data, filetype::security)){
+    fprintf(stderr,"Error while parsing security json file '%s\n",security);
+    return;
+  }
 }
 
 KineticClusterMap::~KineticClusterMap()
@@ -59,15 +80,6 @@ int KineticClusterMap::getSize()
   return map.size();
 }
 
-int KineticClusterMap::getJsonEntry(json_object* parent, json_object*& entry,
-        const char* name)
-{
-  entry = json_object_object_get(parent, name);
-  if(!entry)
-    return -EINVAL;
-  return 0;
-}
-
 int KineticClusterMap::parseDriveInfo(struct json_object * drive)
 {
   struct json_object *tmp = NULL;
@@ -75,21 +87,20 @@ int KineticClusterMap::parseDriveInfo(struct json_object * drive)
   /* We could go with wwn instead of serial number. Chosen SN since it is also
    * unique and is both shorter and contains no spaces (eos does not like spaces
    * in the path name). */
-  if(int err = getJsonEntry(drive,tmp,"serialNumber"))
-    return err;
+  if(!json_object_object_get_ex(drive, "serialNumber", &tmp))
+    return -EINVAL;
   std::string id = json_object_get_string(tmp);
 
-  if(int err = getJsonEntry(drive,tmp,"inet4"))
-    return err;
+  if(!json_object_object_get_ex(drive, "inet4", &tmp))
+    return -EINVAL;
   tmp = json_object_array_get_idx(tmp, 0);
   ki.connection_options.host = json_object_get_string(tmp);
 
-  if(int err = getJsonEntry(drive,tmp,"port"))
-    return err;
+  if(!json_object_object_get_ex(drive, "port", &tmp))
+    return -EINVAL;
   ki.connection_options.port = json_object_get_int(tmp);
 
   ki.connection_options.use_ssl = false;
-
   map.insert(std::make_pair(id, ki));
   return 0;
 }
@@ -97,11 +108,8 @@ int KineticClusterMap::parseDriveInfo(struct json_object * drive)
 int KineticClusterMap::parseDriveSecurity(struct json_object * drive)
 {
   struct json_object *tmp = NULL;
-  /* We could go with wwn instead of serial number. Chosen SN since it is also
-   * unique and is both shorter and contains no spaces (eos does not like spaces
-   * in the path name). */
-  if(int err = getJsonEntry(drive,tmp,"serialNumber"))
-      return err;
+  if(!json_object_object_get_ex(drive, "serialNumber", &tmp))
+    return -EINVAL;
   std::string id = json_object_get_string(tmp);
 
   /* Require that drive info has been scanned already.*/
@@ -110,19 +118,19 @@ int KineticClusterMap::parseDriveSecurity(struct json_object * drive)
 
   KineticClusterInfo & ki = map.at(id);
 
-  if(int err = getJsonEntry(drive,tmp,"userId"))
-    return err;
+  if(!json_object_object_get_ex(drive, "userId", &tmp))
+    return -EINVAL;
   ki.connection_options.user_id = json_object_get_int(tmp);
 
-  if(int err = getJsonEntry(drive,tmp,"key"))
-    return err;
+  if(!json_object_object_get_ex(drive, "key", &tmp))
+    return -EINVAL;
   ki.connection_options.hmac_key = json_object_get_string(tmp);
 
   return 0;
 }
 
 
-int KineticClusterMap::parseJson(const std::string& filedata, const int type)
+int KineticClusterMap::parseJson(const std::string& filedata, filetype type)
 {
   struct json_object *root = json_tokener_parse(filedata.c_str());
   if(!root)
@@ -130,11 +138,13 @@ int KineticClusterMap::parseJson(const std::string& filedata, const int type)
 
   struct json_object *d = NULL;
   struct json_object *dlist = NULL;
-  int err = getJsonEntry(root, dlist,
-          type == filetype::location ? "location" : "security");
-  if( err) return err;
+
+  if(!json_object_object_get_ex(root,
+          type == filetype::location ? "location" : "security", &dlist))
+    return -EINVAL;
 
   int num_drives = json_object_array_length(dlist);
+  int err = 0;
   for(int i=0; i<num_drives; i++){
     d = json_object_array_get_idx(dlist, i);
     if(type == filetype::location)

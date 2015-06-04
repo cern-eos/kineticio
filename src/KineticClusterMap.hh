@@ -51,17 +51,18 @@ public:
   ~KineticClusterMap();
 
 private:
+  enum class filetype{location,security};
   //--------------------------------------------------------------------------
-  //! Utility function to grab a specific json entry.
+  //! Parse the supplied json file.
   //!
-  //! @param parent the json object to search in
-  //! @param entry output
-  //! @param name the name of the entry to search for
-  //! @return 0 if successful, EINVAL if name entry not available
+  //! @param filedata contents of a json file
+  //! @param filetype specifies if filedata contains security or location
+  //!        information.
+  //! @return 0 if successful, EINVAL if drive description incomplete or
+  //!         incorrect json.
   //--------------------------------------------------------------------------
-  int getJsonEntry(struct json_object *parent, struct json_object *& entry,
-          const char * name);
-
+  int parseJson(const std::string & filedata, filetype type);
+  
   //--------------------------------------------------------------------------
   //! Creates a KineticDrive object in the drive map containing the ip and port
   //!
@@ -76,17 +77,6 @@ private:
   //! @return 0 if successful, EINVAL if drive description incomplete or
   //          incorrect json,  ENODEV if drive id does not exist in map.
   int parseDriveSecurity(struct json_object *drive);
-
-  //--------------------------------------------------------------------------
-  //! Parse the supplied json file.
-  //!
-  //! @param filedata contents of a json file
-  //! @param filetype specifies if filedata contains security or location
-  //!        information.
-  //! @return 0 if successful, EINVAL if drive description incomplete or
-  //!         incorrect json.
-  //--------------------------------------------------------------------------
-  int parseJson(const std::string & filedata, int filetype);
 
 private:
   //--------------------------------------------------------------------------
