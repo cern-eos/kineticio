@@ -20,8 +20,11 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
   REQUIRE(con->InstantErase("NULL").ok());
 
   GIVEN ("An empty chunk."){
-    std::shared_ptr<KineticClusterInterface> cluster(new KineticSingletonCluster(options));
-    REQUIRE(cluster->ok());
+
+    std::shared_ptr<KineticSingletonCluster> cluster = std::make_shared<KineticSingletonCluster>(options,
+            std::chrono::seconds(20),
+            std::chrono::seconds(5)
+    );
     KineticChunk c(cluster, std::make_shared<std::string>("key"));
 
     THEN("Illegal writes to the chunk fail."){
@@ -65,6 +68,8 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
           char out[] = "0123456789";
           char compare[10];
           memset(compare,0,10);
+
+          REQUIRE(cluster->limits().max_value_size > 0);
           REQUIRE_NOTHROW(c.read(out,0,10));
           REQUIRE(memcmp(compare,out,10) == 0);
         }

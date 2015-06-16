@@ -71,7 +71,11 @@ std::shared_ptr<KineticClusterInterface>  KineticClusterMap::getCluster(const st
 
   KineticClusterInfo & ki = map.at(id);
   if(!ki.cluster)
-    ki.cluster.reset(new KineticSingletonCluster(ki.connection_options));
+    ki.cluster = std::make_shared<KineticSingletonCluster>(
+        ki.connection_options,
+        std::chrono::seconds(20),
+        std::chrono::seconds(5)
+    );
   return ki.cluster;
 }
 
@@ -93,8 +97,8 @@ int KineticClusterMap::parseDriveInfo(struct json_object * drive)
 
   if(!json_object_object_get_ex(drive, "inet4", &tmp))
     return -EINVAL;
-  tmp = json_object_array_get_idx(tmp, 0);
-  ki.connection_options.host = json_object_get_string(tmp);
+  struct json_object *item = json_object_array_get_idx(tmp, 0);
+  ki.connection_options.host = json_object_get_string(item);
 
   if(!json_object_object_get_ex(drive, "port", &tmp))
     return -EINVAL;
@@ -125,7 +129,6 @@ int KineticClusterMap::parseDriveSecurity(struct json_object * drive)
   if(!json_object_object_get_ex(drive, "key", &tmp))
     return -EINVAL;
   ki.connection_options.hmac_key = json_object_get_string(tmp);
-
   return 0;
 }
 
@@ -134,14 +137,16 @@ int KineticClusterMap::parseJson(const std::string& filedata, filetype type)
 {
   struct json_object *root = json_tokener_parse(filedata.c_str());
   if(!root)
-      return -EINVAL;
+    return -EINVAL;
 
   struct json_object *d = NULL;
   struct json_object *dlist = NULL;
 
   if(!json_object_object_get_ex(root,
-          type == filetype::location ? "location" : "security", &dlist))
+        type == filetype::location ? "location" : "security", &dlist)){
+    json_object_put(root);
     return -EINVAL;
+  }
 
   int num_drives = json_object_array_length(dlist);
   int err = 0;
@@ -151,7 +156,8 @@ int KineticClusterMap::parseJson(const std::string& filedata, filetype type)
       err = parseDriveInfo(d);
     else if (type == filetype::security)
       err = parseDriveSecurity(d);
-    if(err) return err;
+    if(err) break;
   }
-  return 0;
+  json_object_put(root);
+  return err;
 }

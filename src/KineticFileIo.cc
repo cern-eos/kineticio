@@ -84,7 +84,10 @@ int64_t KineticFileIo::ReadWrite (long long off, char* buffer,
     if(mode == rw::WRITE){
       chunk->write(buffer+off_done, chunk_offset, chunk_length);
 
-      /* Flush chunk in background if writing to chunk capacity. */
+      /* Flush chunk in background if writing to chunk capacity. Do not worry
+       * about creating too many threads: There can never be more
+       * chunks in memory than the size of the chunk cache, which implicitly
+       * limits the number of threads that could be concurrently created here.*/
       if(chunk_offset + chunk_length == chunk_capacity)
         std::thread(&KineticChunk::flush, chunk).detach();
     }
@@ -209,8 +212,14 @@ void KineticFileIo::Statfs (const char* p, struct statfs* sfs)
     obj_path=p;
   }
 
-  long capacity = cluster->size().nominal_capacity_in_bytes;
-  long free     = capacity - (capacity * cluster->size().portion_full);
+  kinetic::Capacity cap;
+  auto status = cluster->size(cap);
+  if(!status.ok())
+     throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
+         "Could not obtain cluster size values.");
+    
+  long capacity = cap.nominal_capacity_in_bytes;
+  long free     = capacity - (capacity * cap.portion_full);
 
   /* Minimal allocated block size. Set to 4K because that's the
    * maximum accepted value by Linux. */

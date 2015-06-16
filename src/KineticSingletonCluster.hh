@@ -3,16 +3,15 @@
 
 #include "KineticClusterInterface.hh"
 #include <chrono>
+#include <mutex>
 
 /* Implementing the interface for a single drive. */
 class KineticSingletonCluster : public KineticClusterInterface {
 public:
   //! See documentation in superclass.
-  bool ok();
+  const kinetic::Limits& limits() const;
   //! See documentation in superclass.
-  kinetic::Capacity size();
-  //! See documentation in superclass.
-  const kinetic::Limits& limits();
+  kinetic::KineticStatus size(kinetic::Capacity& size);
   //! See documentation in superclass.
   kinetic::KineticStatus get(const std::shared_ptr<const std::string>& key,
       bool skip_value,
@@ -25,7 +24,7 @@ public:
     const std::shared_ptr<const std::string>& value,
     bool force,
     std::shared_ptr<const std::string>& version_out);
-   //! See documentation in superclass.
+  //! See documentation in superclass.
   kinetic::KineticStatus remove(const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
       bool force);
@@ -40,8 +39,13 @@ public:
   //! Constructor.
   //!
   //! @param connection_info host / port / key of target kinetic drive
+  //! @param min_reconnect_interval minimum time between reconnection attempts
+  //! @param min_getlog_interval minimum time between getlog attempts
   //--------------------------------------------------------------------------
-  explicit KineticSingletonCluster(const kinetic::ConnectionOptions &con_info);
+  explicit KineticSingletonCluster(
+    const kinetic::ConnectionOptions &con_info,
+    std::chrono::seconds min_reconnect_interval,
+    std::chrono::seconds min_getlog_interval);
 
   //--------------------------------------------------------------------------
   //! Destructor.
@@ -53,26 +57,52 @@ private:
   //! Attempt to build a connection to a kinetic drive using the connection
   //! information that has been supplied to the constructor.
   //--------------------------------------------------------------------------
-  kinetic::KineticStatus connect();
+  void connect();
+
+  //--------------------------------------------------------------------------
+  //! Attempt to get the log from the currently connected drive.
+  //--------------------------------------------------------------------------
+  kinetic::KineticStatus getLog();
+
+  //--------------------------------------------------------------------------
+  //! Execute the supplied operation, making sure the connection state is valid
+  //! before attempting to execute and, in case of failure, retry the operation.
+  //! This function can be thought as as a dispatcher.
+  //!
+  //! @param fun the operation that needs to be executed.
+  //! @return status of operation
+  //--------------------------------------------------------------------------
+  kinetic::KineticStatus execute(std::function<kinetic::KineticStatus(void)> fun);
 
 private:
-  //! information required to build a connection
-  kinetic::ConnectionOptions connection_info;
-
   //! connection to a kinetic target
   std::unique_ptr<kinetic::ThreadsafeBlockingKineticConnection> con;
 
-  //! limits (primarily to key/value/version buffer sizes) for this cluster
+  //! information required to build a connection
+  kinetic::ConnectionOptions connection_info;
+
+  //! concurrency control
+  std::mutex mutex;
+
+  //! cluster limits are constant over cluster lifetime, no need to get them
+  //! repeatedly with getlog.
   kinetic::Limits cluster_limits;
 
-  //! current size + capacity of the cluster
-  kinetic::Capacity cluster_size;
+  //! storing getlog information.
+  std::unique_ptr<kinetic::DriveLog> drive_log;
+  //! timestamp of the last attempt to update cluster size / capacity
+  std::chrono::system_clock::time_point getlog_timestamp;
+  //! minimum time between attempting to perform getlog operation
+  std::chrono::seconds getlog_ratelimit;
+  //! status of last attempt to update the drive log
+  kinetic::KineticStatus getlog_status;
 
-  //! time point when cluster_size was last verified to be correct
-  std::chrono::system_clock::time_point size_timepoint;
-
-  //! expiration time during which the cached size will be accepted as valid
-  std::chrono::milliseconds size_expiration;
+  //! timestamp of the last connection attempt
+  std::chrono::system_clock::time_point connection_timestamp;
+  //! minimum time between reconnection attempts
+  std::chrono::seconds  connection_ratelimit;
+  //! status of last reconnect attempt
+  kinetic::KineticStatus connection_status;
 };
 
 

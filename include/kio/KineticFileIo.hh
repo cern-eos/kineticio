@@ -134,7 +134,7 @@ public:
   //! Constructor
   //! @param cache_capacity maximum cache size
   //--------------------------------------------------------------------------
-  explicit KineticFileIo (size_t cache_capacity=10);
+  explicit KineticFileIo (size_t cache_capacity=6);
 
   //--------------------------------------------------------------------------
   //! Destructor

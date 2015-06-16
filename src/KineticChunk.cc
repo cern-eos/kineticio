@@ -15,11 +15,12 @@ using kinetic::StatusCode;
 const int KineticChunk::expiration_time = 1000;
 
 
-KineticChunk::KineticChunk(const std::shared_ptr<KineticClusterInterface>& c,
+KineticChunk::KineticChunk(std::shared_ptr<KineticClusterInterface> c,
     const std::shared_ptr<const std::string> k, bool skip_initial_get) :
         cluster(c), key(k), version(), value(make_shared<string>()),
         timestamp(), updates()
 {
+  if(!cluster) throw std::invalid_argument("no cluster supplied");
   if(skip_initial_get == false)
     getRemoteValue();
 }
@@ -93,10 +94,12 @@ void KineticChunk::read(char* const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
-  if(buffer==NULL || offset<0 || offset+length > cluster->limits().max_value_size)
-    throw KineticException(EINVAL,__FUNCTION__,__FILE__,__LINE__, "Invalid argument");
+  if(buffer==NULL) throw std::invalid_argument("null buffer supplied");
+  if(offset<0) throw std::invalid_argument("negative offset");
+  if(offset+length > cluster->limits().max_value_size)
+    throw std::invalid_argument("attempting to read past cluster limits");
 
-  /* Ensure data is not too stale to read. */
+  /*Ensure data is not too stale to read.*/
   if(!validateVersion())
     getRemoteValue();
 
@@ -114,8 +117,10 @@ void KineticChunk::write(const char* const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
-  if(buffer==NULL || offset<0 || offset+length>cluster->limits().max_value_size)
-    throw KineticException(EINVAL,__FUNCTION__,__FILE__,__LINE__, "Invalid argument");
+  if(buffer==NULL) throw std::invalid_argument("null buffer supplied");
+  if(offset<0) throw std::invalid_argument("negative offset");
+  if(offset+length > cluster->limits().max_value_size)
+    throw std::invalid_argument("attempting to write past cluster limits");
 
   /* Set new entry size. */
   value->resize(std::max((size_t) offset + length, value->size()));
@@ -129,8 +134,9 @@ void KineticChunk::truncate(off_t offset)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
-  if(offset<0 || offset>cluster->limits().max_value_size)
-    throw KineticException(EINVAL,__FUNCTION__,__FILE__,__LINE__, "Invalid argument");
+  if(offset<0) throw std::invalid_argument("negative offset");
+  if(offset > cluster->limits().max_value_size)
+    throw std::invalid_argument("attempting to truncate past cluster limits");
 
   value->resize(offset);
   updates.push_back(std::pair<off_t, size_t>(offset, 0));

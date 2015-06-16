@@ -85,9 +85,13 @@ public:
   //! @param key the name of the chunk
   //! @param skip_initial_get if true assume that the key does not yet exist
   //--------------------------------------------------------------------------
-  explicit KineticChunk(const std::shared_ptr<KineticClusterInterface>& cluster,
+  explicit KineticChunk(std::shared_ptr<KineticClusterInterface> cluster,
                         const std::shared_ptr<const std::string> key,
                         bool skip_initial_get=false);
+
+  //--------------------------------------------------------------------------
+  //! Destructor.
+  //--------------------------------------------------------------------------
   ~KineticChunk();
 
 private:
@@ -108,7 +112,7 @@ private:
 
 private:
   //! cluster this chunk is (to be) stored on
-  const std::shared_ptr<KineticClusterInterface>& cluster;
+  std::shared_ptr<KineticClusterInterface> cluster;
 
   //! the key of the chunk
   const std::shared_ptr<const std::string> key;

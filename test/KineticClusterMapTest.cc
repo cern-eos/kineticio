@@ -34,10 +34,10 @@ SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
             REQUIRE(kcm.getSize() == 2);
         }
         THEN("An existing id to a running device returns a working cluster."){
-            REQUIRE(kcm.getCluster("SN1")->ok());
+            REQUIRE_NOTHROW(kcm.getCluster("SN1"));
         }
-        THEN("An existing id with an unreachable IP returns a broken cluster"){
-            REQUIRE(kcm.getCluster("SN2")->ok() == false);
+        THEN("An existing id with an unreachable "){
+            REQUIRE_THROWS(kcm.getCluster("SN2"));
         }
         THEN("A nonexisting drive id returns ENODEV."){
             REQUIRE_THROWS(kcm.getCluster("nonExistingID"));

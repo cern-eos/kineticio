@@ -1,5 +1,8 @@
 #include "KineticSingletonCluster.hh"
+#include "KineticException.hh"
 #include <uuid/uuid.h>
+#include <functional>
+#include <thread>
 
 using std::chrono::system_clock;
 using std::unique_ptr;
@@ -8,68 +11,78 @@ using std::string;
 using namespace kinetic;
 using com::seagate::kinetic::client::proto::Command_Algorithm_SHA1;
 
-KineticSingletonCluster::KineticSingletonCluster(const kinetic::ConnectionOptions &ci) :
-  connection_info(ci), con(), cluster_limits{0,0,0,0,0,0,0,0}, cluster_size{0,0},
-  size_timepoint(), size_expiration(5000)
+KineticSingletonCluster::KineticSingletonCluster(
+    const kinetic::ConnectionOptions &ci,
+    std::chrono::seconds connect_min,
+    std::chrono::seconds getlog_min) :
+  con(), connection_info(ci), mutex(), cluster_limits{0,0,0,0,0,0,0,0}, drive_log(),
+  getlog_timestamp(), getlog_ratelimit(getlog_min),
+  getlog_status(StatusCode::CLIENT_SHUTDOWN,""),
+  connection_timestamp(), connection_ratelimit(connect_min),
+  connection_status(StatusCode::CLIENT_SHUTDOWN,"")
 {
   connect();
+  if(!connection_status.ok())
+    throw std::runtime_error("Initial connection failed: "+connection_status.message());
+  getLog();
+  if(!getlog_status.ok())
+    throw std::runtime_error("Initial getlog operation failed: "+getlog_status.message());
 }
 
 KineticSingletonCluster::~KineticSingletonCluster()
 {
 }
 
-kinetic::KineticStatus KineticSingletonCluster::connect()
+void KineticSingletonCluster::connect()
 {
-  KineticConnectionFactory factory = NewKineticConnectionFactory();
-  if(factory.NewThreadsafeBlockingConnection(connection_info, con, 30).notOk())
-     return KineticStatus(StatusCode::REMOTE_REMOTE_CONNECTION_ERROR,
-             "Failed building connection");
+  std::lock_guard<std::mutex> lck(mutex);
 
-  /* Initialize limits and sizes. */
-  std::vector<Command_GetLog_Type> types = {
-    Command_GetLog_Type::Command_GetLog_Type_LIMITS,
-    Command_GetLog_Type::Command_GetLog_Type_CAPACITIES
-  };
-  unique_ptr<DriveLog> log;
+  /* Rate limit connection attempts. */
+  if(std::chrono::duration_cast<std::chrono::milliseconds>
+    (system_clock::now() - connection_timestamp) < connection_ratelimit)
+    return;
 
-  if(con->GetLog(types, log).ok()){
-    cluster_limits = log->limits;
-    cluster_size = log->capacity;
-    size_timepoint = system_clock::now();
+  /* Remember this reconnection attempt. */
+  connection_timestamp = system_clock::now();
+
+  /* If NoOp succeeds -> false alarm. */
+  if(con && con->NoOp().ok()){
+    connection_status = KineticStatus(StatusCode::OK,"");
+    return;
   }
 
-  return KineticStatus(StatusCode::OK,"");
+  KineticConnectionFactory factory = NewKineticConnectionFactory();
+  if(factory.NewThreadsafeBlockingConnection(connection_info, con, 10).ok()){
+    connection_status = KineticStatus(StatusCode::OK,"");
+  }
+  else{
+    connection_status = KineticStatus(StatusCode::REMOTE_REMOTE_CONNECTION_ERROR,
+            "Failed building connection to "
+            +connection_info.host+":"
+            +std::to_string((long long int)connection_info.port));
+  }
 }
 
-bool KineticSingletonCluster::ok()
+KineticStatus KineticSingletonCluster::execute(std::function<KineticStatus(void)> fun)
 {
-  if(!con && !connect().ok())
-      return false;
-  return con->NoOp().ok();
-}
+  for(int attempt=0; attempt<2; attempt++){
+    if(!connection_status.ok())
+      connect();
+    if(connection_status.ok()){
+      auto status = fun();
 
-const kinetic::Limits& KineticSingletonCluster::limits()
-{
-  return cluster_limits;
-}
-
-kinetic::Capacity KineticSingletonCluster::size()
-{
-  if(con && std::chrono::duration_cast<std::chrono::milliseconds>
-          (system_clock::now() - size_timepoint) > size_expiration){
-    std::vector<Command_GetLog_Type> types = {
-      Command_GetLog_Type::Command_GetLog_Type_CAPACITIES
-    };
-    unique_ptr<DriveLog> log;
-
-    if(con->GetLog(types, log).ok()){
-      cluster_size = log->capacity;
-      size_timepoint = system_clock::now();
+      if( status.statusCode() == StatusCode::REMOTE_REMOTE_CONNECTION_ERROR ||
+          status.statusCode() == StatusCode::REMOTE_INTERNAL_ERROR ||
+          status.statusCode() == StatusCode::CLIENT_INTERNAL_ERROR ||
+          status.statusCode() == StatusCode::CLIENT_SHUTDOWN ||
+          status.statusCode() == StatusCode::CLIENT_IO_ERROR){
+        connection_status = status;
+      } else{
+        return status;
+      }
     }
   }
-
-  return cluster_size;
+  return connection_status;
 }
 
 KineticStatus KineticSingletonCluster::get(
@@ -80,14 +93,29 @@ KineticStatus KineticSingletonCluster::get(
 {
   if(skip_value){
     unique_ptr<string> v;
-    KineticStatus status = con->GetVersion(key, v);
-      if(status.ok())
-        version.reset(new string(std::move(*v)));
+    auto f = std::bind<KineticStatus(ThreadsafeBlockingKineticConnection::*)(
+            const shared_ptr<const string>,
+            unique_ptr<string>&)>(
+        &ThreadsafeBlockingKineticConnection::GetVersion, std::ref(con),
+            std::cref(key),
+            std::ref(v)
+    );
+    auto status = execute(f);
+
+    if(status.ok())
+      version.reset(new string(std::move(*v)));
     return status;
   }
 
   unique_ptr<KineticRecord> record;
-  KineticStatus status = con->Get(key, record);
+  auto f = std::bind<KineticStatus(ThreadsafeBlockingKineticConnection::*)(
+          const shared_ptr<const string>,
+          unique_ptr<KineticRecord>&)>(
+    &ThreadsafeBlockingKineticConnection::Get, std::ref(con),
+          std::cref(key),
+          std::ref(record)
+  );
+  auto status = execute(f);
   if(status.ok()){
     version = record->version();
     value = record->value();
@@ -116,11 +144,22 @@ KineticStatus KineticSingletonCluster::put(
   shared_ptr<KineticRecord> record(
           new KineticRecord(value, version_new, tag, Command_Algorithm_SHA1)
   );
+  
+  auto f =  std::bind<KineticStatus(ThreadsafeBlockingKineticConnection::*)(
+              const shared_ptr<const string>,
+              const shared_ptr<const string>,
+              WriteMode,
+              const shared_ptr<const KineticRecord>,
+              PersistMode)>(
+    &ThreadsafeBlockingKineticConnection::Put, std::ref(con),
+        std::cref(key),
+        version_in ? version_in : make_shared<const string>(),
+        force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION,
+        std::cref(record),
+        PersistMode::WRITE_BACK
+  );
 
-  auto status = con->Put(key,
-          version_in ? version_in : make_shared<const string>(),
-          force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION,
-          record, PersistMode::WRITE_BACK);
+  auto status = execute(f);
   version_out = version_new;
   return status;
 }
@@ -130,9 +169,18 @@ KineticStatus KineticSingletonCluster::remove(
                      const shared_ptr<const string>& version,
                      bool force)
 {
-  return con->Delete(key, version,
-          force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION,
-          PersistMode::WRITE_BACK);
+  auto f = std::bind<KineticStatus(ThreadsafeBlockingKineticConnection::*)(
+            const shared_ptr<const string>,
+            const shared_ptr<const string>,
+            WriteMode,
+            PersistMode)>(
+    &ThreadsafeBlockingKineticConnection::Delete, std::ref(con),
+        std::cref(key),
+        std::cref(version),
+        force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION,
+        PersistMode::WRITE_BACK
+  );
+  return execute(f);
 }
 
 KineticStatus KineticSingletonCluster::range(
@@ -141,6 +189,67 @@ KineticStatus KineticSingletonCluster::range(
           int maxRequested,
           std::unique_ptr< std::vector<std::string> >& keys)
 {
-  return con->GetKeyRange(start_key, true, end_key, true, false,
-          maxRequested, keys);
+  auto f = std::bind<KineticStatus(ThreadsafeBlockingKineticConnection::*)(
+            const shared_ptr<const string>, bool,
+            const shared_ptr<const string>, bool,
+            bool,
+            int32_t,
+            unique_ptr<vector<string>>&)>(
+    &ThreadsafeBlockingKineticConnection::GetKeyRange, std::ref(con),
+        std::cref(start_key), true,
+        std::cref(end_key), true,
+        false,
+        maxRequested,
+        std::ref(keys)
+  );
+  return execute(f);
+}
+
+KineticStatus KineticSingletonCluster::getLog()
+{
+  unique_ptr<kinetic::DriveLog> tmp_log;
+
+  std::vector<Command_GetLog_Type> types = {
+    Command_GetLog_Type::Command_GetLog_Type_CAPACITIES,
+    Command_GetLog_Type::Command_GetLog_Type_UTILIZATIONS
+  };
+  if(!drive_log)
+    types.push_back(Command_GetLog_Type::Command_GetLog_Type_LIMITS);
+
+  auto f = std::bind<KineticStatus(ThreadsafeBlockingKineticConnection::*)(
+            const vector<Command_GetLog_Type>&,
+            unique_ptr<DriveLog>&)>(
+    &ThreadsafeBlockingKineticConnection::GetLog, std::ref(con),
+        std::cref(types),
+        std::ref(tmp_log)
+  );
+  auto status = execute(f);
+
+  std::lock_guard<std::mutex> lck(mutex);
+  getlog_status = status;
+  getlog_timestamp = system_clock::now();
+
+  if(status.ok()){
+    if(!drive_log) cluster_limits = tmp_log->limits;
+    std::swap(drive_log,tmp_log);
+  }
+  return status;
+}
+
+const Limits& KineticSingletonCluster::limits() const
+{
+  return cluster_limits;
+}
+
+KineticStatus KineticSingletonCluster::size(kinetic::Capacity& size)
+{
+  std::lock_guard<std::mutex> lck(mutex);
+  if(std::chrono::duration_cast<std::chrono::milliseconds>
+    (system_clock::now() - getlog_timestamp) > getlog_ratelimit){
+    getlog_timestamp = system_clock::now();
+    std::thread(&KineticSingletonCluster::getLog, this).detach();
+  }
+  if(getlog_status.ok())
+    size = drive_log->capacity;
+  return getlog_status;
 }
