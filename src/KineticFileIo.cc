@@ -212,14 +212,10 @@ void KineticFileIo::Statfs (const char* p, struct statfs* sfs)
     obj_path=p;
   }
 
-  kinetic::Capacity cap;
-  auto status = cluster->size(cap);
-  if(!status.ok())
+  KineticClusterSize s;
+  if(!cluster->size(s).ok())
      throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
          "Could not obtain cluster size values.");
-    
-  long capacity = cap.nominal_capacity_in_bytes;
-  long free     = capacity - (capacity * cap.portion_full);
 
   /* Minimal allocated block size. Set to 4K because that's the
    * maximum accepted value by Linux. */
@@ -230,15 +226,15 @@ void KineticFileIo::Statfs (const char* p, struct statfs* sfs)
     * kernel level file systems. */
   sfs->f_bsize  = sfs->f_frsize;
   /* Blocks on FS in units of f_frsize */
-  sfs->f_blocks = (fsblkcnt_t) (capacity / sfs->f_frsize);
+  sfs->f_blocks = (fsblkcnt_t) (s.bytes_total / sfs->f_frsize);
   /* Free blocks */
-  sfs->f_bavail = (fsblkcnt_t) (free / sfs->f_frsize);
+  sfs->f_bavail = (fsblkcnt_t) (s.bytes_free / sfs->f_frsize);
   /* Free blocks available to non root user */
   sfs->f_bfree  = sfs->f_bavail;
   /* Total inodes. */
-  sfs->f_files   = capacity;
+  sfs->f_files   = s.bytes_total;
   /* Free inodes */
-  sfs->f_ffree   = free;
+  sfs->f_ffree   = s.bytes_free;
 }
 
 struct ftsState{

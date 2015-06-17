@@ -15,21 +15,40 @@
 /* TODO: Do not use kinetic::KineticStatus directly, as it can't
  * represent cluster error states. Would also allow to decouple ClusterInterface
  * from kinetic/kinetic.h
- * enum ClusterOperationStatus{
- *   OK,
- *   VERSION_MISSMATCH,
- *   OFFLINE
- * };
+ * 
+enum class KineticClusterStatus{
+  OK,
+  VERSION_MISSMATCH,
+  NOT_FOUND,
+  NOT_AUTHORIZED,
+  NO_SPACE,
+  SERVICE_BUSY,
+  CLUSTER_OFFLINE
+};
  */
+
+
+
+struct KineticClusterSize{
+  uint64_t bytes_total;
+  uint64_t bytes_free;
+};
+
+struct KineticClusterLimits{
+  uint32_t max_key_size;
+  uint32_t max_version_size;
+  uint32_t max_value_size;
+};
+
 //------------------------------------------------------------------------------
 //! Interface to a kinetic cluster. Can be a drive, a simulator, or or a
 //! whole cluster of either.
 //------------------------------------------------------------------------------
 class KineticClusterInterface{
 public:
- 
+
   //----------------------------------------------------------------------------
-  //! Obtain cluster limits, most importantly maximum key / value sizes.
+  //! Obtain maximum key / version / value sizes.
   //! These limits may drastically differ from standard Kinetic drive limits,
   //! as for example the value might be written to multiple drives concurrently
   //! and some of the key-space might be reserved for cluster internal metadata.
@@ -37,16 +56,16 @@ public:
   //!
   //! @return cluster limits
   //----------------------------------------------------------------------------
-  virtual const kinetic::Limits& limits() const = 0;
- 
+  virtual const KineticClusterLimits& limits() const = 0;
+
   //----------------------------------------------------------------------------
   //! Check the maximum size of the Kinetic cluster. Function will not block but
   //! might return outdated values.
   //!
   //! @param size size and capacity of the Kinetic cluster in bytes.
-  //! @return status of operation 
+  //! @return status of operation
   //----------------------------------------------------------------------------
-  virtual kinetic::KineticStatus size(kinetic::Capacity& size) = 0;
+  virtual kinetic::KineticStatus size(KineticClusterSize& size) = 0;
 
   //----------------------------------------------------------------------------
   //! Get the value and version associated with the supplied key.

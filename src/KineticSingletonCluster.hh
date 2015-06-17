@@ -5,13 +5,14 @@
 #include <chrono>
 #include <mutex>
 
+
 /* Implementing the interface for a single drive. */
 class KineticSingletonCluster : public KineticClusterInterface {
 public:
   //! See documentation in superclass.
-  const kinetic::Limits& limits() const;
+  const KineticClusterLimits& limits() const;
   //! See documentation in superclass.
-  kinetic::KineticStatus size(kinetic::Capacity& size);
+  kinetic::KineticStatus size(KineticClusterSize& size);
   //! See documentation in superclass.
   kinetic::KineticStatus get(const std::shared_ptr<const std::string>& key,
       bool skip_value,
@@ -62,7 +63,7 @@ private:
   //--------------------------------------------------------------------------
   //! Attempt to get the log from the currently connected drive.
   //--------------------------------------------------------------------------
-  kinetic::KineticStatus getLog();
+  kinetic::KineticStatus getLog(std::vector<kinetic::Command_GetLog_Type> types);
 
   //--------------------------------------------------------------------------
   //! Execute the supplied operation, making sure the connection state is valid
@@ -72,7 +73,7 @@ private:
   //! @param fun the operation that needs to be executed.
   //! @return status of operation
   //--------------------------------------------------------------------------
-  kinetic::KineticStatus execute(std::function<kinetic::KineticStatus(void)> fun);
+  kinetic::KineticStatus execute(std::function<kinetic::KineticStatus(void)> f);
 
 private:
   //! connection to a kinetic target
@@ -84,12 +85,12 @@ private:
   //! concurrency control
   std::mutex mutex;
 
-  //! cluster limits are constant over cluster lifetime, no need to get them
-  //! repeatedly with getlog.
-  kinetic::Limits cluster_limits;
+  //! cluster limits are constant over cluster lifetime
+  KineticClusterLimits clusterlimits;
 
-  //! storing getlog information.
-  std::unique_ptr<kinetic::DriveLog> drive_log;
+  //! size of the cluster
+  KineticClusterSize clustersize;
+
   //! timestamp of the last attempt to update cluster size / capacity
   std::chrono::system_clock::time_point getlog_timestamp;
   //! minimum time between attempting to perform getlog operation
