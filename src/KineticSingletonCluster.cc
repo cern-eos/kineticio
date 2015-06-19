@@ -1,6 +1,7 @@
 #include "KineticSingletonCluster.hh"
 #include "KineticException.hh"
 #include <uuid/uuid.h>
+#include <zlib.h>
 #include <functional>
 #include <algorithm>
 #include <thread>
@@ -142,13 +143,16 @@ KineticStatus KineticSingletonCluster::put(
   auto version_new = std::make_shared<string>(
     string(reinterpret_cast<const char *>(uuid), sizeof(uuid_t)));
 
-  /* Generate SHA1 tag. TODO */
-  std::shared_ptr<string> tag = std::make_shared<string>("");
+  /* Generate Checksum. */
+  auto checksum = value ? 0 : crc32(0, (const Bytef*) value->c_str(), value->length());
+  auto tag = std::make_shared<string>(
+      std::to_string((long long unsigned int) checksum)
+  );
 
   /* Construct record structure. */
   shared_ptr<KineticRecord> record(
-          new KineticRecord(value, version_new, tag,
-          com::seagate::kinetic::client::proto::Command_Algorithm_SHA1)
+    new KineticRecord(value, version_new, tag,
+      com::seagate::kinetic::client::proto::Command_Algorithm_CRC32)
   );
 
   auto f =  std::bind<KineticStatus(ThreadsafeBlockingKineticConnection::*)(
@@ -254,16 +258,20 @@ const KineticClusterLimits& KineticSingletonCluster::limits() const
 KineticStatus KineticSingletonCluster::size(KineticClusterSize& size)
 {
   std::lock_guard<std::mutex> lck(mutex);
-  
+
   /* rate limit getlog requests */
   using std::chrono::duration_cast;
   using std::chrono::seconds;
+
   if(duration_cast<seconds>(system_clock::now() - getlog_timestamp) > getlog_ratelimit){
+
     getlog_timestamp = system_clock::now();
     std::vector<Command_GetLog_Type> v =
         {Command_GetLog_Type::Command_GetLog_Type_CAPACITIES};
+
     std::thread(&KineticSingletonCluster::getLog, this, v).detach();
   }
+
   if(getlog_status.ok())
     size = size;
   return getlog_status;

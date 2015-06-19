@@ -8,6 +8,7 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(kinetic-c++ REQUIRED)
 find_package(jsonc REQUIRED)
 find_package(uuid REQUIRED)
+find_package(z REQUIRED) 
 
 ################################################################################
 # Force /usr/ installation prefix, same as EOS
@@ -41,6 +42,7 @@ include_directories(
     ${KINETIC-C++_INCLUDE_DIRS}
     ${JSONC_INCLUDE_DIRS}
     ${UUID_INCLUDE_DIRS}
+    ${Z_INCLUDE_DIRS}
 )
 add_library(kineticio SHARED
     src/KineticChunk.cc
@@ -48,11 +50,13 @@ add_library(kineticio SHARED
     src/KineticFileIo.cc
     src/KineticFileAttr.cc
     src/KineticSingletonCluster.cc
+   # src/KineticCluster.cc
 )
 
 target_link_libraries(kineticio
     ${JSONC_LIBRARIES}
     ${UUID_LIBRARIES}
+    ${Z_LIBRARIES}
     ${KINETIC-C++_LIBRARIES}
 )
 
@@ -70,6 +74,7 @@ add_executable(kinetic-test
 target_link_libraries(kinetic-test
    ${JSONC_LIBRARIES}
    ${UUID_LIBRARIES}
+   ${Z_LIBRARIES}
    ${KINETIC-C++_LIBRARIES}
    ${CMAKE_THREAD_LIBS_INIT}
 )

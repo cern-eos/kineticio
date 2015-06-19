@@ -62,6 +62,9 @@ private:
 
   //--------------------------------------------------------------------------
   //! Attempt to get the log from the currently connected drive.
+  //!
+  //! @param types requested to be updated from the drive.
+  //! @return status of operation
   //--------------------------------------------------------------------------
   kinetic::KineticStatus getLog(std::vector<kinetic::Command_GetLog_Type> types);
 
