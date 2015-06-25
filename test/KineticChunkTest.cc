@@ -3,6 +3,7 @@
 #include "catch.hpp"
 #include "KineticChunk.hh"
 #include "KineticSingletonCluster.hh"
+#include "KineticCluster.hh"
 
 SCENARIO("Chunk integration test.", "[Chunk]"){
 
@@ -21,10 +22,17 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
 
   GIVEN ("An empty chunk."){
 
-    std::shared_ptr<KineticSingletonCluster> cluster = std::make_shared<KineticSingletonCluster>(options,
+    /*
+    auto cluster = std::make_shared<KineticSingletonCluster>(options,
             std::chrono::seconds(20),
             std::chrono::seconds(5)
     );
+    */
+    
+    std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info;
+    info.push_back(std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>(options,options));
+    auto cluster = std::make_shared<KineticCluster>(1, 0, info, std::chrono::seconds(20));
+
     KineticChunk c(cluster, std::make_shared<std::string>("key"));
 
     THEN("Illegal writes to the chunk fail."){

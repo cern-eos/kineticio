@@ -50,7 +50,8 @@ add_library(kineticio SHARED
     src/KineticFileIo.cc
     src/KineticFileAttr.cc
     src/KineticSingletonCluster.cc
-   # src/KineticCluster.cc
+    src/RateLimitKineticConnection.cc
+    src/KineticCluster.cc
 )
 
 target_link_libraries(kineticio
@@ -65,11 +66,14 @@ add_executable(kinetic-test
     test/KineticChunkTest.cc
     test/KineticIoTest.cc
     test/KineticClusterMapTest.cc
+    test/KineticClusterTest.cc
     src/KineticChunk.cc
     src/KineticClusterMap.cc
     src/KineticFileIo.cc
     src/KineticFileAttr.cc
     src/KineticSingletonCluster.cc
+    src/KineticCluster.cc
+    src/RateLimitKineticConnection.cc
 )
 target_link_libraries(kinetic-test
    ${JSONC_LIBRARIES}
