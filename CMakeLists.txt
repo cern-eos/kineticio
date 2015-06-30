@@ -8,7 +8,8 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(kinetic-c++ REQUIRED)
 find_package(jsonc REQUIRED)
 find_package(uuid REQUIRED)
-find_package(z REQUIRED) 
+find_package(z REQUIRED)
+find_package(isal REQUIRED)
 
 ################################################################################
 # Force /usr/ installation prefix, same as EOS
@@ -43,6 +44,7 @@ include_directories(
     ${JSONC_INCLUDE_DIRS}
     ${UUID_INCLUDE_DIRS}
     ${Z_INCLUDE_DIRS}
+    ${ISAL_INCLUDE_DIRS}
 )
 add_library(kineticio SHARED
     src/KineticChunk.cc
@@ -52,12 +54,14 @@ add_library(kineticio SHARED
     src/KineticSingletonCluster.cc
     src/RateLimitKineticConnection.cc
     src/KineticCluster.cc
+    src/ErasureEncoding.cc
 )
 
 target_link_libraries(kineticio
     ${JSONC_LIBRARIES}
     ${UUID_LIBRARIES}
     ${Z_LIBRARIES}
+    ${ISAL_LIBRARIES}
     ${KINETIC-C++_LIBRARIES}
 )
 
@@ -67,18 +71,21 @@ add_executable(kinetic-test
     test/KineticIoTest.cc
     test/KineticClusterMapTest.cc
     test/KineticClusterTest.cc
+    test/ErasureEncdodingTest.cc
     src/KineticChunk.cc
     src/KineticClusterMap.cc
     src/KineticFileIo.cc
     src/KineticFileAttr.cc
     src/KineticSingletonCluster.cc
-    src/KineticCluster.cc
     src/RateLimitKineticConnection.cc
+    src/KineticCluster.cc
+    src/ErasureEncoding.cc
 )
 target_link_libraries(kinetic-test
    ${JSONC_LIBRARIES}
    ${UUID_LIBRARIES}
    ${Z_LIBRARIES}
+   ${ISAL_LIBRARIES}
    ${KINETIC-C++_LIBRARIES}
    ${CMAKE_THREAD_LIBS_INIT}
 )
