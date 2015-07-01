@@ -6,20 +6,19 @@
 
 SCENARIO("KineticIo Integration Test", "[Io]"){
 
-  kinetic::ConnectionOptions cops;
-  cops.host = "localhost";
-  cops.port = 8443;
-  cops.use_ssl = true;
-  cops.user_id = 1;
-  cops.hmac_key = "asdfasdf";
+  kinetic::ConnectionOptions tls_t1 = { "localhost", 8443, true, 1, "asdfasdf" };
+  kinetic::ConnectionOptions tls_t2 = { "localhost", 8444, true, 1, "asdfasdf" };
 
-  std::unique_ptr<kinetic::BlockingKineticConnection> bcon;
   kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
-  REQUIRE(factory.NewBlockingConnection(cops, bcon, 30).ok());
-  REQUIRE(bcon->InstantErase("NULL").ok());
+  std::shared_ptr<kinetic::BlockingKineticConnection> con1;
+  std::shared_ptr<kinetic::BlockingKineticConnection> con2;
+  REQUIRE(factory.NewBlockingConnection(tls_t1, con1, 30).ok());
+  REQUIRE(factory.NewBlockingConnection(tls_t2, con2, 30).ok());
+  REQUIRE(con1->InstantErase("NULL").ok());
+  REQUIRE(con2->InstantErase("NULL").ok());
 
   KineticFileIo kio;
-  std::string base_path("kinetic:SN1:");
+  std::string base_path("kinetic:Cluster1:");
   std::string path(base_path+"filename");
 
   int  buf_size = 64;
@@ -47,7 +46,6 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
   }
 
   GIVEN ("A kio object for a nonexisting file"){
-    REQUIRE(bcon->InstantErase("NULL").ok());
 
     THEN("All public operations (except Statfs) fail with ENXIO error code"){
       REQUIRE_THROWS(kio.Read(0,read_buf,buf_size));
@@ -162,7 +160,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
 
     THEN("Calling statfs on the same object is illegal,"){
       struct statfs sfs;
-      REQUIRE_THROWS(kio.Statfs("kinetic:SN1:", &sfs));
+      REQUIRE_THROWS(kio.Statfs(base_path.c_str(), &sfs));
     }
 
     AND_WHEN("The file is removed via a second io object."){

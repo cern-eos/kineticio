@@ -13,7 +13,7 @@ using std::shared_ptr;
 static int gf_gen_decode_matrix(
   unsigned char *encode_matrix, // in: encode matrix
   unsigned char *decode_matrix, // in: buffer, out: generated decode matrix
-  unsigned int  *decode_index,  // out: order of healthy chunks used for decoding [data#1, data#3, ..., parity#1... ]
+  unsigned int  *decode_index,  // out: order of healthy blocks used for decoding [data#1, data#3, ..., parity#1... ]
   unsigned char *src_err_list,  // in: array of #nerrs size [index error #1, index error #2, ... ]
   unsigned char *src_in_err,    // in: array of #data size > [1,0,0,0,1,0...] -> 0 == no error, 1 == error
   int nerrs,                    // #total errors
@@ -86,8 +86,7 @@ static int gf_gen_decode_matrix(
 
 ErasureEncoding::ErasureEncoding(std::size_t data, std::size_t parity) : 
   nData(data), nParity(parity),
-  matrixSize((nData+nParity)*nData), tableSize(data*parity*32),
-  encode_matrix(new unsigned char[matrixSize])
+  encode_matrix(new unsigned char[(nData+nParity)*nData])
 {
   // k = data
   // m = data + parity
@@ -98,15 +97,17 @@ ErasureEncoding::~ErasureEncoding()
 {
 }
 
-std::string ErasureEncoding::getErrorPattern(
-      std::vector<std::shared_ptr<const std::string> >& stripe
-)
+std::string ErasureEncoding::getErrorPattern (
+      const std::vector<std::shared_ptr<const std::string> >& stripe
+) const
 {
   if(stripe.size() != nData+nParity)
-    throw std::logic_error("Illegal stripe size.");
+    throw std::logic_error("ErasureEncoding: Illegal stripe size: Expected "
+            +std::to_string(nData+nParity)+", observed "
+            +std::to_string(stripe.size())+".");
 
   std::string pattern(nData+nParity,'0');
-  int chunkSize=0;
+  int blockSize=0;
   int nErrs=0;
 
   for(int i=0; i<stripe.size(); i++){
@@ -116,14 +117,19 @@ std::string ErasureEncoding::getErrorPattern(
     }
     else{
       pattern[i] = 0;
-      if(!chunkSize)
-        chunkSize = stripe[i]->size();
-      if(chunkSize != stripe[i]->size())
-        throw std::logic_error("Illegal chunk sizes.");
+      if(!blockSize)
+        blockSize = stripe[i]->size();
+      if(blockSize != stripe[i]->size())
+        throw std::logic_error("ErasureEncoding: Non-static block sizes, observed"
+                " one block with a size of "+std::to_string(blockSize)+" bytes"
+                " and one with a size of "+std::to_string(stripe[i]->size())+
+                " bytes.");
     }
   }
   if(nErrs > nParity)
-    throw std::logic_error("More errors than parity chunks.");
+    throw std::logic_error("ErasureEncoding: More errors than parity blocks. "
+            +std::to_string(nErrs)+" errors "
+            +std::to_string(nParity)+" parities.");
 
   return pattern;
 }
@@ -150,22 +156,22 @@ ErasureEncoding::CodingTable& ErasureEncoding::getCodingTable(
   /* Allocate Decode Object. */
   CodingTable dd;
   dd.nErrors = nerrs;
-  dd.chunkIndices.reset(new unsigned int[nData]);
-  dd.table.reset(new unsigned char[tableSize]);
+  dd.blockIndices.reset(new unsigned int[nData]);
+  dd.table.reset(new unsigned char[nData*nParity*32]);
 
   /* Compute decode matrix. */
-  std::unique_ptr<unsigned char> decode_matrix(new unsigned char[matrixSize]);
+  std::unique_ptr<unsigned char> decode_matrix(new unsigned char[(nData+nParity)*nData]);
   if( gf_gen_decode_matrix(
       encode_matrix.get(),
       decode_matrix.get(),
-      dd.chunkIndices.get(),
+      dd.blockIndices.get(),
       err_indx_list,
       (unsigned char*) pattern.c_str(),
       nerrs,
       nsrcerrs,
       nData,
       nParity+nData)
-  ) throw std::runtime_error("Failed computing decode matrix");
+  ) throw std::runtime_error("ErasureEncoding: Failed computing decode matrix");
 
   /* Compute Tables. */
   ec_init_tables(nData, nerrs, decode_matrix.get(), dd.table.get());
@@ -175,24 +181,27 @@ ErasureEncoding::CodingTable& ErasureEncoding::getCodingTable(
 
 void ErasureEncoding::compute(std::vector<std::shared_ptr<const std::string> >& stripe)
 {
+  if(!nParity)
+    return;
+  
   std::string pattern = getErrorPattern(stripe);
   auto& dd = getCodingTable(pattern);
 
   unsigned char* inbuf[nData];
   for(int i=0; i<nData; i++){
-      inbuf[i] = (unsigned char*) stripe[dd.chunkIndices.get()[i]]->c_str();
+      inbuf[i] = (unsigned char*) stripe[dd.blockIndices.get()[i]]->c_str();
   }
 
-  auto chunkSize = stripe[dd.chunkIndices.get()[0]]->size();
-  std::unique_ptr<unsigned char> memory(new unsigned char[dd.nErrors * chunkSize]);
+  auto blockSize = stripe[dd.blockIndices.get()[0]]->size();
+  std::unique_ptr<unsigned char> memory(new unsigned char[dd.nErrors * blockSize]);
 
   unsigned char* outbuf[dd.nErrors];
   for(int i=0; i<dd.nErrors; i++){
-    outbuf[i] = memory.get() + i*chunkSize*sizeof(unsigned char); 
+    outbuf[i] = memory.get() + i*blockSize*sizeof(unsigned char); 
   }
 
   ec_encode_data(
-      chunkSize,      // Length of each block of data (vector) of source or dest data.
+      blockSize,      // Length of each block of data (vector) of source or dest data.
       nData,          // The number of vector sources in the generator matrix for coding.
       dd.nErrors,     // The number of output vectors to concurrently encode/decode.
       dd.table.get(), // Pointer to array of input tables
@@ -205,7 +214,7 @@ void ErasureEncoding::compute(std::vector<std::shared_ptr<const std::string> >& 
     if(pattern[i]){
       //printf("Repairing error %d (stripe index %d)\n",e,i);
       stripe[i] = make_shared<const string>(
-                      string((const char*)outbuf[e], chunkSize)
+                      string((const char*)outbuf[e], blockSize)
                   );
       e++;
     }

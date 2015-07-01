@@ -31,13 +31,10 @@ SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
         std::shared_ptr<KineticClusterInterface> c;
 
         THEN("Map size equals number of entries."){
-            REQUIRE(kcm.getSize() == 2);
+            REQUIRE(kcm.getSize() == 3);
         }
         THEN("An existing id to a running device returns a working cluster."){
-            REQUIRE_NOTHROW(kcm.getCluster("SN1"));
-        }
-        THEN("An existing id with an unreachable "){
-            REQUIRE_THROWS(kcm.getCluster("SN2"));
+            REQUIRE_NOTHROW(kcm.getCluster("Cluster1"));
         }
         THEN("A nonexisting drive id returns ENODEV."){
             REQUIRE_THROWS(kcm.getCluster("nonExistingID"));

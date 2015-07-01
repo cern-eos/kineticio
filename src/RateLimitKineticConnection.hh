@@ -51,8 +51,8 @@ private:
   std::chrono::seconds ratelimit;
   //! status of last reconnect attempt
   kinetic::KineticStatus status;
-  
-  //! thread safety. TODO: this shouldn't be a shared_ptr, need to write copy constructor 
+
+  //! thread safety. TODO: this shouldn't be a shared_ptr, need to write copy constructor
   std::shared_ptr<std::mutex> mutex;
 
 private:

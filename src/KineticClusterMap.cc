@@ -3,6 +3,7 @@
 #include <sstream>
 #include "KineticClusterMap.hh"
 #include "KineticSingletonCluster.hh"
+#include "KineticCluster.hh"
 #include "KineticException.hh"
 #include <stdio.h>
 
@@ -55,6 +56,10 @@ KineticClusterMap::KineticClusterMap()
     fprintf(stderr,"Error while parsing security json file '%s\n",security);
     return;
   }
+  if(parseJson(location_data, filetype::cluster)){
+    fprintf(stderr,"Error while parsing cluster json file '%s\n",location);
+    return;
+  }
 }
 
 KineticClusterMap::~KineticClusterMap()
@@ -65,70 +70,139 @@ std::shared_ptr<KineticClusterInterface>  KineticClusterMap::getCluster(const st
 {
   std::unique_lock<std::mutex> locker(mutex);
 
-  if(!map.count(id))
+  if(!clustermap.count(id))
     throw KineticException(ENODEV,__FUNCTION__,__FILE__,__LINE__,"Nonexisting "
         "cluster id '"+id+"' requested.");
 
-  KineticClusterInfo & ki = map.at(id);
-  if(!ki.cluster)
-    ki.cluster = std::make_shared<KineticSingletonCluster>(
-        ki.connection_options,
-        std::chrono::seconds(20),
+  KineticClusterInfo & ki = clustermap.at(id);
+  if(!ki.cluster){
+
+     std::vector<std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>> cops;
+     for(auto wwn = ki.drives.begin(); wwn != ki.drives.end(); wwn++){
+       if(!drivemap.count(*wwn))
+       throw KineticException(ENODEV,__FUNCTION__,__FILE__,__LINE__,"Nonexisting "
+         "drive wwn '"+id+"' requested.");
+       cops.push_back(drivemap.at(*wwn));
+     }
+
+    /* Differentiate between Singleton Clusters and Full Clusters. */
+    if(ki.numData == 1 && ki.numParity == 0 && ki.drives.size() == 1)
+      ki.cluster = std::make_shared<KineticSingletonCluster>(
+        cops.begin()->first,
+        ki.min_reconnect_interval,
         std::chrono::seconds(5)
-    );
+      );
+    /* Normal Cluster. */
+    else
+      ki.cluster = std::make_shared<KineticCluster>(
+              ki.numData, ki.numParity,
+              cops, ki.min_reconnect_interval, ki.operation_timeout
+      );
+  }
+  
   return ki.cluster;
 }
 
 int KineticClusterMap::getSize()
 {
-  return map.size();
+  return clustermap.size();
 }
 
-int KineticClusterMap::parseDriveInfo(struct json_object * drive)
+int KineticClusterMap::parseDriveLocation(struct json_object * drive)
 {
   struct json_object *tmp = NULL;
-  KineticClusterInfo ki;
-  /* We could go with wwn instead of serial number. Chosen SN since it is also
-   * unique and is both shorter and contains no spaces (eos does not like spaces
-   * in the path name). */
-  if(!json_object_object_get_ex(drive, "serialNumber", &tmp))
+  struct json_object *host= NULL;
+  std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions> kops;
+
+  if(!json_object_object_get_ex(drive, "wwn", &tmp))
     return -EINVAL;
   std::string id = json_object_get_string(tmp);
 
   if(!json_object_object_get_ex(drive, "inet4", &tmp))
     return -EINVAL;
-  struct json_object *item = json_object_array_get_idx(tmp, 0);
-  ki.connection_options.host = json_object_get_string(item);
+
+  host = json_object_array_get_idx(tmp, 0);
+  if(!host)
+    return -EINVAL;
+  kops.first.host = json_object_get_string(host);
+
+  host = json_object_array_get_idx(tmp, 1);
+  if(!host)
+    kops.second.host = kops.first.host;
+  else
+    kops.second.host = json_object_get_string(host);
 
   if(!json_object_object_get_ex(drive, "port", &tmp))
     return -EINVAL;
-  ki.connection_options.port = json_object_get_int(tmp);
+  kops.first.port = kops.second.port = json_object_get_int(tmp);
 
-  ki.connection_options.use_ssl = false;
-  map.insert(std::make_pair(id, ki));
+  kops.first.use_ssl = kops.second.use_ssl = false;
+  drivemap.insert(std::make_pair(id, kops));
   return 0;
 }
 
 int KineticClusterMap::parseDriveSecurity(struct json_object * drive)
 {
   struct json_object *tmp = NULL;
-  if(!json_object_object_get_ex(drive, "serialNumber", &tmp))
+  if(!json_object_object_get_ex(drive, "wwn", &tmp))
     return -EINVAL;
   std::string id = json_object_get_string(tmp);
 
   /* Require that drive info has been scanned already.*/
-  if(!map.count(id))
+  if(!drivemap.count(id))
       return -ENODEV;
 
-  KineticClusterInfo & ki = map.at(id);
+  auto& kops = drivemap.at(id);
 
   if(!json_object_object_get_ex(drive, "userId", &tmp))
     return -EINVAL;
-  ki.connection_options.user_id = json_object_get_int(tmp);
+  kops.first.user_id = kops.second.user_id = json_object_get_int(tmp);
 
   if(!json_object_object_get_ex(drive, "key", &tmp))
     return -EINVAL;
-  ki.connection_options.hmac_key = json_object_get_string(tmp);
+  kops.first.hmac_key = kops.second.hmac_key = json_object_get_string(tmp);
+  return 0;
+}
+
+int KineticClusterMap::parseClusterInformation(struct json_object * cluster)
+{
+  struct json_object *tmp = NULL;
+  if(!json_object_object_get_ex(cluster, "clusterID", &tmp))
+    return -EINVAL;
+  std::string id = json_object_get_string(tmp);
+  
+  struct KineticClusterInfo cinfo;
+
+  if(!json_object_object_get_ex(cluster, "numData", &tmp))
+    return -EINVAL;
+  cinfo.numData = json_object_get_int(tmp);
+
+  if(!json_object_object_get_ex(cluster, "numParity", &tmp))
+    return -EINVAL;
+  cinfo.numParity = json_object_get_int(tmp);
+
+  if(!json_object_object_get_ex(cluster, "minReconnectInterval", &tmp))
+    return -EINVAL;
+  cinfo.min_reconnect_interval = std::chrono::seconds(json_object_get_int(tmp));
+
+  if(!json_object_object_get_ex(cluster, "timeout", &tmp))
+    return -EINVAL;
+  cinfo.operation_timeout = std::chrono::seconds(json_object_get_int(tmp));
+
+  struct json_object *list = NULL;
+  if(!json_object_object_get_ex(cluster,"drives", &list))
+    return -EINVAL;
+
+  json_object *drive = NULL;
+  int num_drives = json_object_array_length(list);
+
+  for(int i=0; i<num_drives; i++){
+    drive = json_object_array_get_idx(list, i);
+    if(!json_object_object_get_ex(drive, "wwn", &tmp))
+      return -EINVAL;
+    cinfo.drives.push_back(json_object_get_string(tmp));
+  }
+  clustermap.insert(std::make_pair(id, cinfo));
   return 0;
 }
 
@@ -139,24 +213,42 @@ int KineticClusterMap::parseJson(const std::string& filedata, filetype type)
   if(!root)
     return -EINVAL;
 
-  struct json_object *d = NULL;
-  struct json_object *dlist = NULL;
+  struct json_object *element = NULL;
+  struct json_object *list = NULL;
 
-  if(!json_object_object_get_ex(root,
-        type == filetype::location ? "location" : "security", &dlist)){
+  std::string typestring;
+  switch(type){
+    case filetype::location:
+      typestring="location";
+      break;
+    case filetype::security:
+      typestring="security";
+      break;
+    case filetype::cluster:
+      typestring="cluster";
+      break;
+  }
+  
+  if(!json_object_object_get_ex(root,typestring.c_str(), &list)){
     json_object_put(root);
     return -EINVAL;
   }
 
-  int num_drives = json_object_array_length(dlist);
+  int num_drives = json_object_array_length(list);
   int err = 0;
-  for(int i=0; i<num_drives; i++){
-    d = json_object_array_get_idx(dlist, i);
-    if(type == filetype::location)
-      err = parseDriveInfo(d);
-    else if (type == filetype::security)
-      err = parseDriveSecurity(d);
-    if(err) break;
+  for(int i=0; i<num_drives && !err; i++){
+    element = json_object_array_get_idx(list, i);
+    switch(type){
+      case filetype::location:
+        err = parseDriveLocation(element);
+        break;
+      case filetype::security:
+        err = parseDriveSecurity(element);
+        break;
+      case filetype::cluster:
+        err = parseClusterInformation(element);
+        break;
+    }
   }
   json_object_put(root);
   return err;

@@ -4,11 +4,12 @@
 #include "KineticClusterInterface.hh"
 #include "RateLimitKineticConnection.hh"
 #include "KineticAsyncOperation.hh"
+#include "ErasureEncoding.hh"
 #include <chrono>
 #include <mutex>
 
 /* <cstdatomic> is part of gcc 4.4.x experimental C++0x support... <atomic> is
- * what actually made it into the standard. 
+ * what actually made it into the standard.
 #if __GNUC__ == 4 && (__GNUC_MINOR__ == 4)
     #include <cstdatomic>
 #else
@@ -16,8 +17,6 @@
 #endif
  */
 
-// maybe use std::array over std::vector with template class
-//    template<std::size_t _m, std::size_t _n>
 class KineticCluster : public KineticClusterInterface {
 public:
   //! See documentation in superclass.
@@ -58,14 +57,16 @@ public:
   //--------------------------------------------------------------------------
   //! Constructor.
   //!
-  //! @param connection_info host / port / key of target kinetic drives
+  //! @param stripe_size the number of drives data is striped to
+  //! @param num_parities the number of parities to be computed for a stripe
+  //! @param info host / port / key of target kinetic drives
   //! @param min_reconnect_interval minimum time between reconnection attempts
-  //! @param min_getlog_interval minimum time between getlog attempts
   //--------------------------------------------------------------------------
   explicit KineticCluster(
     std::size_t stripe_size, std::size_t num_parities,
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info,
-    std::chrono::seconds min_reconnect_interval
+    std::chrono::seconds min_reconnect_interval,
+    std::chrono::seconds operation_timeout
   );
 
   //--------------------------------------------------------------------------
@@ -123,16 +124,26 @@ private:
       std::shared_ptr<const std::string>& version
   );
 
+  /* This should mark a key to be repaired. Not sure if it should happen in the 
+     background. */
+  void schedule_repair(std::string key);
+  void schedule_repair(std::string key, std::vector< KineticAsyncOperation >& getops);
+
 private:
+  //! number of data chunks in a stripe
   std::size_t nData;
+
+  //! number of parities in a stripe
   std::size_t nParity;
 
   std::vector< RateLimitKineticConnection > connections;
+  
+  std::chrono::seconds operation_timeout; 
 
   //! cluster limits are constant over cluster lifetime
   KineticClusterLimits clusterlimits;
 
-  //! size of the cluster
+  //! size information of the cluster (total / free bytes)
   KineticClusterSize clustersize;
 
   //! status of last attempt to update the drive log
@@ -144,6 +155,8 @@ private:
   //! concurrency control
   std::mutex getlog_mutex;
 
+  // erasure coding
+  ErasureEncoding erasure;
 };
 
 #endif	/* KINETICCLUSTER_HH */

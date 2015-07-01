@@ -1,14 +1,13 @@
-{ 
-   "location_comment":"Array of drive locations, format as output by kinetic-tools discover function, located at $KINETIC_DRIVE_LOCATION",
+{
+   "location_comment":"Array of drive locations {wwn,inet4,port}, format as output by kinetic-tools discover function can be used, located at $KINETIC_DRIVE_LOCATION",
    "location":[
         {"inet4":["localhost","127.0.0.1"],"port":8123,"tlsPort":8443,"wwn":"WWN1","model":"Simulator","serialNumber":"SN1","firmwareVersion":"2.6.0"},
-        {"inet4":["nohost",""],"port":8123,"tlsPort":8443,"wwn":"WWN2","model":"ST4000NK001-1NX668","serialNumber":"SN2","firmwareVersion":"2.6.0"}
+        {"wwn":"WWN2","inet4":["nohost",""],"port":8123},
+        {"wwn":"WWN3","inet4":["localhost","127.0.0.1"],"port":8124}
     ],
-    
-    
-   "security_comment":"Array of drive access information, format as input to kinetic-tool setsecurity function (with identifiers wwn and serialNumber added), located at $KINETIC_DRIVE_SECURITY ",
+
+   "security_comment":"Array of drive access information {wwn, userId, key}, format as input to kinetic-tool setsecurity function can be used, located at $KINETIC_DRIVE_SECURITY ",
    "security":[
-        {"userId":1,"key":"asdfasdf","wwn":"WWN1","serialNumber":"SN1"},
         {"userId":1,
          "key":"asdfasdf",
          "algorithm":"HmacSHA1",
@@ -16,8 +15,37 @@
                      "value":"",
                      "roles":["READ","WRITE","DELETE","RANGE","SETUP","P2POP","GETLOG","SECURITY"]
                     }],
-          "wwn":"WWN2",
-          "serialNumber":"SN2"
-        }
+          "wwn":"WWN2"
+        },
+        {"wwn":"WWN1","userId":1,"key":"asdfasdf"},
+        {"wwn":"WWN3","userId":1,"key":"asdfasdf"}
+    ],
+
+    "cluster_comment":"Array of cluster definitions, clustering a number of drives under a single cluster identifier.",
+    "cluster":[
+        {"clusterID":"Cluster1",
+         "minReconnectInterval":20,
+         "timeout":10,
+         "drives":[{"wwn":"WWN1"},{"wwn":"WWN3"}],
+         "numData":1,
+         "numParity":1
+        },
+        {"clusterID":"Cluster2",
+         "minReconnectInterval":20,
+         "timeout":10,
+         "drives":[
+             {"wwn":"WWN1"},
+             {"wwn":"WWN2"}
+          ],
+         "numData":1,
+         "numParity":1
+        },
+        {"clusterID":"Cluster3",
+         "minReconnectInterval":20,
+         "timeout":10,
+         "drives":[{"wwn":"WWN1"}],
+         "numData":1,
+         "numParity":0
+       }
     ]
 }

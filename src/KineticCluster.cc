@@ -1,11 +1,13 @@
 #include "KineticCluster.hh"
 #include "KineticException.hh"
+#include "ErasureEncoding.hh"
 #include <uuid/uuid.h>
 #include <zlib.h>
 #include <functional>
 #include <algorithm>
 #include <thread>
 #include <set>
+
 
 using std::chrono::system_clock;
 using std::unique_ptr;
@@ -127,17 +129,19 @@ private:
 KineticCluster::KineticCluster(
     std::size_t stripe_size, std::size_t num_parities,
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info,
-    std::chrono::seconds min_reconnect_interval
+    std::chrono::seconds min_reconnect_interval,
+    std::chrono::seconds op_timeout
 ) :
     nData(stripe_size), nParity(num_parities),
-    connections(), clusterlimits{0,0,0}, clustersize{0,0},
+    connections(), operation_timeout(op_timeout),
+    clusterlimits{0,0,0}, clustersize{0,0},
     getlog_status(StatusCode::CLIENT_INTERNAL_ERROR,"not initialized"),
     getlog_outstanding(false),
-    getlog_mutex()
+    getlog_mutex(), erasure(nData, nParity)
 {
   if(nData+nParity > info.size())
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
-      
+
   for(auto i = info.begin(); i != info.end(); i++){
     auto ncon = RateLimitKineticConnection(*i, min_reconnect_interval);
     connections.push_back(ncon);
@@ -151,6 +155,7 @@ KineticCluster::KineticCluster(
             ENXIO,__FUNCTION__,__FILE__,__LINE__,
             "Initial getlog failed: " + getlog_status.message()
           );
+    clusterlimits.max_value_size*=nData;
 }
 
 KineticCluster::~KineticCluster()
@@ -163,6 +168,54 @@ KineticCluster::~KineticCluster()
       break;
   };
 }
+
+/* return the frequency of the most common element in the vector, as well
+   as a reference to that element. */
+KineticAsyncOperation& mostFrequent(
+    std::vector<KineticAsyncOperation>& ops, int& count,
+    std::function<bool(const KineticAsyncOperation& ,const KineticAsyncOperation&)> equal
+)
+{
+  count = 0;
+  auto element = ops.begin();
+
+  for(auto o = ops.begin(); o != ops.end(); o++){
+    int frequency = 0;
+    for(auto l = ops.begin(); l!= ops.end(); l++)
+      if(equal(*o,*l))
+        frequency++;
+
+    if(frequency > count){
+      count=frequency;
+      element=o;
+    }
+    if(frequency > ops.size()/2)
+      break;
+  }
+  return *element;
+}
+
+bool resultsEqual(const KineticAsyncOperation& lhs ,const KineticAsyncOperation& rhs)
+{
+  return lhs.callback->getResult().statusCode() == rhs.callback->getResult().statusCode(); 
+}
+
+bool getVersionEqual(const KineticAsyncOperation& lhs ,const KineticAsyncOperation& rhs)
+{
+  return
+    std::static_pointer_cast<GetVersionCallback>(lhs.callback)->getVersion()
+          ==
+    std::static_pointer_cast<GetVersionCallback>(rhs.callback)->getVersion();
+}
+bool getRecordVersionEqual(const KineticAsyncOperation& lhs ,const KineticAsyncOperation& rhs)
+{
+  return
+    * std::static_pointer_cast<GetCallback>(lhs.callback)->getRecord()->version()
+          ==
+    * std::static_pointer_cast<GetCallback>(rhs.callback)->getRecord()->version();
+}
+
+
 
 void makeGetVersionOp(
   KineticAsyncOperation& o,
@@ -182,7 +235,8 @@ void makeGetVersionOp(
 
 KineticStatus KineticCluster::getVersion(
     const std::shared_ptr<const std::string>& key,
-          std::shared_ptr<const std::string>& version)
+          std::shared_ptr<const std::string>& version
+)
 {
   auto ops = initialize(key, nData+nParity);
   for(auto o = ops.begin(); o != ops.end(); o++)
@@ -190,21 +244,18 @@ KineticStatus KineticCluster::getVersion(
   auto status = execute(ops);
   if(!status.ok()) return status;
 
-  auto first = std::static_pointer_cast<GetVersionCallback>(
-      ops.cbegin()->callback
-  );
-  for(auto o = ops.cbegin(); o < ops.cend(); o++){
-    auto element = std::static_pointer_cast<GetVersionCallback>(o->callback);
-    if(first->getVersion() != element->getVersion()){
-      status = KineticStatus(
-                StatusCode::CLIENT_IO_ERROR,
-                "Subchunks have different versions."
-              );
-    }
+  int count=0;
+  auto& op = mostFrequent(ops, count, getVersionEqual);
+  if(count<nData){
+    return KineticStatus(
+              StatusCode::CLIENT_IO_ERROR,
+              "Version missmatch: Read quorum of " +std::to_string(nData)+
+              " not reached. Maximum number observed: " +std::to_string(count)
+            );
   }
-  if(status.ok()){
-    version.reset(new string(std::move(first->getVersion())));
-  }
+  version.reset(new string(std::move(
+        std::static_pointer_cast<GetVersionCallback>(op.callback)->getVersion()
+  )));
   return status;
 }
 
@@ -226,10 +277,11 @@ void makeGetOp(
 }
 
 KineticStatus KineticCluster::get(
-                  const shared_ptr<const string>& key,
-                  bool skip_value,
-                  shared_ptr<const string>& version,
-                  shared_ptr<const string>& value)
+    const shared_ptr<const string>& key,
+    bool skip_value,
+    shared_ptr<const string>& version,
+    shared_ptr<const string>& value
+)
 {
   if(skip_value)
     return getVersion(key,version);
@@ -240,26 +292,42 @@ KineticStatus KineticCluster::get(
   auto status = execute(ops);
   if(!status.ok()) return status;
 
-  /* Ensure all versions are equal. */
-  auto first = std::static_pointer_cast<GetCallback>(
-      ops.cbegin()->callback
-  );
-  for(auto o = ops.cbegin(); o < ops.cend(); o++){
-    auto element = std::static_pointer_cast<GetCallback>(o->callback);
-    if(*(first->getRecord()->version()) != *(element->getRecord()->version())){
-      status = KineticStatus(
-                StatusCode::CLIENT_IO_ERROR,
-                "Subchunks have different versions."
-              );
-    }
+  int count=0;
+  auto& op = mostFrequent(ops, count, getRecordVersionEqual);
+  if(count<nData){
+    return KineticStatus(
+              StatusCode::CLIENT_IO_ERROR,
+              "Version missmatch: Read quorum of " +std::to_string(nData)+
+              " not reached. Maximum number observed: " +std::to_string(count)
+            );
   }
-  version = std::move(first->getRecord()->version());
+  version = std::static_pointer_cast<GetCallback>(op.callback)->getRecord()->version();
 
-  /* Create a single value from read-in values. */
-  auto v = std::make_shared<string>();
-  for(auto o = ops.cbegin(); o < ops.cend(); o++){
+  bool data = false;
+  std::vector< shared_ptr<const string> > stripe;
+  for(auto o = ops.begin(); o != ops.end(); o++){
     auto cb = std::static_pointer_cast<GetCallback>(o->callback);
-    v->append(std::move(*cb->getRecord()->value()));
+    if(cb->getRecord() && (*cb->getRecord()->version() == *version)){
+      stripe.push_back(cb->getRecord()->value());
+      if(cb->getRecord()->value() && cb->getRecord()->value()->size())
+        data=true;
+    }
+    else
+      stripe.push_back(make_shared<const string>(""));
+  }
+  try{
+    /* Do not try to 'repair' an empty stripe. Empty keys are
+     * valid but cannot be erasure coded. */
+    if(data)
+      erasure.compute(stripe);
+  }catch(const std::exception& e){
+    return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
+  }
+
+  /* Create a single value from stripe values. */
+  auto v = make_shared<string>();
+  for(int i=0; i<nData; i++){
+    v->append(stripe[i]->c_str());
   }
   value = std::move(v);
   return status;
@@ -311,16 +379,30 @@ KineticStatus KineticCluster::put(
 
   auto version_old = version_in ? version_in : make_shared<const string>();
 
+  /* Create a stripe vector by chunking up the value into nData data chunks
+     and computing nParity parity chunks. */
+  int chunk_size = (value->size() + nData-1) / (nData);
+  std::vector< shared_ptr<const string> > stripe;
+  for(int i=0; i<nData+nParity; i++){
+    if(value->size() > i*chunk_size)
+      stripe.push_back(
+            make_shared<string>(value->substr(i*chunk_size, chunk_size))
+            );
+    else
+      stripe.push_back(make_shared<string>());
+  }
+  try{
+    /*Do not try to erasure code data if we are putting an empty key. The
+      erasure coding would assume all chunks are missing. and throw an error.*/
+    if(chunk_size)
+      erasure.compute(stripe);
+  }catch(const std::exception& e){
+    return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
+  }
 
-  int chunk_size = (value->size() + nData+nParity-1) / (nData+nParity);
-
+  /* Set up execution to write stripe to drives. */
   for(int i=0; i<ops.size(); i++){
-
-    /* select value subrange. */
-    auto v = make_shared<string>();
-    if(chunk_size){
-      v->assign( value->substr(i*chunk_size, chunk_size) );
-    }
+    auto& v = stripe[i];
 
     /* Generate Checksum. */
     auto checksum = v->empty() ? 0 : crc32(0, (const Bytef*) v->c_str(), v->length());
@@ -597,7 +679,7 @@ KineticStatus KineticCluster::execute(std::vector< KineticAsyncOperation >& ops)
       break;
 
     /* Wait on previously set fds until timeout */
-    struct timeval tv {20, 0};
+    struct timeval tv {operation_timeout.count(), 0};
     num_fds  = select(num_fds+1, &read_fds, &write_fds, NULL, &tv);
 
     if (num_fds <= 0) {

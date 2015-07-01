@@ -21,12 +21,17 @@ SCENARIO("Cluster integration test.", "[Cluster]"){
   REQUIRE(con1->InstantErase("NULL").ok());
   REQUIRE(con2->InstantErase("NULL").ok());
 
-  GIVEN ("A drive cluster"){
-    std::vector< std::pair<ConnectionOptions,ConnectionOptions> > info;
+  std::vector< std::pair<ConnectionOptions,ConnectionOptions> > info;
     info.push_back(std::pair<ConnectionOptions,ConnectionOptions>(target1,target1));
     info.push_back(std::pair<ConnectionOptions,ConnectionOptions>(target2,target2));
+  
+  GIVEN ("A drive cluster"){
 
-    auto cluster = make_shared<KineticCluster>(1, 0, info, std::chrono::seconds(20));
+
+    auto cluster = make_shared<KineticCluster>(1, 1, info, 
+            std::chrono::seconds(20),
+            std::chrono::seconds(10)
+    );
 
     THEN("cluster limits reflect kinetic-drive limits"){
       REQUIRE(cluster->limits().max_key_size == 4096);
@@ -72,7 +77,7 @@ SCENARIO("Cluster integration test.", "[Cluster]"){
           make_shared<string>("key"),
           make_shared<string>("incorrect"),
           false);
-          REQUIRE(status.statusCode() == kinetic::StatusCode::REMOTE_VERSION_MISMATCH);        
+          REQUIRE(status.statusCode() == kinetic::StatusCode::REMOTE_VERSION_MISMATCH);
       }
 
       THEN("It can be removed again."){
