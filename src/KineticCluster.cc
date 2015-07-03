@@ -244,13 +244,13 @@ KineticStatus KineticCluster::getVersion(
   auto status = execute(ops);
   if(!status.ok()) return status;
 
-  int count=0;
+  int count;
   auto& op = mostFrequent(ops, count, getVersionEqual);
   if(count<nData){
     return KineticStatus(
               StatusCode::CLIENT_IO_ERROR,
-              "Version missmatch: Read quorum of " +std::to_string(nData)+
-              " not reached. Maximum number observed: " +std::to_string(count)
+              "Version missmatch: "+std::to_string(count)+" equal versions does "
+              "not reach read quorum of "+std::to_string(nData)
             );
   }
   version.reset(new string(std::move(
@@ -275,6 +275,40 @@ void makeGetOp(
           std::cref(key),
           cb);
 }
+/* Build a stripe vector from the records returned by a get operation. Only
+ * accept values with valid CRC. */
+std::vector< shared_ptr<const string> > getOperationToStripe(
+    std::vector< KineticAsyncOperation >& ops,
+    int& count,
+    const std::shared_ptr<const string>& target_version
+)
+{
+  std::vector< shared_ptr<const string> > stripe;
+  count = 0;
+
+  for(auto o = ops.begin(); o != ops.end(); o++){
+    auto& record = std::static_pointer_cast<GetCallback>(o->callback)->getRecord();
+    stripe.push_back(make_shared<const string>());
+
+    if( record &&
+       *record->version() == *target_version &&
+        record->value() &&
+        record->value()->size()
+    ){
+      /* validate the checksum */
+      auto checksum = crc32(0,
+                        (const Bytef*) record->value()->c_str(), 
+                        record->value()->length()
+                      );
+      auto tag = std::to_string((long long unsigned int) checksum);
+      if(tag == *record->tag()){
+        stripe.back() = record->value();
+        count++;
+      }
+    }
+  }
+  return std::move(stripe);
+}
 
 KineticStatus KineticCluster::get(
     const shared_ptr<const string>& key,
@@ -292,36 +326,34 @@ KineticStatus KineticCluster::get(
   auto status = execute(ops);
   if(!status.ok()) return status;
 
+  /* At least nData get operations succeeded. Validate that a
+   * read quorum of nData operations returned a conforming version. */
   int count=0;
   auto& op = mostFrequent(ops, count, getRecordVersionEqual);
   if(count<nData){
     return KineticStatus(
               StatusCode::CLIENT_IO_ERROR,
-              "Version missmatch: Read quorum of " +std::to_string(nData)+
-              " not reached. Maximum number observed: " +std::to_string(count)
+              "Version missmatch: "+std::to_string(count)+" equal versions does "
+              "not reach read quorum of "+std::to_string(nData)
             );
   }
-  version = std::static_pointer_cast<GetCallback>(op.callback)->getRecord()->version();
+  auto target_version = std::static_pointer_cast<GetCallback>(op.callback)->getRecord()->version();
+  auto stripe = getOperationToStripe(ops, count, target_version);
 
-  bool data = false;
-  std::vector< shared_ptr<const string> > stripe;
-  for(auto o = ops.begin(); o != ops.end(); o++){
-    auto cb = std::static_pointer_cast<GetCallback>(o->callback);
-    if(cb->getRecord() && (*cb->getRecord()->version() == *version)){
-      stripe.push_back(cb->getRecord()->value());
-      if(cb->getRecord()->value() && cb->getRecord()->value()->size())
-        data=true;
-    }
-    else
-      stripe.push_back(make_shared<const string>(""));
+  /* count 0 -> empty value for key. */
+  if(count==0){
+    value = make_shared<const string>();
+    version = target_version;
+    return status;
   }
-  try{
-    /* Do not try to 'repair' an empty stripe. Empty keys are
-     * valid but cannot be erasure coded. */
-    if(data)
-      erasure.compute(stripe);
-  }catch(const std::exception& e){
-    return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
+
+  /* missing blocks -> erasure code */
+  if(count < stripe.size()){
+    try{
+        erasure.compute(stripe);
+    }catch(const std::exception& e){
+      return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
+    }
   }
 
   /* Create a single value from stripe values. */
@@ -330,6 +362,7 @@ KineticStatus KineticCluster::get(
     v->append(stripe[i]->c_str());
   }
   value = std::move(v);
+  version = target_version;
   return status;
 }
 

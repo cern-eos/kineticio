@@ -8,7 +8,7 @@
 
 /*----------------------------------------------------------------------------*/
 #include "KineticClusterInterface.hh"
-#include "KineticChunk.hh"
+#include "ClusterChunk.hh"
 #include <condition_variable>
 #include <unordered_map>
 #include <chrono>
@@ -196,10 +196,10 @@ private:
   };
 
   //----------------------------------------------------------------------------
-  //! Simple LRU cache for KineticChunks. Is not threadsafe. Will obtain chunks
+  //! Simple LRU cache for ClusterChunks. Is not threadsafe. Will obtain chunks
   //! that are not in cache automatically from the backend.
   //----------------------------------------------------------------------------
-  class KineticChunkCache {
+  class ChunkCache {
 
   public:
     //--------------------------------------------------------------------------
@@ -212,7 +212,7 @@ private:
     //!        cluster yet
     //! @return the chunk on success, throws on error
     //--------------------------------------------------------------------------
-    std::shared_ptr<KineticChunk> get(int chunk_number, bool create=false);
+    std::shared_ptr<ClusterChunk> get(int chunk_number, bool create=false);
 
     //--------------------------------------------------------------------------
     //! Blocking flush of the entire cache.
@@ -230,12 +230,12 @@ private:
     //! @param parent reference to the enclosing KineticFileIo object
     //! @param cache_capacity maximum number of items in chache
     //--------------------------------------------------------------------------
-    explicit KineticChunkCache(KineticFileIo & parent, size_t cache_capacity);
+    explicit ChunkCache(KineticFileIo & parent, size_t cache_capacity);
 
     //--------------------------------------------------------------------------
     //! Destructor.
     //--------------------------------------------------------------------------
-    ~KineticChunkCache();
+    ~ChunkCache();
 
 private:
     //! reference to the enclosing KineticFileIo object
@@ -248,8 +248,8 @@ private:
     std::list<int> lru_order;
 
     //! the cache... could increase performance a little bit using
-    //! <ListIterator, KineticChunk> elements
-    std::unordered_map<int, std::shared_ptr<KineticChunk>> cache;
+    //! <ListIterator, ClusterChunk> elements
+    std::unordered_map<int, std::shared_ptr<ClusterChunk>> cache;
   };
 
 private:
@@ -257,7 +257,7 @@ private:
   ClusterPointer cluster;
 
   //! cache & background flush functionality.
-  KineticChunkCache cache;
+  ChunkCache cache;
 
   //! keep track of the last chunk to answer stat requests reasonably
   LastChunkNumber lastChunkNumber;

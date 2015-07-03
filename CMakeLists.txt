@@ -47,7 +47,7 @@ include_directories(
     ${ISAL_INCLUDE_DIRS}
 )
 add_library(kineticio SHARED
-    src/KineticChunk.cc
+    src/ClusterChunk.cc
     src/KineticClusterMap.cc
     src/KineticFileIo.cc
     src/KineticFileAttr.cc
@@ -67,12 +67,12 @@ target_link_libraries(kineticio
 
 add_executable(kinetic-test
     test/KineticTestMain.cc
-    test/KineticChunkTest.cc
+    test/ClusterChunkTest.cc
     test/KineticIoTest.cc
     test/KineticClusterMapTest.cc
     test/KineticClusterTest.cc
     test/ErasureEncdodingTest.cc
-    src/KineticChunk.cc
+    src/ClusterChunk.cc
     src/KineticClusterMap.cc
     src/KineticFileIo.cc
     src/KineticFileAttr.cc

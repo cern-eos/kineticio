@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include "catch.hpp"
-#include "KineticChunk.hh"
+#include "ClusterChunk.hh"
 #include "KineticSingletonCluster.hh"
 #include "KineticCluster.hh"
 
@@ -36,7 +36,7 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
             std::chrono::seconds(10)
     );
 
-    KineticChunk c(cluster, std::make_shared<std::string>("key"));
+    ClusterChunk c(cluster, std::make_shared<std::string>("key"));
 
     THEN("Illegal writes to the chunk fail."){
       char buf[10];
@@ -90,7 +90,7 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
         REQUIRE_NOTHROW(c.flush());
 
         THEN("It can be read again from the drive."){
-          KineticChunk x(cluster, std::make_shared<std::string>("key"));
+          ClusterChunk x(cluster, std::make_shared<std::string>("key"));
           char out[10];
           REQUIRE_NOTHROW(x.read(out,0,10));
           REQUIRE(memcmp(in,out,10) == 0);
@@ -101,7 +101,7 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
         }
 
         AND_WHEN("The on-drive value is manipulated by someone else."){
-          KineticChunk x(cluster, std::make_shared<std::string>("key"));
+          ClusterChunk x(cluster, std::make_shared<std::string>("key"));
           REQUIRE_NOTHROW(x.write("99",0,2));
           REQUIRE_NOTHROW(x.flush());
 

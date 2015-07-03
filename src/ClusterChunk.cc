@@ -1,4 +1,4 @@
-#include "KineticChunk.hh"
+#include "ClusterChunk.hh"
 #include "KineticClusterInterface.hh"
 #include "KineticException.hh"
 #include <algorithm>
@@ -12,10 +12,10 @@ using std::chrono::system_clock;
 using kinetic::KineticStatus;
 using kinetic::StatusCode;
 
-const int KineticChunk::expiration_time = 1000;
+const int ClusterChunk::expiration_time = 1000;
 
 
-KineticChunk::KineticChunk(std::shared_ptr<KineticClusterInterface> c,
+ClusterChunk::ClusterChunk(std::shared_ptr<KineticClusterInterface> c,
     const std::shared_ptr<const std::string> k, bool skip_initial_get) :
         cluster(c), key(k), version(), value(make_shared<string>()),
         timestamp(), updates()
@@ -25,14 +25,14 @@ KineticChunk::KineticChunk(std::shared_ptr<KineticClusterInterface> c,
     getRemoteValue();
 }
 
-KineticChunk::~KineticChunk()
+ClusterChunk::~ClusterChunk()
 {
   // take the mutex in order to prevent object deconsturction while flush 
   // operation is executed by non-owning thread.
   std::lock_guard<std::mutex> lock(mutex);
 }
 
-bool KineticChunk::validateVersion()
+bool ClusterChunk::validateVersion()
 {
   /* See if check is unnecessary based on expiration. */
   if(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -57,7 +57,7 @@ bool KineticChunk::validateVersion()
   return false;
 }
 
-void KineticChunk::getRemoteValue()
+void ClusterChunk::getRemoteValue()
 {
   std::shared_ptr<const string> remote_value;
   auto status = cluster->get(key, false, version, remote_value);
@@ -90,7 +90,7 @@ void KineticChunk::getRemoteValue()
   value = merged_value;
 }
 
-void KineticChunk::read(char* const buffer, off_t offset, size_t length)
+void ClusterChunk::read(char* const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -113,7 +113,7 @@ void KineticChunk::read(char* const buffer, off_t offset, size_t length)
   }
 }
 
-void KineticChunk::write(const char* const buffer, off_t offset, size_t length)
+void ClusterChunk::write(const char* const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -130,7 +130,7 @@ void KineticChunk::write(const char* const buffer, off_t offset, size_t length)
   updates.push_back(std::pair<off_t, size_t>(offset, length));
 }
 
-void KineticChunk::truncate(off_t offset)
+void ClusterChunk::truncate(off_t offset)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -142,7 +142,7 @@ void KineticChunk::truncate(off_t offset)
   updates.push_back(std::pair<off_t, size_t>(offset, 0));
 }
 
-void KineticChunk::flush()
+void ClusterChunk::flush()
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -163,7 +163,7 @@ void KineticChunk::flush()
   timestamp = system_clock::now();
 }
 
-bool KineticChunk::dirty() const
+bool ClusterChunk::dirty() const
 {
   std::lock_guard<std::mutex> lock(mutex);
   if(!version)
@@ -171,7 +171,7 @@ bool KineticChunk::dirty() const
   return !updates.empty();
 }
 
-int KineticChunk::size()
+int ClusterChunk::size()
 {
   std::lock_guard<std::mutex> lock(mutex);
 

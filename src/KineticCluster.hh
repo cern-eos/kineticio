@@ -124,11 +124,6 @@ private:
       std::shared_ptr<const std::string>& version
   );
 
-  /* This should mark a key to be repaired. Not sure if it should happen in the 
-     background. */
-  void schedule_repair(std::string key);
-  void schedule_repair(std::string key, std::vector< KineticAsyncOperation >& getops);
-
 private:
   //! number of data chunks in a stripe
   std::size_t nData;
@@ -137,8 +132,8 @@ private:
   std::size_t nParity;
 
   std::vector< RateLimitKineticConnection > connections;
-  
-  std::chrono::seconds operation_timeout; 
+
+  std::chrono::seconds operation_timeout;
 
   //! cluster limits are constant over cluster lifetime
   KineticClusterLimits clusterlimits;

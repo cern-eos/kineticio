@@ -174,7 +174,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
       }
 
       THEN("Calling stat will fail with ENOENT after expiration time has run out."){
-        usleep(KineticChunk::expiration_time * 1000);
+        usleep(ClusterChunk::expiration_time * 1000);
         struct stat stbuf;
         REQUIRE_THROWS(kio.Stat(&stbuf));
       }

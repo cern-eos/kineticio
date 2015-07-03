@@ -79,7 +79,7 @@ int64_t KineticFileIo::ReadWrite (long long off, char* buffer,
       lastChunkNumber.set(chunk_number);
       create = true;
     }
-    shared_ptr<KineticChunk> chunk = cache.get(chunk_number, create);
+    shared_ptr<ClusterChunk> chunk = cache.get(chunk_number, create);
 
     if(mode == rw::WRITE){
       chunk->write(buffer+off_done, chunk_offset, chunk_length);
@@ -89,7 +89,7 @@ int64_t KineticFileIo::ReadWrite (long long off, char* buffer,
        * chunks in memory than the size of the chunk cache, which implicitly
        * limits the number of threads that could be concurrently created here.*/
       if(chunk_offset + chunk_length == chunk_capacity)
-        std::thread(&KineticChunk::flush, chunk).detach();
+        std::thread(&ClusterChunk::flush, chunk).detach();
     }
     else if (mode == rw::READ){
       chunk->read(buffer+off_done, chunk_offset, chunk_length);
@@ -192,7 +192,7 @@ void KineticFileIo::Stat (struct stat* buf, uint16_t timeout)
          "No cluster set for FileIO object.");
 
   lastChunkNumber.verify();
-  std::shared_ptr<KineticChunk> last_chunk = cache.get(lastChunkNumber.get());
+  std::shared_ptr<ClusterChunk> last_chunk = cache.get(lastChunkNumber.get());
 
   memset(buf, 0, sizeof(struct stat));
   buf->st_blksize = cluster->limits().max_value_size;
@@ -308,7 +308,7 @@ void KineticFileIo::LastChunkNumber::verify()
    * created new chunks we know nothing about, or truncated the file. */
   if( std::chrono::duration_cast<std::chrono::milliseconds>(
         system_clock::now() - last_chunk_number_timestamp).count()
-      < KineticChunk::expiration_time
+      < ClusterChunk::expiration_time
     ) return;
 
   /* Technically, we could start at chunk 0 to catch all cases... but that the
@@ -359,22 +359,22 @@ void KineticFileIo::LastChunkNumber::verify()
 }
 
 
-KineticFileIo::KineticChunkCache::KineticChunkCache(KineticFileIo & parent, size_t cache_capacity):
+KineticFileIo::ChunkCache::ChunkCache(KineticFileIo & parent, size_t cache_capacity):
     parent(parent), capacity(cache_capacity)
 {
 }
 
-KineticFileIo::KineticChunkCache::~KineticChunkCache()
+KineticFileIo::ChunkCache::~ChunkCache()
 {
 }
 
-void KineticFileIo::KineticChunkCache::clear()
+void KineticFileIo::ChunkCache::clear()
 {
   cache.clear();
   lru_order.clear();
 }
 
-void KineticFileIo::KineticChunkCache::flush()
+void KineticFileIo::ChunkCache::flush()
 {
   for(auto it=cache.begin(); it!=cache.end(); ++it){
     if(it->second->dirty())
@@ -382,7 +382,7 @@ void KineticFileIo::KineticChunkCache::flush()
   }
 }
 
-std::shared_ptr<KineticChunk> KineticFileIo::KineticChunkCache::get(int chunk_number, bool create)
+std::shared_ptr<ClusterChunk> KineticFileIo::ChunkCache::get(int chunk_number, bool create)
 {
   if(cache.count(chunk_number)){
     lru_order.remove(chunk_number);
@@ -397,7 +397,7 @@ std::shared_ptr<KineticChunk> KineticFileIo::KineticChunkCache::get(int chunk_nu
     lru_order.pop_front();
   }
 
-  std::shared_ptr<KineticChunk> chunk(new KineticChunk(parent.cluster,
+  std::shared_ptr<ClusterChunk> chunk(new ClusterChunk(parent.cluster,
       path_util::chunkKey(parent.chunk_basename, chunk_number), create));
   cache.insert(std::make_pair(chunk_number,chunk));
   lru_order.push_back(chunk_number);
