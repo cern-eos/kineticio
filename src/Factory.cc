@@ -1,16 +1,18 @@
-#include "IoFactory.hh"
+#include "Factory.hh"
 #include "FileIo.hh"
 #include "FileAttr.hh"
 #include "ClusterMap.hh"
 #include "PathUtil.hh"
 
+using namespace kio;
 
-std::shared_ptr<FileIoInterface> IoFactory::sharedFileIo()
+
+std::shared_ptr<FileIoInterface> Factory::sharedFileIo()
 {
   return std::make_shared<FileIo>();
 }
 
-std::unique_ptr<FileIoInterface> IoFactory::uniqueFileIo()
+std::unique_ptr<FileIoInterface> Factory::uniqueFileIo()
 {
   return std::unique_ptr<FileIoInterface>(new FileIo());
 }
@@ -30,7 +32,7 @@ std::shared_ptr<ClusterInterface> attrCluster(const char* path)
 }
 
 
-std::shared_ptr<FileAttrInterface> IoFactory::sharedFileAttr(const char* path)
+std::shared_ptr<FileAttrInterface> Factory::sharedFileAttr(const char* path)
 {
   auto cluster = attrCluster(path);
   if(cluster)
@@ -38,7 +40,7 @@ std::shared_ptr<FileAttrInterface> IoFactory::sharedFileAttr(const char* path)
   return std::shared_ptr<FileAttrInterface>();
 }
 
-std::unique_ptr<FileAttrInterface> IoFactory::uniqueFileAttr(const char* path)
+std::unique_ptr<FileAttrInterface> Factory::uniqueFileAttr(const char* path)
 {
   auto cluster = attrCluster(path);
   if(cluster)

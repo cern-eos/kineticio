@@ -6,6 +6,7 @@
 using std::string;
 using std::make_shared;
 using std::shared_ptr;
+using namespace kio;
 
 
 /* This function is (almost) completely ripped from the erasure_code_test.cc file

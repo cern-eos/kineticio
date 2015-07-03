@@ -1,10 +1,11 @@
 #include "catch.hpp"
-#include "IoFactory.hh"
+#include "Factory.hh"
 #include <unistd.h>
 #include <string.h>
 #include <memory>
 #include <kinetic/kinetic.h>
 
+using namespace kio;
 
 SCENARIO("KineticIo Integration Test", "[Io]"){
 
@@ -19,7 +20,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
   REQUIRE(con1->InstantErase("NULL").ok());
   REQUIRE(con2->InstantErase("NULL").ok());
 
-  auto fileio = IoFactory::uniqueFileIo();
+  auto fileio = Factory::uniqueFileIo();
   std::string base_path("kinetic:Cluster1:");
   std::string path(base_path+"filename");
 
@@ -43,7 +44,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
 
     THEN("Factory function for Attribute class throws"){
-      REQUIRE_THROWS( IoFactory::uniqueFileAttr(path.c_str()) );
+      REQUIRE_THROWS( Factory::uniqueFileAttr(path.c_str()) );
     }
   }
 
@@ -65,7 +66,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
 
     THEN("Factory function for Attribute class returns 0"){
-      auto a = IoFactory::uniqueFileAttr(path.c_str());
+      auto a = Factory::uniqueFileAttr(path.c_str());
       REQUIRE(!a);
      }
 
@@ -90,7 +91,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
 
     
     THEN("Factory function for Attribute class succeeds"){
-      auto a = IoFactory::uniqueFileAttr(path.c_str());
+      auto a = Factory::uniqueFileAttr(path.c_str());
       REQUIRE(a);
 
       AND_THEN("attributes can be set and read-in again."){
@@ -165,7 +166,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
 
     AND_WHEN("The file is removed via a second io object."){
-      auto fileio_2nd = IoFactory::uniqueFileIo();
+      auto fileio_2nd = Factory::uniqueFileIo();
       REQUIRE_NOTHROW(fileio_2nd->Open(path.c_str(), 0));
       REQUIRE_NOTHROW(fileio_2nd->Remove());
 

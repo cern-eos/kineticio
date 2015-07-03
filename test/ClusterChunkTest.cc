@@ -5,6 +5,8 @@
 #include "KineticSingletonCluster.hh"
 #include "KineticCluster.hh"
 
+using namespace kio;
+
 SCENARIO("Chunk integration test.", "[Chunk]"){
 
   kinetic::ConnectionOptions options;

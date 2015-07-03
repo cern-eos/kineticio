@@ -7,6 +7,8 @@
 #include <memory>
 #include <mutex>
 
+namespace kio{
+
 class KineticAutoConnection {
 public:
   //--------------------------------------------------------------------------
@@ -59,7 +61,7 @@ private:
   void connect();
 };
 
-
+}
 
 #endif	/* RATELIMITKINETICCONNECTION_HH */
 

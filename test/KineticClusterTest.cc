@@ -5,6 +5,7 @@ using std::shared_ptr;
 using std::string;
 using std::make_shared;
 using namespace kinetic;
+using namespace kio;
 
 SCENARIO("Cluster integration test.", "[Cluster]"){
 
@@ -41,7 +42,7 @@ SCENARIO("Cluster integration test.", "[Cluster]"){
     }
 
     THEN("Cluster size is reported."){
-      KineticClusterSize s = {0,0};
+      ClusterSize s = {0,0};
       REQUIRE(cluster->size(s).ok());
       REQUIRE(s.bytes_free > 0);
       REQUIRE(s.bytes_total > 0);

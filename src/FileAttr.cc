@@ -1,7 +1,7 @@
 #include "FileAttr.hh"
 
 using std::string;
-using kinetic::KineticStatus;
+using namespace kio;
 
 FileAttr::FileAttr(const char* p,
         std::shared_ptr<ClusterInterface> c) :

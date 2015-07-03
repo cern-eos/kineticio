@@ -15,6 +15,7 @@
 #include "ClusterInterface.hh"
 /*----------------------------------------------------------------------------*/
 
+namespace kio{
 
 //------------------------------------------------------------------------------
 //! High(er) level API for Cluster keys. Handles incremental updates and
@@ -133,6 +134,8 @@ private:
   //! thread-safety
   mutable std::mutex mutex;
 };
+
+}
 
 #endif
 

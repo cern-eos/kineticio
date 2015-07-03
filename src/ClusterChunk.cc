@@ -11,6 +11,7 @@ using std::string;
 using std::chrono::system_clock;
 using kinetic::KineticStatus;
 using kinetic::StatusCode;
+using namespace kio;
 
 const int ClusterChunk::expiration_time = 1000;
 

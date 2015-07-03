@@ -18,6 +18,8 @@
 #include "LRUCache.hh"
 /*----------------------------------------------------------------------------*/
 
+namespace kio{
+
 //------------------------------------------------------------------------------
 //! Supplying a fst wide cluster map. Threadsafe.
 //------------------------------------------------------------------------------
@@ -131,6 +133,8 @@ static ClusterMap & cmap()
 {
   static ClusterMap clustermap;
   return clustermap;
+}
+
 }
 
 

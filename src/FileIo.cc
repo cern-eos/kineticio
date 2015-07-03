@@ -13,6 +13,8 @@ using std::chrono::system_clock;
 using kinetic::KineticStatus;
 using kinetic::StatusCode;
 
+using namespace kio;
+
 FileIo::FileIo (size_t cache_capacity) :
     cluster(), cache(*this, cache_capacity), lastChunkNumber(*this)
 {
@@ -211,7 +213,7 @@ void FileIo::Statfs (const char* p, struct statfs* sfs)
     obj_path=p;
   }
 
-  KineticClusterSize s;
+  ClusterSize s;
   if(!cluster->size(s).ok())
      throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
          "Could not obtain cluster size values.");

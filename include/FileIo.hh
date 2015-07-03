@@ -16,7 +16,7 @@
 #include <queue>
 #include <list>
 
-
+namespace kio{
 
 //------------------------------------------------------------------------------
 //! Class used for doing Kinetic IO operations, mirroring FileIo interface
@@ -271,5 +271,5 @@ private:
     FileIo& operator = (const FileIo&) = delete;
 };
 
-
+}
 #endif  // __KINETICFILEIO__HH__

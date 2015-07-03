@@ -2,6 +2,8 @@
 #include "ClusterMap.hh"
 #include <exception>
 
+using namespace kio;
+
 
 SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
     GIVEN("An invalid path"){

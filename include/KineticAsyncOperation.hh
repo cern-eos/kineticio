@@ -5,6 +5,8 @@
 #include <functional>
 #include <memory>
 
+namespace kio{
+
 class KineticCallback {
 public:
   KineticCallback() :
@@ -41,6 +43,7 @@ struct KineticAsyncOperation {
   KineticAutoConnection& connection;
 };
 
+}
 
 #endif	/* KINETICASYNCOPERATION_HH */
 

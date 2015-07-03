@@ -9,6 +9,8 @@
 #include <exception>
 #include <string>
 
+namespace kio {
+
 //------------------------------------------------------------------------------
 //! Providing information to enable detailed logging.
 //------------------------------------------------------------------------------
@@ -76,6 +78,8 @@ private:
   //! the exception message
   std::string _message;
 };
+
+}
 
 #endif	/* __KINETICIO_LOGGINGEXCEPTION_HH__ */
 

@@ -11,6 +11,7 @@ using std::unique_ptr;
 using std::shared_ptr;
 using std::string;
 using namespace kinetic;
+using namespace kio;
 
 KineticSingletonCluster::KineticSingletonCluster(
     const kinetic::ConnectionOptions &ci,
@@ -251,12 +252,12 @@ KineticStatus KineticSingletonCluster::getLog(std::vector<Command_GetLog_Type> t
   return status;
 }
 
-const KineticClusterLimits& KineticSingletonCluster::limits() const
+const ClusterLimits& KineticSingletonCluster::limits() const
 {
   return clusterlimits;
 }
 
-KineticStatus KineticSingletonCluster::size(KineticClusterSize& size)
+KineticStatus KineticSingletonCluster::size(ClusterSize& size)
 {
   std::lock_guard<std::mutex> lck(mutex);
 

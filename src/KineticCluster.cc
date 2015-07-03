@@ -14,6 +14,7 @@ using std::unique_ptr;
 using std::shared_ptr;
 using std::string;
 using namespace kinetic;
+using namespace kio;
 
 
 class GetCallback : public KineticCallback, public GetCallbackInterface{
@@ -613,12 +614,12 @@ KineticStatus KineticCluster::getLog(std::vector<Command_GetLog_Type> types)
   return getlog_status;
 }
 
-const KineticClusterLimits& KineticCluster::limits() const
+const ClusterLimits& KineticCluster::limits() const
 {
   return clusterlimits;
 }
 
-KineticStatus KineticCluster::size(KineticClusterSize& size)
+KineticStatus KineticCluster::size(ClusterSize& size)
 {
   std::lock_guard<std::mutex> lck(getlog_mutex);
   if(getlog_outstanding == false){

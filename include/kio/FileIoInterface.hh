@@ -10,6 +10,8 @@
 #include <sys/vfs.h>
 #include <sys/stat.h>
 
+namespace kio {
+
 //------------------------------------------------------------------------------
 //! EOS-style FileIo interface.
 //------------------------------------------------------------------------------
@@ -125,5 +127,6 @@ public:
   virtual ~FileIoInterface (){};
 };
 
+}
 
 #endif  // __KINETICIO_FILEIOINTERFACE__HH__

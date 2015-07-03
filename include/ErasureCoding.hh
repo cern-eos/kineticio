@@ -11,6 +11,8 @@
 #include <string>
 #include <map>
 
+namespace kio{
+
 class ErasureCoding{
 public:
   //--------------------------------------------------------------------------
@@ -84,6 +86,8 @@ private:
   //! a cache of previously used coding tables
   std::map<std::string, CodingTable> cache;
 };
+
+}
 
 #endif	/* ERASURECODING_HH */
 

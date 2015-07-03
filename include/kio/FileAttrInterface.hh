@@ -8,6 +8,8 @@
 
 #include <string>
 
+namespace kio{
+
 //------------------------------------------------------------------------------
 //! Interface used for doing Kinetic attribute IO operations,
 //! mirroring EOS FileIo::Attr interface.
@@ -41,5 +43,6 @@ public:
   virtual ~FileAttrInterface (){};
 };
 
+}
 
 #endif // __KINETICIO_FILEATTRINTERFACE__HH__

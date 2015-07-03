@@ -1,7 +1,9 @@
 #include "KineticAutoConnection.hh"
 #include "LoggingException.hh"
 #include <sstream>
+
 using namespace kinetic;
+using namespace kio;
 
 KineticAutoConnection::KineticAutoConnection(
         std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > o,

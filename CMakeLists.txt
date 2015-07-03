@@ -51,7 +51,7 @@ add_library(kineticio SHARED
     src/ClusterMap.cc
     src/FileIo.cc
     src/FileAttr.cc
-    src/IoFactory.cc
+    src/Factory.cc
     src/KineticAutoConnection.cc
     src/KineticSingletonCluster.cc
     src/KineticCluster.cc
@@ -77,7 +77,7 @@ add_executable(kinetic-test
     src/ClusterMap.cc
     src/FileIo.cc
     src/FileAttr.cc
-    src/IoFactory.cc
+    src/Factory.cc
     src/KineticAutoConnection.cc
     src/KineticSingletonCluster.cc
     src/KineticCluster.cc

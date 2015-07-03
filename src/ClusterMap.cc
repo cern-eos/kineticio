@@ -8,6 +8,8 @@
 #include "LRUCache.hh"
 #include <stdio.h>
 
+using namespace kio;
+
 
 /* Read file located at path into string buffer and return it. */
 static std::string readfile(const char* path)

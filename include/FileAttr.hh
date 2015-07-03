@@ -11,6 +11,8 @@
 #include <string>
 #include <memory>
 
+namespace kio{
+
 //------------------------------------------------------------------------------
 //! Class used for doing Kinetic attribute IO operations, mirroring FileIo::Attr
 //! interface. Can throw.
@@ -52,5 +54,7 @@ public:
   // ------------------------------------------------------------------------
   virtual ~FileAttr ();
 };
+
+}
 
 #endif // __KINETICFILEATTR__HH__

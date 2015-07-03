@@ -5,7 +5,7 @@ using std::shared_ptr;
 using std::string;
 using std::make_shared;
 
-#include <array>
+using namespace kio;
 
 const char * story[] = {
 "0 Eine entscheidende Sitzung gibt es noch: Im Schuldenstreit zwischen ",

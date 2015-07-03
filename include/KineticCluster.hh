@@ -17,13 +17,15 @@
 #endif
  */
 
+namespace kio{
+
 class KineticCluster : public ClusterInterface {
 public:
   //! See documentation in superclass.
-  const KineticClusterLimits& limits() const;
+  const ClusterLimits& limits() const;
   //! See documentation in superclass.
   kinetic::KineticStatus size(
-      KineticClusterSize& size
+      ClusterSize& size
   );
   //! See documentation in superclass.
   kinetic::KineticStatus get(
@@ -137,10 +139,10 @@ private:
   std::chrono::seconds operation_timeout;
 
   //! cluster limits are constant over cluster lifetime
-  KineticClusterLimits clusterlimits;
+  ClusterLimits clusterlimits;
 
   //! size information of the cluster (total / free bytes)
-  KineticClusterSize clustersize;
+  ClusterSize clustersize;
 
   //! status of last attempt to update the drive log
   kinetic::KineticStatus getlog_status;
@@ -154,5 +156,7 @@ private:
   // erasure coding
   std::shared_ptr<ErasureCoding> erasure;
 };
+
+}
 
 #endif	/* KINETICCLUSTER_HH */
