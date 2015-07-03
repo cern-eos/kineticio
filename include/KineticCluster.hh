@@ -1,10 +1,10 @@
 #ifndef KINETICCLUSTER_HH
 #define	KINETICCLUSTER_HH
 
-#include "KineticClusterInterface.hh"
-#include "RateLimitKineticConnection.hh"
+#include "ClusterInterface.hh"
+#include "KineticAutoConnection.hh"
 #include "KineticAsyncOperation.hh"
-#include "ErasureEncoding.hh"
+#include "ErasureCoding.hh"
 #include <chrono>
 #include <mutex>
 
@@ -17,7 +17,7 @@
 #endif
  */
 
-class KineticCluster : public KineticClusterInterface {
+class KineticCluster : public ClusterInterface {
 public:
   //! See documentation in superclass.
   const KineticClusterLimits& limits() const;
@@ -66,7 +66,8 @@ public:
     std::size_t stripe_size, std::size_t num_parities,
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info,
     std::chrono::seconds min_reconnect_interval,
-    std::chrono::seconds operation_timeout
+    std::chrono::seconds operation_timeout,
+    std::shared_ptr<ErasureCoding> erasure
   );
 
   //--------------------------------------------------------------------------
@@ -131,7 +132,7 @@ private:
   //! number of parities in a stripe
   std::size_t nParity;
 
-  std::vector< RateLimitKineticConnection > connections;
+  std::vector< KineticAutoConnection > connections;
 
   std::chrono::seconds operation_timeout;
 
@@ -151,7 +152,7 @@ private:
   std::mutex getlog_mutex;
 
   // erasure coding
-  ErasureEncoding erasure;
+  std::shared_ptr<ErasureCoding> erasure;
 };
 
 #endif	/* KINETICCLUSTER_HH */

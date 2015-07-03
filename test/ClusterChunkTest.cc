@@ -21,7 +21,9 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
   REQUIRE(con->InstantErase("NULL").ok());
 
   GIVEN ("An empty chunk."){
-
+    int nData = 1;
+    int nParity = 0; 
+    
     /*
     auto cluster = std::make_shared<KineticSingletonCluster>(options,
             std::chrono::seconds(20),
@@ -31,9 +33,10 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
 
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info;
     info.push_back(std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>(options,options));
-    auto cluster = std::make_shared<KineticCluster>(1, 0, info,
+    auto cluster = std::make_shared<KineticCluster>(nData, nParity, info,
             std::chrono::seconds(20),
-            std::chrono::seconds(10)
+            std::chrono::seconds(10),
+            std::make_shared<ErasureCoding>(nData,nParity)
     );
 
     ClusterChunk c(cluster, std::make_shared<std::string>("key"));

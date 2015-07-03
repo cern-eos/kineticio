@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "KineticClusterMap.hh"
+#include "ClusterMap.hh"
 #include <exception>
 
 
@@ -8,7 +8,7 @@ SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
         std::string location(getenv("KINETIC_DRIVE_LOCATION") ? getenv("KINETIC_DRIVE_LOCATION") : "" );
         setenv("KINETIC_DRIVE_LOCATION", "nonExistingFileName", 1);
 
-        KineticClusterMap kcm;
+        ClusterMap kcm;
         THEN("Map is empty"){
             REQUIRE(kcm.getSize() == 0);
         }
@@ -19,7 +19,7 @@ SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
         std::string location(getenv("KINETIC_DRIVE_LOCATION") ? getenv("KINETIC_DRIVE_LOCATION") : "" );
         setenv("KINETIC_DRIVE_LOCATION", "kinetic-test", 1);
 
-        KineticClusterMap kcm;
+        ClusterMap kcm;
         THEN("Map is empty"){
             REQUIRE(kcm.getSize() == 0);
         }
@@ -27,8 +27,8 @@ SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
     }
 
     GIVEN("A valid path."){
-        KineticClusterMap kcm;
-        std::shared_ptr<KineticClusterInterface> c;
+        ClusterMap kcm;
+        std::shared_ptr<ClusterInterface> c;
 
         THEN("Map size equals number of entries."){
             REQUIRE(kcm.getSize() == 3);

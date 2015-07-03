@@ -12,7 +12,7 @@
 #include <string>
 #include <mutex>
 #include <list>
-#include "KineticClusterInterface.hh"
+#include "ClusterInterface.hh"
 /*----------------------------------------------------------------------------*/
 
 
@@ -85,7 +85,7 @@ public:
   //! @param key the name of the chunk
   //! @param skip_initial_get if true assume that the key does not yet exist
   //--------------------------------------------------------------------------
-  explicit ClusterChunk(std::shared_ptr<KineticClusterInterface> cluster,
+  explicit ClusterChunk(std::shared_ptr<ClusterInterface> cluster,
                         const std::shared_ptr<const std::string> key,
                         bool skip_initial_get=false);
 
@@ -112,7 +112,7 @@ private:
 
 private:
   //! cluster this chunk is (to be) stored on
-  std::shared_ptr<KineticClusterInterface> cluster;
+  std::shared_ptr<ClusterInterface> cluster;
 
   //! the key of the chunk
   const std::shared_ptr<const std::string> key;

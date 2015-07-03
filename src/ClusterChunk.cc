@@ -1,6 +1,6 @@
 #include "ClusterChunk.hh"
-#include "KineticClusterInterface.hh"
-#include "KineticException.hh"
+#include "ClusterInterface.hh"
+#include "LoggingException.hh"
 #include <algorithm>
 #include <errno.h>
 
@@ -15,7 +15,7 @@ using kinetic::StatusCode;
 const int ClusterChunk::expiration_time = 1000;
 
 
-ClusterChunk::ClusterChunk(std::shared_ptr<KineticClusterInterface> c,
+ClusterChunk::ClusterChunk(std::shared_ptr<ClusterInterface> c,
     const std::shared_ptr<const std::string> k, bool skip_initial_get) :
         cluster(c), key(k), version(), value(make_shared<string>()),
         timestamp(), updates()
@@ -63,7 +63,7 @@ void ClusterChunk::getRemoteValue()
   auto status = cluster->get(key, false, version, remote_value);
 
   if(!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-    throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
+    throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
             "Attempting to read key '"+ *key+"' from cluster returned error "
             "message '"+status.message()+"'");
 
@@ -153,7 +153,7 @@ void ClusterChunk::flush()
   }
 
   if (!status.ok())
-    throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
+    throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
         "Attempting to write key '"+ *key+"' to the cluster returned error "
         "message '"+status.message()+"'");
 

@@ -39,7 +39,7 @@ set(CMAKE_CXX_FLAGS "--std=c++0x -g")
 
 include_directories(
     include/kio
-    src
+    include
     ${KINETIC-C++_INCLUDE_DIRS}
     ${JSONC_INCLUDE_DIRS}
     ${UUID_INCLUDE_DIRS}
@@ -48,13 +48,14 @@ include_directories(
 )
 add_library(kineticio SHARED
     src/ClusterChunk.cc
-    src/KineticClusterMap.cc
-    src/KineticFileIo.cc
-    src/KineticFileAttr.cc
+    src/ClusterMap.cc
+    src/FileIo.cc
+    src/FileAttr.cc
+    src/IoFactory.cc
+    src/KineticAutoConnection.cc
     src/KineticSingletonCluster.cc
-    src/RateLimitKineticConnection.cc
     src/KineticCluster.cc
-    src/ErasureEncoding.cc
+    src/ErasureCoding.cc
 )
 
 target_link_libraries(kineticio
@@ -66,20 +67,21 @@ target_link_libraries(kineticio
 )
 
 add_executable(kinetic-test
-    test/KineticTestMain.cc
+    test/TestMain.cc
     test/ClusterChunkTest.cc
-    test/KineticIoTest.cc
-    test/KineticClusterMapTest.cc
+    test/FileIoTest.cc
+    test/ClusterMapTest.cc
     test/KineticClusterTest.cc
-    test/ErasureEncdodingTest.cc
+    test/ErasureCodingTest.cc
     src/ClusterChunk.cc
-    src/KineticClusterMap.cc
-    src/KineticFileIo.cc
-    src/KineticFileAttr.cc
+    src/ClusterMap.cc
+    src/FileIo.cc
+    src/FileAttr.cc
+    src/IoFactory.cc
+    src/KineticAutoConnection.cc
     src/KineticSingletonCluster.cc
-    src/RateLimitKineticConnection.cc
     src/KineticCluster.cc
-    src/ErasureEncoding.cc
+    src/ErasureCoding.cc
 )
 target_link_libraries(kinetic-test
    ${JSONC_LIBRARIES}

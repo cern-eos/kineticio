@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "ErasureEncoding.hh"
+#include "ErasureCoding.hh"
 
 using std::shared_ptr;
 using std::string;
@@ -25,7 +25,7 @@ SCENARIO("Erasure Encoding Test.", "[Erasure]"){
   GIVEN ("An Erasure Code"){
     int nData = 10;
     int nParity = 3;
-    ErasureEncoding e(nData, nParity);
+    ErasureCoding e(nData, nParity);
 
     std::vector<shared_ptr<const string> > stripe(nData+nParity);
       for(int i=0; i<nData; i++)

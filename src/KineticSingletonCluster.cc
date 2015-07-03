@@ -1,5 +1,5 @@
 #include "KineticSingletonCluster.hh"
-#include "KineticException.hh"
+#include "LoggingException.hh"
 #include <uuid/uuid.h>
 #include <zlib.h>
 #include <functional>
@@ -24,12 +24,12 @@ KineticSingletonCluster::KineticSingletonCluster(
 {
   connect();
   if(!connection_status.ok())
-    throw KineticException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
+    throw LoggingException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
             "Initial connection failed: "+connection_status.message());
   getLog({Command_GetLog_Type::Command_GetLog_Type_LIMITS,
           Command_GetLog_Type::Command_GetLog_Type_CAPACITIES});
   if(!getlog_status.ok())
-    throw KineticException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
+    throw LoggingException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
             "Initial getlog failed: "+getlog_status.message());
 }
 
@@ -141,7 +141,8 @@ KineticStatus KineticSingletonCluster::put(
   uuid_t uuid;
   uuid_generate(uuid);
   auto version_new = std::make_shared<string>(
-    string(reinterpret_cast<const char *>(uuid), sizeof(uuid_t)));
+    reinterpret_cast<const char *>(uuid), sizeof(uuid_t)
+  );
 
   /* Generate Checksum. */
   auto checksum = value ? 0 : crc32(0, (const Bytef*) value->c_str(), value->length());

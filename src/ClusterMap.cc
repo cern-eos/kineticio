@@ -1,10 +1,11 @@
 #include <stdlib.h>
 #include <fstream>
 #include <sstream>
-#include "KineticClusterMap.hh"
+#include "ClusterMap.hh"
 #include "KineticSingletonCluster.hh"
 #include "KineticCluster.hh"
-#include "KineticException.hh"
+#include "LoggingException.hh"
+#include "LRUCache.hh"
 #include <stdio.h>
 
 
@@ -20,7 +21,8 @@ static std::string readfile(const char* path)
 }
 
 /* Printing errors initializing static global object to stderr.*/
-KineticClusterMap::KineticClusterMap()
+ClusterMap::ClusterMap() :
+  ecCache(10)
 {
   /* get file names */
   const char* location = getenv("KINETIC_DRIVE_LOCATION");
@@ -62,16 +64,16 @@ KineticClusterMap::KineticClusterMap()
   }
 }
 
-KineticClusterMap::~KineticClusterMap()
+ClusterMap::~ClusterMap()
 {
 }
 
-std::shared_ptr<KineticClusterInterface>  KineticClusterMap::getCluster(const std::string & id)
+std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string & id)
 {
   std::unique_lock<std::mutex> locker(mutex);
 
   if(!clustermap.count(id))
-    throw KineticException(ENODEV,__FUNCTION__,__FILE__,__LINE__,"Nonexisting "
+    throw LoggingException(ENODEV,__FUNCTION__,__FILE__,__LINE__,"Nonexisting "
         "cluster id '"+id+"' requested.");
 
   KineticClusterInfo & ki = clustermap.at(id);
@@ -80,7 +82,7 @@ std::shared_ptr<KineticClusterInterface>  KineticClusterMap::getCluster(const st
      std::vector<std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>> cops;
      for(auto wwn = ki.drives.begin(); wwn != ki.drives.end(); wwn++){
        if(!drivemap.count(*wwn))
-       throw KineticException(ENODEV,__FUNCTION__,__FILE__,__LINE__,"Nonexisting "
+       throw LoggingException(ENODEV,__FUNCTION__,__FILE__,__LINE__,"Nonexisting "
          "drive wwn '"+id+"' requested.");
        cops.push_back(drivemap.at(*wwn));
      }
@@ -93,22 +95,31 @@ std::shared_ptr<KineticClusterInterface>  KineticClusterMap::getCluster(const st
         std::chrono::seconds(5)
       );
     /* Normal Cluster. */
-    else
+    else{
+      auto ectype = std::to_string(ki.numData)+"-"+std::to_string(ki.numParity);
+      if(!ecCache.exists(ectype)){
+        ecCache.put(ectype,
+                std::make_shared<ErasureCoding>(ki.numData, ki.numParity)
+        );
+      }
+      
       ki.cluster = std::make_shared<KineticCluster>(
               ki.numData, ki.numParity,
-              cops, ki.min_reconnect_interval, ki.operation_timeout
+              cops, ki.min_reconnect_interval, ki.operation_timeout,
+              ecCache.get(ectype)
       );
+    }
   }
-  
+
   return ki.cluster;
 }
 
-int KineticClusterMap::getSize()
+int ClusterMap::getSize()
 {
   return clustermap.size();
 }
 
-int KineticClusterMap::parseDriveLocation(struct json_object * drive)
+int ClusterMap::parseDriveLocation(struct json_object * drive)
 {
   struct json_object *tmp = NULL;
   struct json_object *host= NULL;
@@ -141,7 +152,7 @@ int KineticClusterMap::parseDriveLocation(struct json_object * drive)
   return 0;
 }
 
-int KineticClusterMap::parseDriveSecurity(struct json_object * drive)
+int ClusterMap::parseDriveSecurity(struct json_object * drive)
 {
   struct json_object *tmp = NULL;
   if(!json_object_object_get_ex(drive, "wwn", &tmp))
@@ -164,7 +175,7 @@ int KineticClusterMap::parseDriveSecurity(struct json_object * drive)
   return 0;
 }
 
-int KineticClusterMap::parseClusterInformation(struct json_object * cluster)
+int ClusterMap::parseClusterInformation(struct json_object * cluster)
 {
   struct json_object *tmp = NULL;
   if(!json_object_object_get_ex(cluster, "clusterID", &tmp))
@@ -207,7 +218,7 @@ int KineticClusterMap::parseClusterInformation(struct json_object * cluster)
 }
 
 
-int KineticClusterMap::parseJson(const std::string& filedata, filetype type)
+int ClusterMap::parseJson(const std::string& filedata, filetype type)
 {
   struct json_object *root = json_tokener_parse(filedata.c_str());
   if(!root)

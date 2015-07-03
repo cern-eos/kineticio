@@ -26,11 +26,13 @@ SCENARIO("Cluster integration test.", "[Cluster]"){
     info.push_back(std::pair<ConnectionOptions,ConnectionOptions>(target2,target2));
   
   GIVEN ("A drive cluster"){
+    std::size_t nData = 1;
+    std::size_t nParity = 1; 
 
-
-    auto cluster = make_shared<KineticCluster>(1, 1, info, 
+    auto cluster = make_shared<KineticCluster>(nData, nParity, info,
             std::chrono::seconds(20),
-            std::chrono::seconds(10)
+            std::chrono::seconds(10),
+            std::make_shared<ErasureCoding>(nData, nParity)
     );
 
     THEN("cluster limits reflect kinetic-drive limits"){

@@ -1,10 +1,9 @@
-#include <thread>
-
-#include "KineticFileIo.hh"
-#include "KineticFileAttr.hh"
-#include "KineticClusterMap.hh"
-#include "KineticException.hh"
+#include "FileIo.hh"
+#include "FileAttr.hh"
+#include "ClusterMap.hh"
+#include "LoggingException.hh"
 #include "PathUtil.hh"
+#include <thread>
 
 using std::shared_ptr;
 using std::unique_ptr;
@@ -14,18 +13,18 @@ using std::chrono::system_clock;
 using kinetic::KineticStatus;
 using kinetic::StatusCode;
 
-KineticFileIo::KineticFileIo (size_t cache_capacity) :
+FileIo::FileIo (size_t cache_capacity) :
     cluster(), cache(*this, cache_capacity), lastChunkNumber(*this)
 {
 }
 
-KineticFileIo::~KineticFileIo ()
+FileIo::~FileIo ()
 {
 }
 
 /* All necessary checks have been done in the 993 line long
  * XrdFstOfsFile::open method before we are called. */
-void KineticFileIo::Open (const std::string& p, int flags,
+void FileIo::Open (const std::string& p, int flags,
 		mode_t mode, const std::string& opaque, uint16_t timeout)
 {
   cluster = cmap().getCluster(path_util::extractID(p));
@@ -44,12 +43,12 @@ void KineticFileIo::Open (const std::string& p, int flags,
   if(s.ok())
     lastChunkNumber.set(0);
   else if(s.statusCode() != StatusCode::REMOTE_VERSION_MISMATCH)
-    throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
+    throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
             "Attempting to write metadata key '"+ obj_path +"' to cluster "
             "returned unexpected error: '"+s.message()+"'");
 }
 
-void KineticFileIo::Close (uint16_t timeout)
+void FileIo::Close (uint16_t timeout)
 {
   Sync(timeout);
   cluster.reset();
@@ -57,10 +56,10 @@ void KineticFileIo::Close (uint16_t timeout)
   chunk_basename.clear();
 }
 
-int64_t KineticFileIo::ReadWrite (long long off, char* buffer,
-		int length, KineticFileIo::rw mode, uint16_t timeout)
+int64_t FileIo::ReadWrite (long long off, char* buffer,
+		int length, FileIo::rw mode, uint16_t timeout)
 {
-  if(!cluster) throw KineticException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
+  if(!cluster) throw LoggingException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
                               "No cluster set for FileIO object.");
 
   const size_t chunk_capacity = cluster->limits().max_value_size;
@@ -110,22 +109,22 @@ int64_t KineticFileIo::ReadWrite (long long off, char* buffer,
   return length-length_todo;
 }
 
-int64_t KineticFileIo::Read (long long offset, char* buffer, int length,
+int64_t FileIo::Read (long long offset, char* buffer, int length,
       uint16_t timeout)
 {
-  return ReadWrite(offset, buffer, length, KineticFileIo::rw::READ, timeout);
+  return ReadWrite(offset, buffer, length, FileIo::rw::READ, timeout);
 }
 
-int64_t KineticFileIo::Write (long long offset, const char* buffer,
+int64_t FileIo::Write (long long offset, const char* buffer,
       int length, uint16_t timeout)
 {
   return ReadWrite(offset, const_cast<char*>(buffer), length,
-          KineticFileIo::rw::WRITE, timeout);
+          FileIo::rw::WRITE, timeout);
 }
 
-void KineticFileIo::Truncate (long long offset, uint16_t timeout)
+void FileIo::Truncate (long long offset, uint16_t timeout)
 {
-  if(!cluster) throw KineticException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
+  if(!cluster) throw LoggingException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
                               "No cluster set for FileIO object.");
 
   const size_t chunk_capacity = cluster->limits().max_value_size;
@@ -151,7 +150,7 @@ void KineticFileIo::Truncate (long long offset, uint16_t timeout)
             path_util::chunkKey(chunk_basename, 99999999),
             max_keys_requested, keys);
     if(!status.ok())
-      throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
+      throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
               "KeyRange request unexpectedly failed for object "+obj_path+"': "
               +status.message());
 
@@ -159,7 +158,7 @@ void KineticFileIo::Truncate (long long offset, uint16_t timeout)
       status = cluster->remove(make_shared<string>(*iter),
               make_shared<string>(""), true);
       if(!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-        throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
+        throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
                 "Deleting chunk " + *iter +" failed: "+status.message());
     }
   }while(keys->size() == max_keys_requested);
@@ -168,27 +167,27 @@ void KineticFileIo::Truncate (long long offset, uint16_t timeout)
   lastChunkNumber.set(chunk_number);
 }
 
-void KineticFileIo::Remove (uint16_t timeout)
+void FileIo::Remove (uint16_t timeout)
 {
   Truncate(0);
   KineticStatus status = cluster->remove(make_shared<string>(obj_path),
           make_shared<string>(), true);
   if(!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-    throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
+    throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
             "Could not delete metdata key " +obj_path+ ": "+status.message());
 }
 
-void KineticFileIo::Sync (uint16_t timeout)
+void FileIo::Sync (uint16_t timeout)
 {
-  if(!cluster) throw KineticException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
+  if(!cluster) throw LoggingException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
          "No cluster set for FileIO object.");
 
   cache.flush();
 }
 
-void KineticFileIo::Stat (struct stat* buf, uint16_t timeout)
+void FileIo::Stat(struct stat* buf, uint16_t timeout)
 {
-  if(!cluster) throw KineticException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
+  if(!cluster) throw LoggingException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
          "No cluster set for FileIO object.");
 
   lastChunkNumber.verify();
@@ -201,10 +200,10 @@ void KineticFileIo::Stat (struct stat* buf, uint16_t timeout)
 }
 
 
-void KineticFileIo::Statfs (const char* p, struct statfs* sfs)
+void FileIo::Statfs (const char* p, struct statfs* sfs)
 {
   if(obj_path.length() && obj_path.compare(p))
-    throw KineticException(EINVAL,__FUNCTION__,__FILE__,__LINE__,
+    throw LoggingException(EINVAL,__FUNCTION__,__FILE__,__LINE__,
          "Object concurrently used for both Statfs and FileIO");
  
   if(!cluster){
@@ -214,7 +213,7 @@ void KineticFileIo::Statfs (const char* p, struct statfs* sfs)
 
   KineticClusterSize s;
   if(!cluster->size(s).ok())
-     throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
+     throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
          "Could not obtain cluster size values.");
 
   /* Minimal allocated block size. Set to 4K because that's the
@@ -248,13 +247,13 @@ struct ftsState{
   }
 };
 
-void* KineticFileIo::ftsOpen(std::string subtree)
+void* FileIo::ftsOpen(std::string subtree)
 {
   cluster = cmap().getCluster(path_util::extractID(subtree));
   return new ftsState(subtree);
 }
 
-std::string KineticFileIo::ftsRead(void* fts_handle)
+std::string FileIo::ftsRead(void* fts_handle)
 {
   if(!fts_handle) return "";
   ftsState * state = (ftsState*) fts_handle;
@@ -273,7 +272,7 @@ std::string KineticFileIo::ftsRead(void* fts_handle)
   return state->keys->empty() ? "" : state->keys->at(state->index++);
 }
 
-int KineticFileIo::ftsClose(void* fts_handle)
+int FileIo::ftsClose(void* fts_handle)
 {
   ftsState * state = (ftsState*) fts_handle;
   if(state){
@@ -283,25 +282,25 @@ int KineticFileIo::ftsClose(void* fts_handle)
   return -1;
 }
 
-KineticFileIo::LastChunkNumber::LastChunkNumber(KineticFileIo & parent) : 
+FileIo::LastChunkNumber::LastChunkNumber(FileIo & parent) : 
             parent(parent), last_chunk_number(0), last_chunk_number_timestamp()
 {}
 
-KineticFileIo::LastChunkNumber::~LastChunkNumber()
+FileIo::LastChunkNumber::~LastChunkNumber()
 {}
 
-int KineticFileIo::LastChunkNumber::get() const
+int FileIo::LastChunkNumber::get() const
 {
   return last_chunk_number;
 }
 
-void KineticFileIo::LastChunkNumber::set(int chunk_number)
+void FileIo::LastChunkNumber::set(int chunk_number)
 {
   last_chunk_number = chunk_number;
   last_chunk_number_timestamp = system_clock::now();
 }
 
-void KineticFileIo::LastChunkNumber::verify()
+void FileIo::LastChunkNumber::verify()
 {
   /* chunk number verification independent of standard expiration verification
    * in KinetiChunk class. validate last_chunk_number (another client might have
@@ -326,7 +325,7 @@ void KineticFileIo::LastChunkNumber::verify()
             keys);
 
     if(!status.ok())
-       throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
+       throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
               "KeyRange request unexpectedly failed for chunks with base name: "
               +parent.chunk_basename+": "+status.message());
   }while(keys->size() == max_keys_requested);
@@ -354,27 +353,27 @@ void KineticFileIo::LastChunkNumber::verify()
           make_shared<const string>(parent.obj_path),
           true, version, value);
   if(!status.ok())
-    throw KineticException(ENOENT,__FUNCTION__,__FILE__,__LINE__,
+    throw LoggingException(ENOENT,__FUNCTION__,__FILE__,__LINE__,
               "File "+parent.obj_path+" does not exist.");
 }
 
 
-KineticFileIo::ChunkCache::ChunkCache(KineticFileIo & parent, size_t cache_capacity):
+FileIo::ChunkCache::ChunkCache(FileIo & parent, size_t cache_capacity):
     parent(parent), capacity(cache_capacity)
 {
 }
 
-KineticFileIo::ChunkCache::~ChunkCache()
+FileIo::ChunkCache::~ChunkCache()
 {
 }
 
-void KineticFileIo::ChunkCache::clear()
+void FileIo::ChunkCache::clear()
 {
   cache.clear();
   lru_order.clear();
 }
 
-void KineticFileIo::ChunkCache::flush()
+void FileIo::ChunkCache::flush()
 {
   for(auto it=cache.begin(); it!=cache.end(); ++it){
     if(it->second->dirty())
@@ -382,7 +381,7 @@ void KineticFileIo::ChunkCache::flush()
   }
 }
 
-std::shared_ptr<ClusterChunk> KineticFileIo::ChunkCache::get(int chunk_number, bool create)
+std::shared_ptr<ClusterChunk> FileIo::ChunkCache::get(int chunk_number, bool create)
 {
   if(cache.count(chunk_number)){
     lru_order.remove(chunk_number);

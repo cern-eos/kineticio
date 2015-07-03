@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-//! @file KineticDriveMap.hh
+//! @file ClusterMap.hh
 //! @author Paul Hermann Lensing
 //! @brief Supplying a fst wide cluster map. Threadsafe.
 //------------------------------------------------------------------------------
@@ -13,13 +13,15 @@
 #include <string>
 #include <mutex>
 #include <json-c/json.h>
-#include "KineticClusterInterface.hh"
+#include "ClusterInterface.hh"
+#include "ErasureCoding.hh"
+#include "LRUCache.hh"
 /*----------------------------------------------------------------------------*/
 
 //------------------------------------------------------------------------------
 //! Supplying a fst wide cluster map. Threadsafe.
 //------------------------------------------------------------------------------
-class KineticClusterMap {
+class ClusterMap {
 
 public:
   //--------------------------------------------------------------------------
@@ -28,7 +30,7 @@ public:
   //! @param id the unique identifier for the cluster
   //! @param cluster contains the cluster on success
   //--------------------------------------------------------------------------
-  std::shared_ptr<KineticClusterInterface> getCluster(const std::string & id);
+  std::shared_ptr<ClusterInterface> getCluster(const std::string & id);
 
   //--------------------------------------------------------------------------
   //! Obtain the number of entries in the map.
@@ -43,12 +45,12 @@ public:
   //! indicated by the KINETIC_DRIVE_LOCATION and KINETIC_DRIVE_SECURITY
   //! environment variables
   //--------------------------------------------------------------------------
-  explicit KineticClusterMap();
+  explicit ClusterMap();
 
   //--------------------------------------------------------------------------
   //! Destructor
   //--------------------------------------------------------------------------
-  ~KineticClusterMap();
+  ~ClusterMap();
 
 private:
   enum class filetype{location,security,cluster};
@@ -106,9 +108,8 @@ private:
       //! the unique ids of drives belonging to this cluster
       std::vector<std::string> drives;
       //! the cluster object, shared among IO objects of a fst
-      std::shared_ptr<KineticClusterInterface> cluster;
+      std::shared_ptr<ClusterInterface> cluster;
   };
-
 
   //! the cluster map id <-> cluster info
   std::unordered_map<std::string, KineticClusterInfo> clustermap;
@@ -116,14 +117,19 @@ private:
   //! the drive map id <-> connection info
   std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> > drivemap;
 
+  //! ErasureEncoding instances of the same type (nData,nParity) can be shared
+  //! among multiple cluster instances, no need to duplicate decoding tables
+  //! in memory.
+  cache::lru_cache<std::string, std::shared_ptr<ErasureCoding>> ecCache;
+
   //! concurrency control
   std::mutex mutex;
 };
 
 //! Static ClusterMap for all KineticFileIo objects
-static KineticClusterMap & cmap()
+static ClusterMap & cmap()
 {
-  static KineticClusterMap clustermap;
+  static ClusterMap clustermap;
   return clustermap;
 }
 

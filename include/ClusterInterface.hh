@@ -1,10 +1,10 @@
 //------------------------------------------------------------------------------
-//! @file KineticClusterInterface.hh
+//! @file ClusterInterface.hh
 //! @author Paul Hermann Lensing
-//! @brief Interface to a kinetic cluster.
+//! @brief Interface to a cluster.
 //------------------------------------------------------------------------------
-#ifndef KINETICCLUSTERINTERFACE_HH
-#define	KINETICCLUSTERINTERFACE_HH
+#ifndef CLUSTERINTERFACE_HH
+#define	CLUSTERINTERFACE_HH
 
 #include <vector>
 #include <string>
@@ -44,7 +44,7 @@ struct KineticClusterLimits{
 //! Interface to a kinetic cluster. Can be a drive, a simulator, or or a
 //! whole cluster of either.
 //------------------------------------------------------------------------------
-class KineticClusterInterface{
+class ClusterInterface{
 public:
 
   //----------------------------------------------------------------------------
@@ -135,7 +135,7 @@ public:
   //----------------------------------------------------------------------------
   //! Destructor.
   //----------------------------------------------------------------------------
-  virtual ~KineticClusterInterface(){};
+  virtual ~ClusterInterface(){};
 };
 
 

@@ -7,7 +7,7 @@
 #include <memory>
 #include <mutex>
 
-class RateLimitKineticConnection {
+class KineticAutoConnection {
 public:
   //--------------------------------------------------------------------------
   //! Set the connection error status if an operation on the connection
@@ -33,12 +33,12 @@ public:
   //! @param ratelimit minimum time between reconnection attempts
   //! @param min_getlog_interval minimum time between getlog attempts
   //--------------------------------------------------------------------------
-  RateLimitKineticConnection(std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > options, std::chrono::seconds ratelimit);
+  KineticAutoConnection(std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > options, std::chrono::seconds ratelimit);
 
   //--------------------------------------------------------------------------
   //! Destructor.
   //--------------------------------------------------------------------------
-  ~RateLimitKineticConnection();
+  ~KineticAutoConnection();
 
 private:
   //! the underlying connection

@@ -1,6 +1,6 @@
 #include "KineticCluster.hh"
-#include "KineticException.hh"
-#include "ErasureEncoding.hh"
+#include "LoggingException.hh"
+#include "ErasureCoding.hh"
 #include <uuid/uuid.h>
 #include <zlib.h>
 #include <functional>
@@ -130,20 +130,21 @@ KineticCluster::KineticCluster(
     std::size_t stripe_size, std::size_t num_parities,
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info,
     std::chrono::seconds min_reconnect_interval,
-    std::chrono::seconds op_timeout
+    std::chrono::seconds op_timeout,
+    std::shared_ptr<ErasureCoding> ec
 ) :
     nData(stripe_size), nParity(num_parities),
     connections(), operation_timeout(op_timeout),
     clusterlimits{0,0,0}, clustersize{0,0},
     getlog_status(StatusCode::CLIENT_INTERNAL_ERROR,"not initialized"),
     getlog_outstanding(false),
-    getlog_mutex(), erasure(nData, nParity)
+    getlog_mutex(), erasure(ec)
 {
   if(nData+nParity > info.size())
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
 
   for(auto i = info.begin(); i != info.end(); i++){
-    auto ncon = RateLimitKineticConnection(*i, min_reconnect_interval);
+    auto ncon = KineticAutoConnection(*i, min_reconnect_interval);
     connections.push_back(ncon);
   }
 
@@ -151,7 +152,7 @@ KineticCluster::KineticCluster(
       Command_GetLog_Type::Command_GetLog_Type_LIMITS,
       Command_GetLog_Type::Command_GetLog_Type_CAPACITIES
     }).ok()
-   ) throw KineticException(
+   ) throw LoggingException(
             ENXIO,__FUNCTION__,__FILE__,__LINE__,
             "Initial getlog failed: " + getlog_status.message()
           );
@@ -350,7 +351,7 @@ KineticStatus KineticCluster::get(
   /* missing blocks -> erasure code */
   if(count < stripe.size()){
     try{
-        erasure.compute(stripe);
+        erasure->compute(stripe);
     }catch(const std::exception& e){
       return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
     }
@@ -408,7 +409,8 @@ KineticStatus KineticCluster::put(
   uuid_t uuid;
   uuid_generate(uuid);
   auto version_new = std::make_shared<string>(
-    string(reinterpret_cast<const char *>(uuid), sizeof(uuid_t)));
+     reinterpret_cast<const char *>(uuid), sizeof(uuid_t)
+  );
 
   auto version_old = version_in ? version_in : make_shared<const string>();
 
@@ -428,7 +430,7 @@ KineticStatus KineticCluster::put(
     /*Do not try to erasure code data if we are putting an empty key. The
       erasure coding would assume all chunks are missing. and throw an error.*/
     if(chunk_size)
-      erasure.compute(stripe);
+      erasure->compute(stripe);
   }catch(const std::exception& e){
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
   }
@@ -438,7 +440,7 @@ KineticStatus KineticCluster::put(
     auto& v = stripe[i];
 
     /* Generate Checksum. */
-    auto checksum = v->empty() ? 0 : crc32(0, (const Bytef*) v->c_str(), v->length());
+    auto checksum = crc32(0, (const Bytef*) v->c_str(), v->length());
     auto tag = std::make_shared<string>(
         std::to_string((long long unsigned int) checksum)
     );

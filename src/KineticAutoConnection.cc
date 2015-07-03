@@ -1,39 +1,39 @@
-#include "RateLimitKineticConnection.hh"
-#include "KineticException.hh"
+#include "KineticAutoConnection.hh"
+#include "LoggingException.hh"
 #include <sstream>
 using namespace kinetic;
 
-RateLimitKineticConnection::RateLimitKineticConnection(
+KineticAutoConnection::KineticAutoConnection(
         std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > o,
         std::chrono::seconds r) :
         connection(), options(o), timestamp(), ratelimit(r), 
         status(kinetic::StatusCode::CLIENT_INTERNAL_ERROR,""), mutex(new std::mutex())
 {}
 
-RateLimitKineticConnection::~RateLimitKineticConnection()
+KineticAutoConnection::~KineticAutoConnection()
 {
 }
 
-void RateLimitKineticConnection::setError(kinetic::KineticStatus s)
+void KineticAutoConnection::setError(kinetic::KineticStatus s)
 {
   std::lock_guard<std::mutex> lck(*mutex);
   status = s;
 }
 
-std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> RateLimitKineticConnection::get()
+std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConnection::get()
 {
   std::lock_guard<std::mutex> lck(*mutex);
 
   if(!status.ok()){
     connect();
     if(!status.ok())
-      throw KineticException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
+      throw LoggingException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
               "Invalid connection: " + status.message());
   }
   return connection;
 }
 
-void RateLimitKineticConnection::connect()
+void KineticAutoConnection::connect()
 {
   /* Rate limit connection attempts. */
   using std::chrono::system_clock;

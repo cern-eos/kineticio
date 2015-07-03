@@ -1,10 +1,10 @@
 //------------------------------------------------------------------------------
-//! @file KineticException.hh
+//! @file LoggingException.hh
 //! @author Paul Hermann Lensing
 //! @brief Providing information to enable detailed logging.
 //------------------------------------------------------------------------------
-#ifndef KINETICEXCEPTION_HH
-#define	KINETICEXCEPTION_HH
+#ifndef __KINETICIO_LOGGINGEXCEPTION_HH__
+#define	__KINETICIO_LOGGINGEXCEPTION_HH__
 
 #include <exception>
 #include <string>
@@ -12,7 +12,7 @@
 //------------------------------------------------------------------------------
 //! Providing information to enable detailed logging.
 //------------------------------------------------------------------------------
-class KineticException : public std::exception {
+class LoggingException : public std::exception {
 public:
   //----------------------------------------------------------------------------
   //! Get standard error code that best fits the thrown exception
@@ -52,7 +52,7 @@ public:
   //----------------------------------------------------------------------------
   //! Constructor
   //----------------------------------------------------------------------------
-  KineticException(int errnum, std::string function, std::string file,
+  LoggingException(int errnum, std::string function, std::string file,
           int line, std::string  message) :
           _errnum(errnum), _function(std::move(function)), _file(std::move(file)),
           _line(line), _message(std::move(message))
@@ -61,7 +61,7 @@ public:
   //----------------------------------------------------------------------------
   //! Destructor
   //----------------------------------------------------------------------------
-  ~KineticException() throw()
+  ~LoggingException() throw()
   {}
 
 private:
@@ -77,5 +77,5 @@ private:
   std::string _message;
 };
 
-#endif	/* KINETICEXCEPTION_HH */
+#endif	/* __KINETICIO_LOGGINGEXCEPTION_HH__ */
 

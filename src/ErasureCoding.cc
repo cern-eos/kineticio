@@ -1,4 +1,4 @@
-#include "ErasureEncoding.hh"
+#include "ErasureCoding.hh"
 #include <isa-l.h>
 #include <sstream>
 #include <string.h>
@@ -84,7 +84,7 @@ static int gf_gen_decode_matrix(
   return 0;
 }
 
-ErasureEncoding::ErasureEncoding(std::size_t data, std::size_t parity) : 
+ErasureCoding::ErasureCoding(std::size_t data, std::size_t parity) : 
   nData(data), nParity(parity),
   encode_matrix(new unsigned char[(nData+nParity)*nData])
 {
@@ -93,11 +93,11 @@ ErasureEncoding::ErasureEncoding(std::size_t data, std::size_t parity) :
   gf_gen_cauchy1_matrix(encode_matrix.get(), nData+nParity, nData);
 }
 
-ErasureEncoding::~ErasureEncoding()
+ErasureCoding::~ErasureCoding()
 {
 }
 
-std::string ErasureEncoding::getErrorPattern (
+std::string ErasureCoding::getErrorPattern (
       const std::vector<std::shared_ptr<const std::string> >& stripe
 ) const
 {
@@ -134,7 +134,7 @@ std::string ErasureEncoding::getErrorPattern (
   return pattern;
 }
 
-ErasureEncoding::CodingTable& ErasureEncoding::getCodingTable(
+ErasureCoding::CodingTable& ErasureCoding::getCodingTable(
   const std::string& pattern
 )
 {
@@ -171,7 +171,7 @@ ErasureEncoding::CodingTable& ErasureEncoding::getCodingTable(
       nsrcerrs,
       nData,
       nParity+nData)
-  ) throw std::runtime_error("ErasureEncoding: Failed computing decode matrix");
+  ) throw std::runtime_error("ErasureCoding: Failed computing decode matrix");
 
   /* Compute Tables. */
   ec_init_tables(nData, nerrs, decode_matrix.get(), dd.table.get());
@@ -179,11 +179,11 @@ ErasureEncoding::CodingTable& ErasureEncoding::getCodingTable(
   return cache.at(pattern);
 }
 
-void ErasureEncoding::compute(std::vector<std::shared_ptr<const std::string> >& stripe)
+void ErasureCoding::compute(std::vector<std::shared_ptr<const std::string> >& stripe)
 {
   if(!nParity)
     return;
-  
+
   std::string pattern = getErrorPattern(stripe);
   auto& dd = getCodingTable(pattern);
 
@@ -214,7 +214,7 @@ void ErasureEncoding::compute(std::vector<std::shared_ptr<const std::string> >& 
     if(pattern[i]){
       //printf("Repairing error %d (stripe index %d)\n",e,i);
       stripe[i] = make_shared<const string>(
-                      string((const char*)outbuf[e], blockSize)
+                      (const char*)outbuf[e], blockSize
                   );
       e++;
     }

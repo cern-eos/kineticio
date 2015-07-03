@@ -1,13 +1,13 @@
 #ifndef KINETICSPACESIMPLECPP_HH
 #define	KINETICSPACESIMPLECPP_HH
 
-#include "KineticClusterInterface.hh"
+#include "ClusterInterface.hh"
 #include <chrono>
 #include <mutex>
 
 
 /* Implementing the interface for a single drive. */
-class KineticSingletonCluster : public KineticClusterInterface {
+class KineticSingletonCluster : public ClusterInterface {
 public:
   //! See documentation in superclass.
   const KineticClusterLimits& limits() const;

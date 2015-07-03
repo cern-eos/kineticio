@@ -1,12 +1,17 @@
-#ifndef ERASEENCODING_HH
-#define	ERASEENCODING_HH
+//------------------------------------------------------------------------------
+//! @file ErasureCoding.hh
+//! @author Paul Hermann Lensing
+//! @brief Class for computing paries and recovering data 
+//------------------------------------------------------------------------------
+#ifndef ERASURECODING_HH
+#define	ERASURECODING_HH
 
 #include <memory>
 #include <vector>
 #include <string>
 #include <map>
 
-class ErasureEncoding{
+class ErasureCoding{
 public:
   //--------------------------------------------------------------------------
   //! Compute all missing data and parity blocks in the the stripe. Stripe size
@@ -26,10 +31,9 @@ public:
   //! @param nData number of data blocks in stripes to be encoded by this object
   //! @param nParity number of parity blocks in stripes
   //--------------------------------------------------------------------------
-  explicit ErasureEncoding(std::size_t nData, std::size_t nParity);
-  ~ErasureEncoding();
-  
-  
+  explicit ErasureCoding(std::size_t nData, std::size_t nParity);
+  ~ErasureCoding();
+
 private:
   //--------------------------------------------------------------------------
   //! Data structure to store all information required for a decode process with
@@ -81,5 +85,5 @@ private:
   std::map<std::string, CodingTable> cache;
 };
 
-#endif	/* ERASEENCODING_HH */
+#endif	/* ERASURECODING_HH */
 
