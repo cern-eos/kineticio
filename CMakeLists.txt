@@ -94,4 +94,4 @@ target_link_libraries(kinetic-test
 )
 
 install(TARGETS kineticio LIBRARY DESTINATION lib64)
-install(DIRECTORY ${kineticio_SOURCE_DIR}/include/ DESTINATION include)
+install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)

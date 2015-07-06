@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-//! @file Factory.hh
+//! @file KineticIoFactory.hh
 //! @author Paul Hermann Lensing
 //! @brief Factory class for FileIo and FileAttr objects.
 //------------------------------------------------------------------------------

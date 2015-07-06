@@ -1,4 +1,4 @@
-#include "Factory.hh"
+#include "KineticIoFactory.hh"
 #include "FileIo.hh"
 #include "FileAttr.hh"
 #include "ClusterMap.hh"

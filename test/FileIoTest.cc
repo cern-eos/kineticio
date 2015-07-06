@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "Factory.hh"
+#include "KineticIoFactory.hh"
 #include <unistd.h>
 #include <string.h>
 #include <memory>

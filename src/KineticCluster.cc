@@ -409,7 +409,7 @@ KineticStatus KineticCluster::put(
     shared_ptr<const string>& version_out)
 {
   auto ops = initialize(key, nData+nParity);
-  
+
   /* Do not use version_in, version_out variables directly in case the client
      supplies the same pointer for both. */
   auto version_old = version_in ? version_in : make_shared<const string>();
@@ -593,11 +593,14 @@ KineticStatus KineticCluster::getLog(std::vector<Command_GetLog_Type> types)
 
   /* Step 5) Process Results stored in Callbacks. */
   clustersize={0,0};
-  for(int i=0; i<ops.size(); i++){
+  for(auto o = ops.begin(); o != ops.end(); o++){
+    if(!o->callback->getResult().ok())
+      continue;
+
     if(std::find(types.begin(), types.end(),
         Command_GetLog_Type::Command_GetLog_Type_CAPACITIES) != types.end()){
       const auto& c = std::static_pointer_cast<GetLogCallback>
-                          (ops[i].callback)->getLog()->capacity;
+                          (o->callback)->getLog()->capacity;
       clustersize.bytes_total += c.nominal_capacity_in_bytes;
       clustersize.bytes_free  += c.nominal_capacity_in_bytes -
                           (c.nominal_capacity_in_bytes * c.portion_full);
@@ -605,7 +608,7 @@ KineticStatus KineticCluster::getLog(std::vector<Command_GetLog_Type> types)
     if(std::find(types.begin(), types.end(),
         Command_GetLog_Type::Command_GetLog_Type_LIMITS) != types.end()){
       const auto& l = std::static_pointer_cast<GetLogCallback>
-                          (ops[i].callback)->getLog()->limits;
+                          (o->callback)->getLog()->limits;
       clusterlimits.max_key_size = l.max_key_size;
       clusterlimits.max_value_size = l.max_value_size;
       clusterlimits.max_version_size = l.max_version_size;
