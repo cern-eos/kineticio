@@ -251,8 +251,9 @@ KineticStatus KineticCluster::getVersion(
   if(count<nData){
     return KineticStatus(
               StatusCode::CLIENT_IO_ERROR,
-              "Version missmatch: "+std::to_string(count)+" equal versions does "
-              "not reach read quorum of "+std::to_string(nData)
+              "Unreadable: "+std::to_string((long long int)count)+
+              " equal versions does not reach read quorum of "+
+              std::to_string((long long int)nData)
             );
   }
   version.reset(new string(std::move(
@@ -335,8 +336,9 @@ KineticStatus KineticCluster::get(
   if(count<nData){
     return KineticStatus(
               StatusCode::CLIENT_IO_ERROR,
-              "Version missmatch: "+std::to_string(count)+" equal versions does "
-              "not reach read quorum of "+std::to_string(nData)
+              "Unreadable: "+std::to_string((long long int)count)+
+              " equal versions does not reach read quorum of "+
+              std::to_string((long long int)nData)
             );
   }
   auto target_version = std::static_pointer_cast<GetCallback>(op.callback)->getRecord()->version();
@@ -646,28 +648,36 @@ std::vector<KineticAsyncOperation> KineticCluster::initialize(
 
   while(size){
     index = (index+1) % connections.size();
-    ops.push_back({0,0,connections[index]});
+    ops.push_back(
+      KineticAsyncOperation{
+          0,
+          std::shared_ptr<kio::KineticCallback>(),
+          &connections[index]
+      }
+    );
     size--;
   }
 
   return ops;
 }
 
-KineticStatus KineticCluster::execute(std::vector< KineticAsyncOperation >& ops)
-{
-  struct Execution{
+
+ struct Execution{
     shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> con;
     kinetic::HandlerKey hkey;
-    KineticAsyncOperation& op;
-  };
+    KineticAsyncOperation* op;
+};
+
+KineticStatus KineticCluster::execute(std::vector< KineticAsyncOperation >& ops)
+{
   std::vector< Execution > ex;
 
   /* Call functions on connections */
   for(auto o = ops.begin(); o != ops.end(); o++){
     try{
-      auto con  = o->connection.get();
+      auto con  = o->connection->get();
       auto hkey = o->function( con );
-      ex.push_back({con, hkey, *o});
+      ex.push_back(Execution{con, hkey, o.base()});
     }
     catch(const std::exception& e) {
       o->callback->OnResult(
@@ -687,12 +697,12 @@ KineticStatus KineticCluster::execute(std::vector< KineticAsyncOperation >& ops)
 
     /* Call Run() on all connections with outstanding results. */
     for(auto e = ex.cbegin(); e != ex.cend(); e++){
-      if(e->op.callback->finished())
+      if(e->op->callback->finished())
         continue;
 
       if(e->con->Run(&tmp_r, &tmp_w, &fd)){
         /* We could have just finished */
-        if(e->op.callback->finished())
+        if(e->op->callback->finished())
           continue;
         /* This is pretty hacky. But since Nonblocking connection uses fd_sets to
         * return a single fd it is just faster. */
@@ -704,8 +714,8 @@ KineticStatus KineticCluster::execute(std::vector< KineticAsyncOperation >& ops)
       else{
         KineticStatus err(StatusCode::CLIENT_IO_ERROR, "Connection Error");
         e->con->RemoveHandler(e->hkey);
-        e->op.callback->OnResult(err);
-        e->op.connection.setError(err);
+        e->op->callback->OnResult(err);
+        e->op->connection->setError(err);
       }
     }
 
@@ -723,10 +733,10 @@ KineticStatus KineticCluster::execute(std::vector< KineticAsyncOperation >& ops)
             num_fds < 0 ? "Select returned error." : "Network Timeout");
 
       for(auto e = ex.cbegin(); e != ex.cend(); e++){
-        if(!e->op.callback->finished()){
+        if(!e->op->callback->finished()){
           e->con->RemoveHandler(e->hkey);
-          e->op.callback->OnResult(err);
-          e->op.connection.setError(err);
+          e->op->callback->OnResult(err);
+          e->op->connection->setError(err);
         }
       }
     }

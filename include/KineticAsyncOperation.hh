@@ -40,7 +40,7 @@ struct KineticAsyncOperation {
   /* The associated callback function. */
   std::shared_ptr<KineticCallback> callback;
   /* The RateLimitConnection assigned by distribute function. */
-  KineticAutoConnection& connection;
+  KineticAutoConnection* connection;
 };
 
 }

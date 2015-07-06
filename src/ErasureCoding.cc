@@ -2,6 +2,7 @@
 #include <isa-l.h>
 #include <sstream>
 #include <string.h>
+#include <stdexcept>
 
 using std::string;
 using std::make_shared;
@@ -104,8 +105,8 @@ std::string ErasureCoding::getErrorPattern (
 {
   if(stripe.size() != nData+nParity)
     throw std::logic_error("ErasureEncoding: Illegal stripe size: Expected "
-            +std::to_string(nData+nParity)+", observed "
-            +std::to_string(stripe.size())+".");
+            +std::to_string((long long int)nData+nParity)+", observed "
+            +std::to_string((long long int)stripe.size())+".");
 
   std::string pattern(nData+nParity,'0');
   int blockSize=0;
@@ -122,15 +123,17 @@ std::string ErasureCoding::getErrorPattern (
         blockSize = stripe[i]->size();
       if(blockSize != stripe[i]->size())
         throw std::logic_error("ErasureEncoding: Non-static block sizes, observed"
-                " one block with a size of "+std::to_string(blockSize)+" bytes"
-                " and one with a size of "+std::to_string(stripe[i]->size())+
+                " one block with a size of "
+                +std::to_string((long long int)blockSize)+
+                " bytes and one with a size of "
+                +std::to_string((long long int)stripe[i]->size())+
                 " bytes.");
     }
   }
   if(nErrs > nParity)
     throw std::logic_error("ErasureEncoding: More errors than parity blocks. "
-            +std::to_string(nErrs)+" errors "
-            +std::to_string(nParity)+" parities.");
+            +std::to_string((long long int)nErrs)+" errors, "
+            +std::to_string((long long int)nParity)+" parities.");
 
   return pattern;
 }
@@ -198,7 +201,7 @@ void ErasureCoding::compute(std::vector<std::shared_ptr<const std::string> >& st
 
   unsigned char* outbuf[dd.nErrors];
   for(int i=0; i<dd.nErrors; i++){
-    outbuf[i] = memory.get() + i*blockSize*sizeof(unsigned char); 
+    outbuf[i] = memory.get() + i*blockSize*sizeof(unsigned char);
   }
 
   ec_encode_data(

@@ -98,7 +98,8 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string & id
       );
     /* Normal Cluster. */
     else{
-      auto ectype = std::to_string(ki.numData)+"-"+std::to_string(ki.numParity);
+      auto ectype = std::to_string((long long int)ki.numData)+"-"+
+          std::to_string((long long int)ki.numParity);
       if(!ecCache.exists(ectype)){
         ecCache.put(ectype,
                 std::make_shared<ErasureCoding>(ki.numData, ki.numParity)

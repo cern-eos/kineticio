@@ -35,7 +35,7 @@ endif (CMAKE_COMPILER_IS_GNUCXX)
 
 ################################################################################
 # Set CXX flags
-set(CMAKE_CXX_FLAGS "--std=c++0x -g")
+set(CMAKE_CXX_FLAGS "--std=c++0x -g -Wno-pragmas")
 
 include_directories(
     include/kio
