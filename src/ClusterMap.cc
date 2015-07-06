@@ -56,7 +56,7 @@ ClusterMap::ClusterMap() :
   }
   std::string cluster_data = readfile(cluster);
   if(cluster_data.empty()){
-    fprintf(stderr,"File '%s' could not be read in.\n",security);
+    fprintf(stderr,"File '%s' could not be read in.\n",cluster);
     return;
   }
   
@@ -70,7 +70,7 @@ ClusterMap::ClusterMap() :
     fprintf(stderr,"Error while parsing security json file '%s\n",security);
     return;
   }
-  if(parseJson(location_data, filetype::cluster)){
+  if(parseJson(cluster_data, filetype::cluster)){
     fprintf(stderr,"Error while parsing cluster json file '%s\n",cluster);
     return;
   }
