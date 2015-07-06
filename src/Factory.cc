@@ -2,7 +2,7 @@
 #include "FileIo.hh"
 #include "FileAttr.hh"
 #include "ClusterMap.hh"
-#include "PathUtil.hh"
+#include "Utility.hh"
 
 using namespace kio;
 
@@ -20,15 +20,15 @@ std::unique_ptr<FileIoInterface> Factory::uniqueFileIo()
 
 std::shared_ptr<ClusterInterface> attrCluster(const char* path)
 {
-  auto cluster = cmap().getCluster(path_util::extractID(path));
+  auto cluster = cmap().getCluster(utility::extractClusterID(path));
 
   std::shared_ptr<const std::string> empty;
   auto status = cluster->get(std::make_shared<const std::string>(path), true, empty, empty);
 
   if(!status.ok())
     return std::shared_ptr<ClusterInterface>();
-  
-  return cluster; 
+
+  return cluster;
 }
 
 

@@ -73,6 +73,7 @@ add_executable(kinetic-test
     test/ClusterMapTest.cc
     test/KineticClusterTest.cc
     test/ErasureCodingTest.cc
+    test/UtilityTest.cc
     src/ClusterChunk.cc
     src/ClusterMap.cc
     src/FileIo.cc

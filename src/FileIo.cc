@@ -2,7 +2,7 @@
 #include "FileAttr.hh"
 #include "ClusterMap.hh"
 #include "LoggingException.hh"
-#include "PathUtil.hh"
+#include "Utility.hh"
 #include <thread>
 
 using std::shared_ptr;
@@ -29,7 +29,7 @@ FileIo::~FileIo ()
 void FileIo::Open (const std::string& p, int flags,
 		mode_t mode, const std::string& opaque, uint16_t timeout)
 {
-  cluster = cmap().getCluster(path_util::extractID(p));
+  cluster = cmap().getCluster(utility::extractClusterID(p));
 
   /* Setting path variables. There is no need to encode kinetic:clusterID in
    * all chunk keys. */
@@ -148,8 +148,8 @@ void FileIo::Truncate (long long offset, uint16_t timeout)
   const size_t max_keys_requested = 100;
   do{
     KineticStatus status = cluster->range(
-            path_util::chunkKey(chunk_basename, offset ? chunk_number+1 : 0),
-            path_util::chunkKey(chunk_basename, 99999999),
+            utility::constructChunkKey(chunk_basename, offset ? chunk_number+1 : 0),
+            utility::constructChunkKey(chunk_basename, 99999999),
             max_keys_requested, keys);
     if(!status.ok())
       throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
@@ -209,7 +209,7 @@ void FileIo::Statfs (const char* p, struct statfs* sfs)
          "Object concurrently used for both Statfs and FileIO");
  
   if(!cluster){
-    cluster = cmap().getCluster(path_util::extractID(p));
+    cluster = cmap().getCluster(utility::extractClusterID(p));
     obj_path=p;
   }
 
@@ -251,7 +251,7 @@ struct ftsState{
 
 void* FileIo::ftsOpen(std::string subtree)
 {
-  cluster = cmap().getCluster(path_util::extractID(subtree));
+  cluster = cmap().getCluster(utility::extractClusterID(subtree));
   return new ftsState(subtree);
 }
 
@@ -321,8 +321,8 @@ void FileIo::LastChunkNumber::verify()
   do{
     KineticStatus status = parent.cluster->range(keys ?
             make_shared<const string>(keys->back()) :
-            path_util::chunkKey(parent.chunk_basename, last_chunk_number),
-            path_util::chunkKey(parent.chunk_basename, 99999999),
+            utility::constructChunkKey(parent.chunk_basename, last_chunk_number),
+            utility::constructChunkKey(parent.chunk_basename, 99999999),
             max_keys_requested,
             keys);
 
@@ -399,7 +399,7 @@ std::shared_ptr<ClusterChunk> FileIo::ChunkCache::get(int chunk_number, bool cre
   }
 
   std::shared_ptr<ClusterChunk> chunk(new ClusterChunk(parent.cluster,
-      path_util::chunkKey(parent.chunk_basename, chunk_number), create));
+      utility::constructChunkKey(parent.chunk_basename, chunk_number), create));
   cache.insert(std::make_pair(chunk_number,chunk));
   lru_order.push_back(chunk_number);
   return chunk;

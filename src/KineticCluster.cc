@@ -1,6 +1,7 @@
 #include "KineticCluster.hh"
 #include "LoggingException.hh"
 #include "ErasureCoding.hh"
+#include "Utility.hh"
 #include <uuid/uuid.h>
 #include <zlib.h>
 #include <functional>
@@ -365,6 +366,8 @@ KineticStatus KineticCluster::get(
   for(int i=0; i<nData; i++){
     v->append(stripe[i]->c_str());
   }
+  /* Resize value to size encoded in version (to support unaligned value sizes). */
+  v->resize( utility::uuidDecodeSize(target_version));
   value = std::move(v);
   version = target_version;
   return status;
@@ -406,16 +409,11 @@ KineticStatus KineticCluster::put(
     shared_ptr<const string>& version_out)
 {
   auto ops = initialize(key, nData+nParity);
-
-  /* Generate new UUID as version... do not store directly in version_out
-   * in case client uses the same variable for version_in and version_out.*/
-  uuid_t uuid;
-  uuid_generate(uuid);
-  auto version_new = std::make_shared<string>(
-     reinterpret_cast<const char *>(uuid), sizeof(uuid_t)
-  );
-
+  
+  /* Do not use version_in, version_out variables directly in case the client
+     supplies the same pointer for both. */
   auto version_old = version_in ? version_in : make_shared<const string>();
+  auto version_new = utility::uuidGenerateEncodeSize(value->size());
 
   /* Create a stripe vector by chunking up the value into nData data chunks
      and computing nParity parity chunks. */
