@@ -7,6 +7,7 @@
  * localhost. */
 #define KINETIC_DRIVE_LOCATION "../test/localhost.json"
 #define KINETIC_DRIVE_SECURITY KINETIC_DRIVE_LOCATION
+#define KINETIC_CLUSTER_DEFINITION KINETIC_DRIVE_LOCATION
 
 int main( int argc, char* const argv[] )
 {
@@ -16,11 +17,15 @@ int main( int argc, char* const argv[] )
 
     std::string security(getenv("KINETIC_DRIVE_SECURITY") ? getenv("KINETIC_DRIVE_SECURITY") : "" );
     setenv("KINETIC_DRIVE_SECURITY", KINETIC_DRIVE_SECURITY, 1);
+    
+    std::string cluster(getenv("KINETIC_CLUSTER_DEFINITION") ? getenv("KINETIC_CLUSTER_DEFINITION") : "" );
+    setenv("KINETIC_CLUSTER_DEFINITION", KINETIC_CLUSTER_DEFINITION, 1);
 
     int result = Catch::Session().run( argc, argv );
 
     // Reset environment variables back to the initial values.
-    setenv("KINETIC_DRIVE_LOCATION", location.c_str(), 1); 
+    setenv("KINETIC_DRIVE_LOCATION", location.c_str(), 1);
     setenv("KINETIC_DRIVE_SECURITY", security.c_str(), 1);
+    setenv("KINETIC_CLUSTER_DEFINITION", security.c_str(), 1);
     return result;
 }

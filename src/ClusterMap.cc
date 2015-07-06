@@ -37,19 +37,29 @@ ClusterMap::ClusterMap() :
     fprintf(stderr,"KINETIC_DRIVE_SECURITY not set.\n");
     return;
   }
-
+  const char* cluster = getenv("KINETIC_CLUSTER_DEFINITION");
+  if(!security){
+    fprintf(stderr,"KINETIC_CLUSTER_DEFINITION not set.\n");
+    return;
+  }
+  
   /* get file contents */
   std::string location_data = readfile(location);
   if(location_data.empty()){
     fprintf(stderr,"File '%s' could not be read in.\n",location);
     return;
   }
-
   std::string security_data = readfile(security);
   if(security_data.empty()){
     fprintf(stderr,"File '%s' could not be read in.\n",security);
     return;
   }
+  std::string cluster_data = readfile(cluster);
+  if(cluster_data.empty()){
+    fprintf(stderr,"File '%s' could not be read in.\n",security);
+    return;
+  }
+  
 
   /* parse files */
   if(parseJson(location_data, filetype::location)){
@@ -61,7 +71,7 @@ ClusterMap::ClusterMap() :
     return;
   }
   if(parseJson(location_data, filetype::cluster)){
-    fprintf(stderr,"Error while parsing cluster json file '%s\n",location);
+    fprintf(stderr,"Error while parsing cluster json file '%s\n",cluster);
     return;
   }
 }
