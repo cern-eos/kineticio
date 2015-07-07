@@ -153,7 +153,7 @@ private:
   //! concurrency control
   std::mutex getlog_mutex;
 
-  // erasure coding
+  //! erasure coding
   std::shared_ptr<ErasureCoding> erasure;
 };
 

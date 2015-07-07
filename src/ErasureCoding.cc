@@ -28,11 +28,13 @@ static int gf_gen_decode_matrix(
   int r;
   unsigned char *invert_matrix, *backup, *b, s;
   int incr = 0;
-
-  std::unique_ptr<unsigned char> memory(new unsigned char[m*k*3]);
-  b = memory.get();
-  backup = memory.get()+m*k;
-  invert_matrix = memory.get()+2*m*k;
+  
+  std::vector<unsigned char> bv(m*k);
+  b=bv.data();
+  std::vector<unsigned char> backupv(m*k);
+  backup=backupv.data();
+  std::vector<unsigned char> invert_matrixv(m*k);
+  invert_matrix = invert_matrixv.data();
 
   // Construct matrix b by removing error rows
   for (i = 0, r = 0; i < k; i++, r++) {
@@ -88,11 +90,11 @@ static int gf_gen_decode_matrix(
 
 ErasureCoding::ErasureCoding(std::size_t data, std::size_t parity) : 
   nData(data), nParity(parity),
-  encode_matrix(new unsigned char[(nData+nParity)*nData])
+  encode_matrix((nData+nParity)*nData)
 {
   // k = data
   // m = data + parity
-  gf_gen_cauchy1_matrix(encode_matrix.get(), nData+nParity, nData);
+  gf_gen_cauchy1_matrix(encode_matrix.data(), nData+nParity, nData);
 }
 
 ErasureCoding::~ErasureCoding()
@@ -142,6 +144,7 @@ ErasureCoding::CodingTable& ErasureCoding::getCodingTable(
   const std::string& pattern
 )
 {
+  std::lock_guard<std::mutex> lock(mutex); 
   /* Check if decode matrix is already cached. */
   if(cache.count(pattern)){
     return cache.at(pattern);
@@ -158,17 +161,19 @@ ErasureCoding::CodingTable& ErasureCoding::getCodingTable(
   }
 
   /* Allocate Decode Object. */
-  CodingTable dd;
+  CodingTable dd; //={nData*nParity*32, nData, nerrs};
+  
   dd.nErrors = nerrs;
-  dd.blockIndices.reset(new unsigned int[nData]);
-  dd.table.reset(new unsigned char[nData*nParity*32]);
+  dd.blockIndices.resize(nData);
+  dd.table.resize(nData*nParity*32);
 
   /* Compute decode matrix. */
-  std::unique_ptr<unsigned char> decode_matrix(new unsigned char[(nData+nParity)*nData]);
+  std::vector<unsigned char> decode_matrix((nData+nParity)*nData); 
+
   if( gf_gen_decode_matrix(
-      encode_matrix.get(),
-      decode_matrix.get(),
-      dd.blockIndices.get(),
+      encode_matrix.data(),
+      decode_matrix.data(),
+      dd.blockIndices.data(),
       err_indx_list,
       (unsigned char*) pattern.c_str(),
       nerrs,
@@ -178,7 +183,7 @@ ErasureCoding::CodingTable& ErasureCoding::getCodingTable(
   ) throw std::runtime_error("ErasureCoding: Failed computing decode matrix");
 
   /* Compute Tables. */
-  ec_init_tables(nData, nerrs, decode_matrix.get(), dd.table.get());
+  ec_init_tables(nData, nerrs, decode_matrix.data(), dd.table.data());
   cache.insert(std::pair<string,CodingTable>(pattern,dd));
   return cache.at(pattern);
 }
@@ -193,22 +198,22 @@ void ErasureCoding::compute(std::vector<std::shared_ptr<const std::string> >& st
 
   unsigned char* inbuf[nData];
   for(int i=0; i<nData; i++){
-      inbuf[i] = (unsigned char*) stripe[dd.blockIndices.get()[i]]->c_str();
+      inbuf[i] = (unsigned char*) stripe[dd.blockIndices[i]]->c_str();
   }
 
-  auto blockSize = stripe[dd.blockIndices.get()[0]]->size();
-  std::unique_ptr<unsigned char> memory(new unsigned char[dd.nErrors * blockSize]);
+  auto blockSize = stripe[dd.blockIndices[0]]->size();
+  std::vector<unsigned char> memory(dd.nErrors * blockSize);
 
   unsigned char* outbuf[dd.nErrors];
   for(int i=0; i<dd.nErrors; i++){
-    outbuf[i] = memory.get() + i*blockSize*sizeof(unsigned char);
+    outbuf[i] = &memory[i*blockSize];
   }
 
   ec_encode_data(
       blockSize,      // Length of each block of data (vector) of source or dest data.
       nData,          // The number of vector sources in the generator matrix for coding.
       dd.nErrors,     // The number of output vectors to concurrently encode/decode.
-      dd.table.get(), // Pointer to array of input tables
+      dd.table.data(), // Pointer to array of input tables
       inbuf,          // Array of pointers to source input buffers
       outbuf          // Array of pointers to coded output buffers
   );

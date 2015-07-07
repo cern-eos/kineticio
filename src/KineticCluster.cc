@@ -678,7 +678,7 @@ KineticStatus KineticCluster::execute(std::vector< KineticAsyncOperation >& ops)
     try{
       auto con  = o->connection->get();
       auto hkey = o->function( con );
-      ex.push_back(Execution{con, hkey, o.base()});
+      ex.push_back(Execution{con, hkey, &(*o)});
     }
     catch(const std::exception& e) {
       o->callback->OnResult(

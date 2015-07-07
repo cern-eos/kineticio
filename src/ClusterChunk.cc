@@ -71,20 +71,19 @@ void ClusterChunk::getRemoteValue()
   /* We read in the current value from the drive. Remember the time. */
   timestamp = system_clock::now();
 
-  /* Merge all updates done on the local data copy (data) into the freshly
-     read-in data copy. */
-  shared_ptr<string> merged_value;
+  /* If remote is not available, keep the current value. */
   if(status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
-    merged_value = make_shared<string>();
-  else{
-    merged_value = make_shared<string>(*remote_value);
-    merged_value->resize(std::max(remote_value->size(), value->size()));
-  }
+    return;
+
+  /* Merge all updates done on the local data copy (data) into the freshly
+     read-in data copy. */ 
+  auto merged_value = make_shared<string>(*remote_value);
+  merged_value->resize(std::max(remote_value->size(), value->size()));
 
   for (auto iter = updates.begin(); iter != updates.end(); ++iter){
     auto update = *iter;
     if(update.second)
-      merged_value->replace(update.first, update.second, value->c_str(), update.first, update.second);
+      merged_value->replace(update.first, update.second, *value, update.first, update.second);
     else
       merged_value->resize(update.first);
   }

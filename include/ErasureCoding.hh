@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <mutex>
 
 namespace kio{
 
@@ -43,9 +44,9 @@ private:
   //--------------------------------------------------------------------------
   struct CodingTable{
     //! The Coding Table.
-    std::shared_ptr<unsigned char> table;
+    std::vector<unsigned char> table;
     //! array of nData size, containing stripe indices to input blocks
-    std::shared_ptr<unsigned int> blockIndices;
+    std::vector<unsigned int> blockIndices;
     //! Number of Errors this Coding Table is constructed for (maximum nParity)
     int nErrors;
   };
@@ -82,9 +83,11 @@ private:
   //! number of parity blocks in the stripe
   std::size_t nParity;
   //! the encoding matrix, required to compute any decode matrix
-  std::unique_ptr<unsigned char> encode_matrix;
+  std::vector<unsigned char> encode_matrix;
   //! a cache of previously used coding tables
   std::map<std::string, CodingTable> cache;
+  //! concurrency control
+  std::mutex mutex;
 };
 
 }
