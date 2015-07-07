@@ -1,10 +1,10 @@
 //------------------------------------------------------------------------------
-//! @file KineticClusterInterface.hh
+//! @file ClusterInterface.hh
 //! @author Paul Hermann Lensing
-//! @brief Interface to a kinetic cluster.
+//! @brief Interface to a cluster.
 //------------------------------------------------------------------------------
-#ifndef KINETICCLUSTERINTERFACE_HH
-#define	KINETICCLUSTERINTERFACE_HH
+#ifndef CLUSTERINTERFACE_HH
+#define	CLUSTERINTERFACE_HH
 
 #include <vector>
 #include <string>
@@ -27,14 +27,14 @@ enum class KineticClusterStatus{
 };
  */
 
+namespace kio{
 
-
-struct KineticClusterSize{
+struct ClusterSize{
   uint64_t bytes_total;
   uint64_t bytes_free;
 };
 
-struct KineticClusterLimits{
+struct ClusterLimits{
   uint32_t max_key_size;
   uint32_t max_version_size;
   uint32_t max_value_size;
@@ -44,7 +44,7 @@ struct KineticClusterLimits{
 //! Interface to a kinetic cluster. Can be a drive, a simulator, or or a
 //! whole cluster of either.
 //------------------------------------------------------------------------------
-class KineticClusterInterface{
+class ClusterInterface{
 public:
 
   //----------------------------------------------------------------------------
@@ -56,7 +56,7 @@ public:
   //!
   //! @return cluster limits
   //----------------------------------------------------------------------------
-  virtual const KineticClusterLimits& limits() const = 0;
+  virtual const ClusterLimits& limits() const = 0;
 
   //----------------------------------------------------------------------------
   //! Check the maximum size of the Kinetic cluster. Function will not block but
@@ -65,7 +65,7 @@ public:
   //! @param size size and capacity of the Kinetic cluster in bytes.
   //! @return status of operation
   //----------------------------------------------------------------------------
-  virtual kinetic::KineticStatus size(KineticClusterSize& size) = 0;
+  virtual kinetic::KineticStatus size(ClusterSize& size) = 0;
 
   //----------------------------------------------------------------------------
   //! Get the value and version associated with the supplied key.
@@ -135,9 +135,10 @@ public:
   //----------------------------------------------------------------------------
   //! Destructor.
   //----------------------------------------------------------------------------
-  virtual ~KineticClusterInterface(){};
+  virtual ~ClusterInterface(){};
 };
 
+}
 
 
 

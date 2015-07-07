@@ -1,18 +1,19 @@
 #ifndef KINETICSPACESIMPLECPP_HH
 #define	KINETICSPACESIMPLECPP_HH
 
-#include "KineticClusterInterface.hh"
+#include "ClusterInterface.hh"
 #include <chrono>
 #include <mutex>
 
+namespace kio{
 
 /* Implementing the interface for a single drive. */
-class KineticSingletonCluster : public KineticClusterInterface {
+class KineticSingletonCluster : public ClusterInterface {
 public:
   //! See documentation in superclass.
-  const KineticClusterLimits& limits() const;
+  const ClusterLimits& limits() const;
   //! See documentation in superclass.
-  kinetic::KineticStatus size(KineticClusterSize& size);
+  kinetic::KineticStatus size(ClusterSize& size);
   //! See documentation in superclass.
   kinetic::KineticStatus get(const std::shared_ptr<const std::string>& key,
       bool skip_value,
@@ -89,10 +90,10 @@ private:
   std::mutex mutex;
 
   //! cluster limits are constant over cluster lifetime
-  KineticClusterLimits clusterlimits;
+  ClusterLimits clusterlimits;
 
   //! size of the cluster
-  KineticClusterSize clustersize;
+  ClusterSize clustersize;
 
   //! timestamp of the last attempt to update cluster size / capacity
   std::chrono::system_clock::time_point getlog_timestamp;
@@ -109,6 +110,7 @@ private:
   kinetic::KineticStatus connection_status;
 };
 
+}
 
 
 #endif	/* KINETICSPACESIMPLECPP_HH */

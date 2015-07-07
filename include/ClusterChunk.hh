@@ -1,10 +1,10 @@
 //------------------------------------------------------------------------------
-//! @file KineticChunk.hh
+//! @file ClusterChunk.hh
 //! @author Paul Hermann Lensing
-//! @brief High(er) level API for Kinetic keys. 
+//! @brief High(er) level API for Cluster keys. 
 //------------------------------------------------------------------------------
-#ifndef KINETICCHUNK_HH_
-#define KINETICCHUNK_HH_
+#ifndef CLUSTERCHUNK_HH_
+#define CLUSTERCHUNK_HH_
 
 /*----------------------------------------------------------------------------*/
 #include <memory>
@@ -12,17 +12,18 @@
 #include <string>
 #include <mutex>
 #include <list>
-#include "KineticClusterInterface.hh"
+#include "ClusterInterface.hh"
 /*----------------------------------------------------------------------------*/
 
+namespace kio{
 
 //------------------------------------------------------------------------------
-//! High(er) level API for Kinetic keys. Handles incremental updates and
+//! High(er) level API for Cluster keys. Handles incremental updates and
 //! resolves concurrency on chunk-basis. For multi-chunk atomic writes the
 //! caller will have to do appropriate locking himself. Chunk size depends on
 //! cluster configuration. Is threadsafe to enable background flushing.
 //------------------------------------------------------------------------------
-class KineticChunk {
+class ClusterChunk {
 public:
     //! Initialized to 1 second staleness (in milliseconds)
     static const int expiration_time;
@@ -85,14 +86,14 @@ public:
   //! @param key the name of the chunk
   //! @param skip_initial_get if true assume that the key does not yet exist
   //--------------------------------------------------------------------------
-  explicit KineticChunk(std::shared_ptr<KineticClusterInterface> cluster,
+  explicit ClusterChunk(std::shared_ptr<ClusterInterface> cluster,
                         const std::shared_ptr<const std::string> key,
                         bool skip_initial_get=false);
 
   //--------------------------------------------------------------------------
   //! Destructor.
   //--------------------------------------------------------------------------
-  ~KineticChunk();
+  ~ClusterChunk();
 
 private:
   //--------------------------------------------------------------------------
@@ -112,7 +113,7 @@ private:
 
 private:
   //! cluster this chunk is (to be) stored on
-  std::shared_ptr<KineticClusterInterface> cluster;
+  std::shared_ptr<ClusterInterface> cluster;
 
   //! the key of the chunk
   const std::shared_ptr<const std::string> key;
@@ -133,6 +134,8 @@ private:
   //! thread-safety
   mutable std::mutex mutex;
 };
+
+}
 
 #endif
 

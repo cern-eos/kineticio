@@ -1,6 +1,8 @@
 #include "catch.hpp"
-#include "KineticClusterMap.hh"
+#include "ClusterMap.hh"
 #include <exception>
+
+using namespace kio;
 
 
 SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
@@ -8,7 +10,7 @@ SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
         std::string location(getenv("KINETIC_DRIVE_LOCATION") ? getenv("KINETIC_DRIVE_LOCATION") : "" );
         setenv("KINETIC_DRIVE_LOCATION", "nonExistingFileName", 1);
 
-        KineticClusterMap kcm;
+        ClusterMap kcm;
         THEN("Map is empty"){
             REQUIRE(kcm.getSize() == 0);
         }
@@ -19,7 +21,7 @@ SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
         std::string location(getenv("KINETIC_DRIVE_LOCATION") ? getenv("KINETIC_DRIVE_LOCATION") : "" );
         setenv("KINETIC_DRIVE_LOCATION", "kinetic-test", 1);
 
-        KineticClusterMap kcm;
+        ClusterMap kcm;
         THEN("Map is empty"){
             REQUIRE(kcm.getSize() == 0);
         }
@@ -27,17 +29,14 @@ SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
     }
 
     GIVEN("A valid path."){
-        KineticClusterMap kcm;
-        std::shared_ptr<KineticClusterInterface> c;
+        ClusterMap kcm;
+        std::shared_ptr<ClusterInterface> c;
 
         THEN("Map size equals number of entries."){
-            REQUIRE(kcm.getSize() == 2);
+            REQUIRE(kcm.getSize() == 3);
         }
         THEN("An existing id to a running device returns a working cluster."){
-            REQUIRE_NOTHROW(kcm.getCluster("SN1"));
-        }
-        THEN("An existing id with an unreachable "){
-            REQUIRE_THROWS(kcm.getCluster("SN2"));
+            REQUIRE_NOTHROW(kcm.getCluster("Cluster1"));
         }
         THEN("A nonexisting drive id returns ENODEV."){
             REQUIRE_THROWS(kcm.getCluster("nonExistingID"));

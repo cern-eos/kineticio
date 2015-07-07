@@ -8,7 +8,8 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(kinetic-c++ REQUIRED)
 find_package(jsonc REQUIRED)
 find_package(uuid REQUIRED)
-find_package(z REQUIRED) 
+find_package(z REQUIRED)
+find_package(isal REQUIRED)
 
 ################################################################################
 # Force /usr/ installation prefix, same as EOS
@@ -34,50 +35,63 @@ endif (CMAKE_COMPILER_IS_GNUCXX)
 
 ################################################################################
 # Set CXX flags
-set(CMAKE_CXX_FLAGS "--std=c++0x -g")
+set(CMAKE_CXX_FLAGS "--std=c++0x -g -Wno-pragmas")
 
 include_directories(
     include/kio
-    src
+    include
     ${KINETIC-C++_INCLUDE_DIRS}
     ${JSONC_INCLUDE_DIRS}
     ${UUID_INCLUDE_DIRS}
     ${Z_INCLUDE_DIRS}
+    ${ISAL_INCLUDE_DIRS}
 )
 add_library(kineticio SHARED
-    src/KineticChunk.cc
-    src/KineticClusterMap.cc
-    src/KineticFileIo.cc
-    src/KineticFileAttr.cc
+    src/ClusterChunk.cc
+    src/ClusterMap.cc
+    src/FileIo.cc
+    src/FileAttr.cc
+    src/Factory.cc
+    src/KineticAutoConnection.cc
     src/KineticSingletonCluster.cc
-   # src/KineticCluster.cc
+    src/KineticCluster.cc
+    src/ErasureCoding.cc
 )
 
 target_link_libraries(kineticio
     ${JSONC_LIBRARIES}
     ${UUID_LIBRARIES}
     ${Z_LIBRARIES}
+    ${ISAL_LIBRARIES}
     ${KINETIC-C++_LIBRARIES}
 )
 
 add_executable(kinetic-test
-    test/KineticTestMain.cc
-    test/KineticChunkTest.cc
-    test/KineticIoTest.cc
-    test/KineticClusterMapTest.cc
-    src/KineticChunk.cc
-    src/KineticClusterMap.cc
-    src/KineticFileIo.cc
-    src/KineticFileAttr.cc
+    test/TestMain.cc
+    test/ClusterChunkTest.cc
+    test/FileIoTest.cc
+    test/ClusterMapTest.cc
+    test/KineticClusterTest.cc
+    test/ErasureCodingTest.cc
+    test/UtilityTest.cc
+    src/ClusterChunk.cc
+    src/ClusterMap.cc
+    src/FileIo.cc
+    src/FileAttr.cc
+    src/Factory.cc
+    src/KineticAutoConnection.cc
     src/KineticSingletonCluster.cc
+    src/KineticCluster.cc
+    src/ErasureCoding.cc
 )
 target_link_libraries(kinetic-test
    ${JSONC_LIBRARIES}
    ${UUID_LIBRARIES}
    ${Z_LIBRARIES}
+   ${ISAL_LIBRARIES}
    ${KINETIC-C++_LIBRARIES}
    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 install(TARGETS kineticio LIBRARY DESTINATION lib64)
-install(DIRECTORY ${kineticio_SOURCE_DIR}/include/ DESTINATION include)
+install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)

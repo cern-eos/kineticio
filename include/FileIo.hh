@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-//! @file KineticIO.hh
+//! @file FileIo.hh
 //! @author Paul Hermann Lensing
 //! @brief Class used for doing Kinetic IO operations
 //------------------------------------------------------------------------------
@@ -7,26 +7,24 @@
 #define __KINETICFILEIO__HH__
 
 /*----------------------------------------------------------------------------*/
-#include "KineticClusterInterface.hh"
-#include "KineticChunk.hh"
-#include <condition_variable>
+#include "FileIoInterface.hh"
+#include "ClusterInterface.hh"
+#include "ClusterChunk.hh"
 #include <unordered_map>
 #include <chrono>
 #include <mutex>
 #include <queue>
 #include <list>
-#include <sys/vfs.h>
-#include <sys/stat.h>
 
-typedef std::shared_ptr<KineticClusterInterface> ClusterPointer;
+namespace kio{
 
 //------------------------------------------------------------------------------
 //! Class used for doing Kinetic IO operations, mirroring FileIo interface
 //! except for using exceptions instead of return codes
 //------------------------------------------------------------------------------
-class KineticFileIo{
+class FileIo : public FileIoInterface {
 public:
-  //--------------------------------------------------------------------------
+//--------------------------------------------------------------------------
   //! Open file
   //!
   //! @param path file path
@@ -134,12 +132,12 @@ public:
   //! Constructor
   //! @param cache_capacity maximum cache size
   //--------------------------------------------------------------------------
-  explicit KineticFileIo (size_t cache_capacity=6);
+  explicit FileIo (size_t cache_capacity=6);
 
   //--------------------------------------------------------------------------
   //! Destructor
   //--------------------------------------------------------------------------
-  ~KineticFileIo ();
+  ~FileIo ();
 
 private:
   enum rw {READ, WRITE};
@@ -176,7 +174,7 @@ private:
      //!
      //! @param parent reference to the enclosing KineticFileIo object
      //-------------------------------------------------------------------------
-     explicit LastChunkNumber(KineticFileIo & parent);
+     explicit LastChunkNumber(FileIo & parent);
 
      //-------------------------------------------------------------------------
      //! Destructor.
@@ -185,7 +183,7 @@ private:
 
   private:
       //! reference to the enclosing KineticFileIo object
-      KineticFileIo & parent;
+      FileIo & parent;
 
       //! currently set last chunk number
       int last_chunk_number;
@@ -196,10 +194,10 @@ private:
   };
 
   //----------------------------------------------------------------------------
-  //! Simple LRU cache for KineticChunks. Is not threadsafe. Will obtain chunks
+  //! Simple LRU cache for ClusterChunks. Is not threadsafe. Will obtain chunks
   //! that are not in cache automatically from the backend.
   //----------------------------------------------------------------------------
-  class KineticChunkCache {
+  class ChunkCache {
 
   public:
     //--------------------------------------------------------------------------
@@ -212,7 +210,7 @@ private:
     //!        cluster yet
     //! @return the chunk on success, throws on error
     //--------------------------------------------------------------------------
-    std::shared_ptr<KineticChunk> get(int chunk_number, bool create=false);
+    std::shared_ptr<ClusterChunk> get(int chunk_number, bool create=false);
 
     //--------------------------------------------------------------------------
     //! Blocking flush of the entire cache.
@@ -230,16 +228,16 @@ private:
     //! @param parent reference to the enclosing KineticFileIo object
     //! @param cache_capacity maximum number of items in chache
     //--------------------------------------------------------------------------
-    explicit KineticChunkCache(KineticFileIo & parent, size_t cache_capacity);
+    explicit ChunkCache(FileIo & parent, size_t cache_capacity);
 
     //--------------------------------------------------------------------------
     //! Destructor.
     //--------------------------------------------------------------------------
-    ~KineticChunkCache();
+    ~ChunkCache();
 
 private:
     //! reference to the enclosing KineticFileIo object
-    KineticFileIo & parent;
+    FileIo & parent;
 
     //! maximum number of items allowed in the cache
     size_t capacity;
@@ -248,16 +246,16 @@ private:
     std::list<int> lru_order;
 
     //! the cache... could increase performance a little bit using
-    //! <ListIterator, KineticChunk> elements
-    std::unordered_map<int, std::shared_ptr<KineticChunk>> cache;
+    //! <ListIterator, ClusterChunk> elements
+    std::unordered_map<int, std::shared_ptr<ClusterChunk>> cache;
   };
 
 private:
   //! we don't want to have to look in the drive map for every access...
-  ClusterPointer cluster;
+  std::shared_ptr<ClusterInterface> cluster;
 
   //! cache & background flush functionality.
-  KineticChunkCache cache;
+  ChunkCache cache;
 
   //! keep track of the last chunk to answer stat requests reasonably
   LastChunkNumber lastChunkNumber;
@@ -269,8 +267,9 @@ private:
   std::string chunk_basename;
 
 private:
-    KineticFileIo (const KineticFileIo&) = delete;
-    KineticFileIo& operator = (const KineticFileIo&) = delete;
+    FileIo (const FileIo&) = delete;
+    FileIo& operator = (const FileIo&) = delete;
 };
 
+}
 #endif  // __KINETICFILEIO__HH__

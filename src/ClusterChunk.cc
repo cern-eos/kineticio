@@ -1,6 +1,6 @@
-#include "KineticChunk.hh"
-#include "KineticClusterInterface.hh"
-#include "KineticException.hh"
+#include "ClusterChunk.hh"
+#include "ClusterInterface.hh"
+#include "LoggingException.hh"
 #include <algorithm>
 #include <errno.h>
 
@@ -11,11 +11,12 @@ using std::string;
 using std::chrono::system_clock;
 using kinetic::KineticStatus;
 using kinetic::StatusCode;
+using namespace kio;
 
-const int KineticChunk::expiration_time = 1000;
+const int ClusterChunk::expiration_time = 1000;
 
 
-KineticChunk::KineticChunk(std::shared_ptr<KineticClusterInterface> c,
+ClusterChunk::ClusterChunk(std::shared_ptr<ClusterInterface> c,
     const std::shared_ptr<const std::string> k, bool skip_initial_get) :
         cluster(c), key(k), version(), value(make_shared<string>()),
         timestamp(), updates()
@@ -25,14 +26,14 @@ KineticChunk::KineticChunk(std::shared_ptr<KineticClusterInterface> c,
     getRemoteValue();
 }
 
-KineticChunk::~KineticChunk()
+ClusterChunk::~ClusterChunk()
 {
   // take the mutex in order to prevent object deconsturction while flush 
   // operation is executed by non-owning thread.
   std::lock_guard<std::mutex> lock(mutex);
 }
 
-bool KineticChunk::validateVersion()
+bool ClusterChunk::validateVersion()
 {
   /* See if check is unnecessary based on expiration. */
   if(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -57,40 +58,39 @@ bool KineticChunk::validateVersion()
   return false;
 }
 
-void KineticChunk::getRemoteValue()
+void ClusterChunk::getRemoteValue()
 {
   std::shared_ptr<const string> remote_value;
   auto status = cluster->get(key, false, version, remote_value);
 
   if(!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-    throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
+    throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
             "Attempting to read key '"+ *key+"' from cluster returned error "
             "message '"+status.message()+"'");
 
   /* We read in the current value from the drive. Remember the time. */
   timestamp = system_clock::now();
 
-  /* Merge all updates done on the local data copy (data) into the freshly
-     read-in data copy. */
-  shared_ptr<string> merged_value;
+  /* If remote is not available, keep the current value. */
   if(status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
-    merged_value = make_shared<string>();
-  else{
-    merged_value = make_shared<string>(*remote_value);
-    merged_value->resize(std::max(remote_value->size(), value->size()));
-  }
+    return;
+
+  /* Merge all updates done on the local data copy (data) into the freshly
+     read-in data copy. */ 
+  auto merged_value = make_shared<string>(*remote_value);
+  merged_value->resize(std::max(remote_value->size(), value->size()));
 
   for (auto iter = updates.begin(); iter != updates.end(); ++iter){
     auto update = *iter;
     if(update.second)
-      merged_value->replace(update.first, update.second, value->c_str(), update.first, update.second);
+      merged_value->replace(update.first, update.second, *value, update.first, update.second);
     else
       merged_value->resize(update.first);
   }
   value = merged_value;
 }
 
-void KineticChunk::read(char* const buffer, off_t offset, size_t length)
+void ClusterChunk::read(char* const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -113,7 +113,7 @@ void KineticChunk::read(char* const buffer, off_t offset, size_t length)
   }
 }
 
-void KineticChunk::write(const char* const buffer, off_t offset, size_t length)
+void ClusterChunk::write(const char* const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -130,7 +130,7 @@ void KineticChunk::write(const char* const buffer, off_t offset, size_t length)
   updates.push_back(std::pair<off_t, size_t>(offset, length));
 }
 
-void KineticChunk::truncate(off_t offset)
+void ClusterChunk::truncate(off_t offset)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -142,7 +142,7 @@ void KineticChunk::truncate(off_t offset)
   updates.push_back(std::pair<off_t, size_t>(offset, 0));
 }
 
-void KineticChunk::flush()
+void ClusterChunk::flush()
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -153,7 +153,7 @@ void KineticChunk::flush()
   }
 
   if (!status.ok())
-    throw KineticException(EIO,__FUNCTION__,__FILE__,__LINE__,
+    throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
         "Attempting to write key '"+ *key+"' to the cluster returned error "
         "message '"+status.message()+"'");
 
@@ -163,7 +163,7 @@ void KineticChunk::flush()
   timestamp = system_clock::now();
 }
 
-bool KineticChunk::dirty() const
+bool ClusterChunk::dirty() const
 {
   std::lock_guard<std::mutex> lock(mutex);
   if(!version)
@@ -171,7 +171,7 @@ bool KineticChunk::dirty() const
   return !updates.empty();
 }
 
-int KineticChunk::size()
+int ClusterChunk::size()
 {
   std::lock_guard<std::mutex> lock(mutex);
 
