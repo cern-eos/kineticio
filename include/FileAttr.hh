@@ -14,14 +14,10 @@
 namespace kio{
 
 //------------------------------------------------------------------------------
-//! Class used for doing Kinetic attribute IO operations, mirroring FileIo::Attr
+//! Class used for doing kio attribute IO operations, mirroring FileIo::Attr
 //! interface. Can throw.
 //------------------------------------------------------------------------------
 class FileAttr : public FileAttrInterface {
-private:
-  std::string path;
-  std::shared_ptr<ClusterInterface> cluster;
-
 public:
   // ------------------------------------------------------------------------
   //! Set a binary attribute (name has to start with 'user.' !!!)
@@ -44,17 +40,22 @@ public:
   std::string Get (std::string name);
 
   // ------------------------------------------------------------------------
-  // Constructor
+  //! Constructor
   // ------------------------------------------------------------------------
   explicit FileAttr (const char* path,
                   std::shared_ptr<ClusterInterface> cluster);
 
   // ------------------------------------------------------------------------
-  // Destructor
+  //! Destructor
   // ------------------------------------------------------------------------
   ~FileAttr ();
-};
 
+private:
+  //! the path of the FileIo object this attribute object is associated with
+  std::string path;
+  //! the cluster attributes are to be stored in / retrieved from
+  std::shared_ptr<ClusterInterface> cluster;
+};
 }
 
-#endif // __KINETICFILEATTR__HH__
+#endif // __FILEATTR__HH__

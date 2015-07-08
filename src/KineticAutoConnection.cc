@@ -41,25 +41,25 @@ void KineticAutoConnection::connect()
   using std::chrono::system_clock;
   using std::chrono::duration_cast;
   using std::chrono::seconds;
-  if(duration_cast<seconds>(system_clock::now() - timestamp) > ratelimit){
+  if(duration_cast<seconds>(system_clock::now() - timestamp) < ratelimit)
+    return;
 
-    /* Remember this reconnection attempt. */
-    timestamp = system_clock::now();
+  /* Remember this reconnection attempt. */
+  timestamp = system_clock::now();
 
-    KineticConnectionFactory factory = NewKineticConnectionFactory();
+  KineticConnectionFactory factory = NewKineticConnectionFactory();
 
-    /* Attempt connection. Prioritize first address, but take second if first
-     * failed. */
-    if(factory.NewThreadsafeNonblockingConnection(options.first,  connection).ok() ||
-       factory.NewThreadsafeNonblockingConnection(options.second, connection).ok()){
-      status = KineticStatus(StatusCode::OK,"");
-    }
-    else{
-      std::stringstream ss;
-      ss << "Failed building connection to " << options.first.host << ":"
-         << options.first.port << " and " << options.second.host << ":"
-         << options.second.port;
-      status = KineticStatus(StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, ss.str());
-    }
+  /* Attempt connection. Prioritize first address, but take second if first
+   * failed. */
+  if(factory.NewThreadsafeNonblockingConnection(options.first,  connection).ok() ||
+     factory.NewThreadsafeNonblockingConnection(options.second, connection).ok()){
+    status = KineticStatus(StatusCode::OK,"");
+  }
+  else{
+    std::stringstream ss;
+    ss << "Failed building connection to " << options.first.host << ":"
+       << options.first.port << " and " << options.second.host << ":"
+       << options.second.port;
+    status = KineticStatus(StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, ss.str());
   }
 }

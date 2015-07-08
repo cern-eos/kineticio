@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 //! @file ClusterChunk.hh
 //! @author Paul Hermann Lensing
-//! @brief High(er) level API for Cluster keys. 
+//! @brief High(er) level API for Cluster keys.
 //------------------------------------------------------------------------------
 #ifndef CLUSTERCHUNK_HH_
 #define CLUSTERCHUNK_HH_
@@ -18,15 +18,15 @@
 namespace kio{
 
 //------------------------------------------------------------------------------
-//! High(er) level API for Cluster keys. Handles incremental updates and
+//! High(er) level API for cluster keys. Handles incremental updates and
 //! resolves concurrency on chunk-basis. For multi-chunk atomic writes the
 //! caller will have to do appropriate locking himself. Chunk size depends on
 //! cluster configuration. Is threadsafe to enable background flushing.
 //------------------------------------------------------------------------------
 class ClusterChunk {
 public:
-    //! Initialized to 1 second staleness (in milliseconds)
-    static const int expiration_time;
+  //! Initialized to 1 second staleness
+  static const std::chrono::milliseconds expiration_time;
 
 public:
   //--------------------------------------------------------------------------

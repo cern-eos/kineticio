@@ -308,7 +308,7 @@ void FileIo::LastChunkNumber::verify()
    * in KinetiChunk class. validate last_chunk_number (another client might have
    * created new chunks we know nothing about, or truncated the file. */
   if( std::chrono::duration_cast<std::chrono::milliseconds>(
-        system_clock::now() - last_chunk_number_timestamp).count()
+        system_clock::now() - last_chunk_number_timestamp)
       < ClusterChunk::expiration_time
     ) return;
 

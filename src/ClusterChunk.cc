@@ -13,7 +13,7 @@ using kinetic::KineticStatus;
 using kinetic::StatusCode;
 using namespace kio;
 
-const int ClusterChunk::expiration_time = 1000;
+const std::chrono::milliseconds ClusterChunk::expiration_time(1000);
 
 
 ClusterChunk::ClusterChunk(std::shared_ptr<ClusterInterface> c,
@@ -37,7 +37,7 @@ bool ClusterChunk::validateVersion()
 {
   /* See if check is unnecessary based on expiration. */
   if(std::chrono::duration_cast<std::chrono::milliseconds>(
-          system_clock::now() - timestamp).count()
+          system_clock::now() - timestamp)
           < expiration_time)
     return true;
 

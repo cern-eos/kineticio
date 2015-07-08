@@ -1,5 +1,10 @@
-#ifndef RATELIMITKINETICCONNECTION_HH
-#define	RATELIMITKINETICCONNECTION_HH
+//------------------------------------------------------------------------------
+//! @file KineticAutoConnection.hh
+//! @author Paul Hermann Lensing
+//! @brief Wrapping kinetic connection, primarily to supply automatic reconnect
+//------------------------------------------------------------------------------
+#ifndef KINETICAUTOCONNECTION_HH
+#define	KINETICAUTOCONNECTION_HH
 
 #include <kinetic/kinetic.h>
 #include <utility>
@@ -9,19 +14,23 @@
 
 namespace kio{
 
+//------------------------------------------------------------------------------
+//! Wrapping kinetic::ThreadsafeNonblockingKineticConnection, (re)connecting
+//! automatically when the underlying connection is requested.
+//------------------------------------------------------------------------------
 class KineticAutoConnection {
 public:
   //--------------------------------------------------------------------------
   //! Set the connection error status if an operation on the connection
   //! failed catastrophically.
   //!
-  //! @param status The error status that ocurred.
+  //! @param status the error status that occurred.
   //--------------------------------------------------------------------------
   void setError(kinetic::KineticStatus status);
 
   //--------------------------------------------------------------------------
   //! Return copy of underlying connection pointer, reconnect if indicated by
-  //! current status and allowed by rate limit, throws KineticException if
+  //! current status and allowed by rate limit, throws if
   //! connection is not usable.
   //!
   //! @return copy of underlying connection pointer
@@ -35,7 +44,10 @@ public:
   //! @param ratelimit minimum time between reconnection attempts
   //! @param min_getlog_interval minimum time between getlog attempts
   //--------------------------------------------------------------------------
-  KineticAutoConnection(std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > options, std::chrono::seconds ratelimit);
+  KineticAutoConnection(
+      std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > options,
+      std::chrono::seconds ratelimit
+  );
 
   //--------------------------------------------------------------------------
   //! Destructor.
@@ -53,15 +65,18 @@ private:
   std::chrono::seconds ratelimit;
   //! status of last reconnect attempt
   kinetic::KineticStatus status;
-
-  //! thread safety. TODO: this shouldn't be a shared_ptr, need to write copy constructor
+  //! thread safety, mutex stored in shared_ptr to allow vector of AutoConnections
   std::shared_ptr<std::mutex> mutex;
 
 private:
+  //--------------------------------------------------------------------------
+  //! Attempt to connect unless blocked by rate limit. Will attempt both host
+  //! names supplied to options, but prioritize the first host name.
+  //--------------------------------------------------------------------------
   void connect();
 };
 
 }
 
-#endif	/* RATELIMITKINETICCONNECTION_HH */
+#endif	/* KINETICAUTOCONNECTION_HH */
 

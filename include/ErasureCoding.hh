@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 //! @file ErasureCoding.hh
 //! @author Paul Hermann Lensing
-//! @brief Class for computing paries and recovering data 
+//! @brief Class for computing parities and recovering data
 //------------------------------------------------------------------------------
 #ifndef ERASURECODING_HH
 #define	ERASURECODING_HH
@@ -9,7 +9,7 @@
 #include <memory>
 #include <vector>
 #include <string>
-#include <map>
+#include <unordered_map>
 #include <mutex>
 
 namespace kio{
@@ -21,8 +21,8 @@ public:
   //! has to equal nData+nParity. Blocks can be arbitrary size, but size has
   //! to be equal within a stripe. Function will throw on incorrect input.
   //!
-  //! @param stripe nData+nParity blocks, missing (empty) blcoks will be computed
-  //!        if possible.
+  //! @param stripe nData+nParity blocks, missing (empty) blocks will be
+  //!   computed if possible.
   //--------------------------------------------------------------------------
   void compute(std::vector<std::shared_ptr<const std::string> >& stripe);
 
@@ -43,11 +43,11 @@ private:
   //! a known error pattern.
   //--------------------------------------------------------------------------
   struct CodingTable{
-    //! The Coding Table.
+    //! the coding table
     std::vector<unsigned char> table;
     //! array of nData size, containing stripe indices to input blocks
     std::vector<unsigned int> blockIndices;
-    //! Number of Errors this Coding Table is constructed for (maximum nParity)
+    //! Number of errors this coding table is constructed for (maximum==nParity)
     int nErrors;
   };
 
@@ -55,7 +55,7 @@ private:
   //! Constructs a string of the error pattern / signature. Each missing block
   //! in the stripe is counted as an error block, existing blocks are assumed
   //! to be correct (crc integrity checks of blocks should be done previously
-  //! to attempting erasure decoding)
+  //! to attempting erasure decoding).
   //!
   //! @param stripe vector of nData+nParity blocks, missing (empty) blocks are
   //!        errors
@@ -85,7 +85,7 @@ private:
   //! the encoding matrix, required to compute any decode matrix
   std::vector<unsigned char> encode_matrix;
   //! a cache of previously used coding tables
-  std::map<std::string, CodingTable> cache;
+  std::unordered_map<std::string, CodingTable> cache;
   //! concurrency control
   std::mutex mutex;
 };

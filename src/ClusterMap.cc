@@ -2,7 +2,6 @@
 #include <fstream>
 #include <sstream>
 #include "ClusterMap.hh"
-#include "KineticSingletonCluster.hh"
 #include "KineticCluster.hh"
 #include "LoggingException.hh"
 #include "LRUCache.hh"
@@ -91,39 +90,28 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string & id
   KineticClusterInfo & ki = clustermap.at(id);
   if(!ki.cluster){
 
-     std::vector<std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>> cops;
-     for(auto wwn = ki.drives.begin(); wwn != ki.drives.end(); wwn++){
-       if(!drivemap.count(*wwn))
-       throw LoggingException(ENODEV,__FUNCTION__,__FILE__,__LINE__,"Nonexisting "
-         "drive wwn '"+id+"' requested.");
-       cops.push_back(drivemap.at(*wwn));
-     }
-
-    /* Differentiate between Singleton Clusters and Full Clusters. */
-    if(ki.numData == 1 && ki.numParity == 0 && ki.drives.size() == 1)
-      ki.cluster = std::make_shared<KineticSingletonCluster>(
-        cops.begin()->first,
-        ki.min_reconnect_interval,
-        std::chrono::seconds(5)
-      );
-    /* Normal Cluster. */
-    else{
-      auto ectype = std::to_string((long long int)ki.numData)+"-"+
-          std::to_string((long long int)ki.numParity);
-      if(!ecCache.exists(ectype)){
-        ecCache.put(ectype,
-                std::make_shared<ErasureCoding>(ki.numData, ki.numParity)
-        );
-      }
-      
-      ki.cluster = std::make_shared<KineticCluster>(
-              ki.numData, ki.numParity,
-              cops, ki.min_reconnect_interval, ki.operation_timeout,
-              ecCache.get(ectype)
+    auto ectype = std::to_string((long long int)ki.numData)+"-"+
+         std::to_string((long long int)ki.numParity);
+    if(!ecCache.exists(ectype)){
+      ecCache.put(ectype,
+              std::make_shared<ErasureCoding>(ki.numData, ki.numParity)
       );
     }
-  }
 
+    std::vector<std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>> cops;
+    for(auto wwn = ki.drives.begin(); wwn != ki.drives.end(); wwn++){
+      if(!drivemap.count(*wwn))
+      throw LoggingException(ENODEV,__FUNCTION__,__FILE__,__LINE__,"Nonexisting "
+        "drive wwn '"+id+"' requested.");
+      cops.push_back(drivemap.at(*wwn));
+    }
+
+    ki.cluster = std::make_shared<KineticCluster>(
+             ki.numData, ki.numParity,
+             cops, ki.min_reconnect_interval, ki.operation_timeout,
+             ecCache.get(ectype)
+    );
+  }
   return ki.cluster;
 }
 

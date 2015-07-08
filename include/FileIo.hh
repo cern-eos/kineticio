@@ -20,7 +20,7 @@ namespace kio{
 
 //------------------------------------------------------------------------------
 //! Class used for doing Kinetic IO operations, mirroring FileIo interface
-//! except for using exceptions instead of return codes
+//! except for using exceptions instead of return codes.
 //------------------------------------------------------------------------------
 class FileIo : public FileIoInterface {
 public:
@@ -254,7 +254,7 @@ private:
   //! we don't want to have to look in the drive map for every access...
   std::shared_ptr<ClusterInterface> cluster;
 
-  //! cache & background flush functionality.
+  //! cache functionality
   ChunkCache cache;
 
   //! keep track of the last chunk to answer stat requests reasonably

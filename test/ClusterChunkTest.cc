@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include "catch.hpp"
 #include "ClusterChunk.hh"
-#include "KineticSingletonCluster.hh"
 #include "KineticCluster.hh"
 
 using namespace kio;
@@ -116,7 +115,7 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
             REQUIRE(memcmp(in,out,10) == 0);
 
             AND_THEN("It will become visible after expiration time has run out."){
-              usleep(c.expiration_time * 1000);
+              usleep(c.expiration_time.count() * 1000);
               REQUIRE_NOTHROW(c.read(out,0,10));
               REQUIRE(memcmp(in,out,10) != 0);
             }

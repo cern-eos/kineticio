@@ -1,3 +1,8 @@
+//------------------------------------------------------------------------------
+//! @file KineticCluster.hh
+//! @author Paul Hermann Lensing
+//! @brief General purpose implementation of cluster interface for Kinetic. 
+//------------------------------------------------------------------------------
 #ifndef KINETICCLUSTER_HH
 #define	KINETICCLUSTER_HH
 
@@ -10,15 +15,20 @@
 
 /* <cstdatomic> is part of gcc 4.4.x experimental C++0x support... <atomic> is
  * what actually made it into the standard.
-#if __GNUC__ == 4 && (__GNUC_MINOR__ == 4)
-    #include <cstdatomic>
-#else
-    #include <atomic>
-#endif
  */
+//#if __GNUC__ == 4 && (__GNUC_MINOR__ == 4)
+//    #include <cstdatomic>
+//#else
+//    #include <atomic>
+//#endif
+
 
 namespace kio{
 
+//------------------------------------------------------------------------------
+//! Implementation of cluster interface for arbitrarily sized cluster & stripe
+//! sizes.
+//------------------------------------------------------------------------------
 class KineticCluster : public ClusterInterface {
 public:
   //! See documentation in superclass.
@@ -59,13 +69,15 @@ public:
   //--------------------------------------------------------------------------
   //! Constructor.
   //!
-  //! @param stripe_size the number of drives data is striped to
+  //! @param num_data the number of data chunks generated for a single value 
   //! @param num_parities the number of parities to be computed for a stripe
   //! @param info host / port / key of target kinetic drives
   //! @param min_reconnect_interval minimum time between reconnection attempts
+  //! @param operation_timeout the maximum interval an operation is allowed
+  //! @param erasure pointer to an ErasureCoding object
   //--------------------------------------------------------------------------
   explicit KineticCluster(
-    std::size_t stripe_size, std::size_t num_parities,
+    std::size_t num_data, std::size_t num_parities,
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info,
     std::chrono::seconds min_reconnect_interval,
     std::chrono::seconds operation_timeout,
@@ -105,7 +117,7 @@ private:
 
   //--------------------------------------------------------------------------
   //! Update the clustersize / clusterlimits variables. This function is
-  //! threadsafe and can be called in the background.
+  //! thread-safe and can be called in the background.
   //!
   //! @param types the log types to request from the backend.
   //! @return status of operation
@@ -134,8 +146,10 @@ private:
   //! number of parities in a stripe
   std::size_t nParity;
 
+  //! all connections associated with this cluster
   std::vector< KineticAutoConnection > connections;
 
+  //! timeout of asynchronous operations
   std::chrono::seconds operation_timeout;
 
   //! cluster limits are constant over cluster lifetime

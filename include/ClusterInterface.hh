@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 //! @file ClusterInterface.hh
 //! @author Paul Hermann Lensing
-//! @brief Interface to a cluster.
+//! @brief Interface to a cluster...
 //------------------------------------------------------------------------------
 #ifndef CLUSTERINTERFACE_HH
 #define	CLUSTERINTERFACE_HH
@@ -15,7 +15,7 @@
 /* TODO: Do not use kinetic::KineticStatus directly, as it can't
  * represent cluster error states. Would also allow to decouple ClusterInterface
  * from kinetic/kinetic.h
- * 
+ *
 enum class KineticClusterStatus{
   OK,
   VERSION_MISSMATCH,
@@ -41,17 +41,17 @@ struct ClusterLimits{
 };
 
 //------------------------------------------------------------------------------
-//! Interface to a kinetic cluster. Can be a drive, a simulator, or or a
-//! whole cluster of either.
+//! Interface to a cluster, primarily intended to interface with Kinetic
+//! drives.
 //------------------------------------------------------------------------------
 class ClusterInterface{
 public:
 
   //----------------------------------------------------------------------------
   //! Obtain maximum key / version / value sizes.
-  //! These limits may drastically differ from standard Kinetic drive limits,
-  //! as for example the value might be written to multiple drives concurrently
-  //! and some of the key-space might be reserved for cluster internal metadata.
+  //! These limits may drastically differ from standard Kinetic drive limits.
+  //! For example, a value might be split and written to multiple drives. Or
+  //! some of the key-space might be reserved for cluster internal metadata.
   //! Limits remain constant during the cluster lifetime.
   //!
   //! @return cluster limits
@@ -59,10 +59,10 @@ public:
   virtual const ClusterLimits& limits() const = 0;
 
   //----------------------------------------------------------------------------
-  //! Check the maximum size of the Kinetic cluster. Function will not block but
+  //! Check the maximum size of the Cluster. Function will not block but
   //! might return outdated values.
   //!
-  //! @param size size and capacity of the Kinetic cluster in bytes.
+  //! @param size on success, stores size and capacity of the cluster in bytes
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus size(ClusterSize& size) = 0;
@@ -79,18 +79,18 @@ public:
   virtual kinetic::KineticStatus get(
     const std::shared_ptr<const std::string>& key,
     bool skip_value,
-    std::shared_ptr<const std::string>& value,
-    std::shared_ptr<const std::string>& version) = 0;
+    std::shared_ptr<const std::string>& version,
+    std::shared_ptr<const std::string>& value) = 0;
 
   //----------------------------------------------------------------------------
   //! Write the supplied key-value pair to the Kinetic cluster.
   //!
   //! @param key the key
-  //! @param version existing version expected in the cluster
+  //! @param version existing version expected in the cluster, empty for none
   //! @param value value to store
   //! @param force if set, possibly existing version in the cluster will be
-  //!   overwritten without check
-  //! @param version_out stores cluster generated version, on_drive upon success
+  //!   overwritten without checking if supplied version is correct
+  //! @param version_out stores cluster generated new version upon success
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus put(
@@ -106,7 +106,7 @@ public:
   //! @param key     the key
   //! @param version existing version expected in the cluster
   //! @param force   if set to true, possibly existing version in the cluster
-  //!                will not be checked against supplied version
+  //!   will not be verified against supplied version.
   //! @return status of operation
    //---------------------------------------------------------------------------
   virtual kinetic::KineticStatus remove(
@@ -118,11 +118,11 @@ public:
   //! Obtain keys in the supplied range [start,...,end]
   //!
   //! @param start  the start point of the requested key range, supplied key
-  //!               is included in the range
+  //!   is included in the range
   //! @param end    the end point of the requested key range, supplied key is
-  //!               included in the range
+  //!   included in the range
   //! @param maxRequested the maximum number of keys requested (cannot be higher
-  //!                     than limits allow)
+  //!   than limits allow)
   //! @param keys   on success, contains existing key names in supplied range
   //! @return status of operation
   //----------------------------------------------------------------------------
