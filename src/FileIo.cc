@@ -58,6 +58,12 @@ void FileIo::Close (uint16_t timeout)
   chunk_basename.clear();
 }
 
+void flush_noexcept(std::shared_ptr<ClusterChunk> chunk)
+{
+  try{chunk->flush();}
+  catch(...){}
+}
+
 int64_t FileIo::ReadWrite (long long off, char* buffer,
 		int length, FileIo::rw mode, uint16_t timeout)
 {
@@ -90,7 +96,7 @@ int64_t FileIo::ReadWrite (long long off, char* buffer,
        * chunks in memory than the size of the chunk cache, which implicitly
        * limits the number of threads that could be concurrently created here.*/
       if(chunk_offset + chunk_length == chunk_capacity)
-        std::thread(&ClusterChunk::flush, chunk).detach();
+        std::thread(flush_noexcept, chunk).detach();
     }
     else if (mode == rw::READ){
       chunk->read(buffer+off_done, chunk_offset, chunk_length);

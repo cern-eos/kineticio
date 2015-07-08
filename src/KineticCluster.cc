@@ -579,6 +579,10 @@ void makeGetLogOp(
 
 KineticStatus KineticCluster::getLog(std::vector<Command_GetLog_Type> types)
 {
+  /* This function is executed in a background thread. Make sure it never
+     ever throws anything, as otherwise the whole process terminates. */
+  try{
+
   auto ops = initialize( make_shared<string>("all"), connections.size() );
   for(auto o = ops.begin(); o != ops.end(); o++)
     makeGetLogOp(*o, types);
@@ -615,6 +619,8 @@ KineticStatus KineticCluster::getLog(std::vector<Command_GetLog_Type> types)
     }
   }
   return getlog_status;
+
+  }catch(...){}
 }
 
 const ClusterLimits& KineticCluster::limits() const
@@ -627,9 +633,8 @@ KineticStatus KineticCluster::size(ClusterSize& size)
   std::lock_guard<std::mutex> lck(getlog_mutex);
   if(getlog_outstanding == false){
     getlog_outstanding = true;
-    std::vector<Command_GetLog_Type> v = {
-        Command_GetLog_Type::Command_GetLog_Type_CAPACITIES
-    };
+    std::vector<Command_GetLog_Type> v =
+        {Command_GetLog_Type::Command_GetLog_Type_CAPACITIES};
     std::thread(&KineticCluster::getLog, this, std::move(v)).detach();
   }
 
