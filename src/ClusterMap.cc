@@ -41,7 +41,7 @@ ClusterMap::ClusterMap() :
     fprintf(stderr,"KINETIC_CLUSTER_DEFINITION not set.\n");
     return;
   }
-  
+
   /* get file contents */
   std::string location_data = readfile(location);
   if(location_data.empty()){
@@ -58,7 +58,6 @@ ClusterMap::ClusterMap() :
     fprintf(stderr,"File '%s' could not be read in.\n",cluster);
     return;
   }
-  
 
   /* parse files */
   if(parseJson(location_data, filetype::location)){
@@ -107,9 +106,10 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string & id
     }
 
     ki.cluster = std::make_shared<KineticCluster>(
-             ki.numData, ki.numParity,
-             cops, ki.min_reconnect_interval, ki.operation_timeout,
-             ecCache.get(ectype)
+            ki.numData, ki.numParity,
+            cops, ki.min_reconnect_interval, ki.operation_timeout,
+            ecCache.get(ectype),
+            listener
     );
   }
   return ki.cluster;

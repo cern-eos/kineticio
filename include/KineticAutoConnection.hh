@@ -11,6 +11,7 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include "SocketListener.hh"
 
 namespace kio{
 
@@ -45,6 +46,7 @@ public:
   //! @param min_getlog_interval minimum time between getlog attempts
   //--------------------------------------------------------------------------
   KineticAutoConnection(
+      SocketListener& sockwatch,
       std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > options,
       std::chrono::seconds ratelimit
   );
@@ -57,6 +59,8 @@ public:
 private:
   //! the underlying connection
   std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> connection;
+  //! the fd of an open connection
+  int fd; 
   //! the two interfaces of the target drive, first interface will be prioritized
   std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > options;
   //! timestamp of the last connection attempt
@@ -67,6 +71,8 @@ private:
   kinetic::KineticStatus status;
   //! thread safety, mutex stored in shared_ptr to allow vector of AutoConnections
   std::shared_ptr<std::mutex> mutex;
+  //! register connections with epoll listener
+  SocketListener* sockwatch;
 
 private:
   //--------------------------------------------------------------------------

@@ -9,6 +9,7 @@
 #include "ClusterInterface.hh"
 #include "KineticAutoConnection.hh"
 #include "KineticAsyncOperation.hh"
+#include "SocketListener.hh"
 #include "ErasureCoding.hh"
 #include <chrono>
 #include <mutex>
@@ -81,7 +82,8 @@ public:
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info,
     std::chrono::seconds min_reconnect_interval,
     std::chrono::seconds operation_timeout,
-    std::shared_ptr<ErasureCoding> erasure
+    std::shared_ptr<ErasureCoding> erasure,
+    SocketListener& sockwatch
   );
 
   //--------------------------------------------------------------------------

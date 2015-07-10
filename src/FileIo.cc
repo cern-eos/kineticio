@@ -101,6 +101,8 @@ int64_t FileIo::ReadWrite (long long off, char* buffer,
     else if (mode == rw::READ){
       chunk->read(buffer+off_done, chunk_offset, chunk_length);
 
+      /*TODO: Pre-fetch next chunk in background if reasonable*/
+      
       /* If we are reading the last chunk (or past it) */
       if(chunk_number >= lastChunkNumber.get()){
         /* make sure length doesn't indicate that we read past filesize. */

@@ -53,6 +53,7 @@ add_library(kineticio SHARED
     src/FileAttr.cc
     src/Factory.cc
     src/KineticAutoConnection.cc
+    src/SocketListener.cc
     src/KineticCluster.cc
     src/ErasureCoding.cc
 )
@@ -71,6 +72,7 @@ add_executable(kinetic-test
     test/FileIoTest.cc
     test/ClusterMapTest.cc
     test/KineticClusterTest.cc
+    test/SocketListenerTest.cc
     test/ErasureCodingTest.cc
     test/UtilityTest.cc
     src/ClusterChunk.cc
@@ -79,6 +81,7 @@ add_executable(kinetic-test
     src/FileAttr.cc
     src/Factory.cc
     src/KineticAutoConnection.cc
+    src/SocketListener.cc
     src/KineticCluster.cc
     src/ErasureCoding.cc
 )

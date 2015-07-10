@@ -6,7 +6,9 @@
 #include <kinetic/kinetic.h>
 
 using namespace kio;
-
+  std::string base_path("kinetic:Cluster1:");
+  std::string path(base_path+"filename");
+  
 SCENARIO("KineticIo Integration Test", "[Io]"){
 
   kinetic::ConnectionOptions tls_t1 = { "localhost", 8443, true, 1, "asdfasdf" };
@@ -21,8 +23,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
   REQUIRE(con2->InstantErase("NULL").ok());
 
   auto fileio = Factory::uniqueFileIo();
-  std::string base_path("kinetic:Cluster1:");
-  std::string path(base_path+"filename");
+
 
   int  buf_size = 64;
   char write_buf[] = "rcPOa12L3nhN5Cgvsa6Jlr3gn58VhazjA6oSpKacLFYqZBEu0khRwbWtEjge3BUA";

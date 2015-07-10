@@ -16,6 +16,7 @@
 #include "ClusterInterface.hh"
 #include "ErasureCoding.hh"
 #include "LRUCache.hh"
+#include "SocketListener.hh"
 /*----------------------------------------------------------------------------*/
 
 namespace kio{
@@ -123,6 +124,9 @@ private:
   //! among multiple cluster instances, no need to duplicate decoding tables
   //! in memory.
   cache::lru_cache<std::string, std::shared_ptr<ErasureCoding>> ecCache;
+
+  //! epoll listener loop shared among all connections
+  SocketListener listener;
 
   //! concurrency control
   std::mutex mutex;
