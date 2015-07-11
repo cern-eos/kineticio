@@ -126,7 +126,7 @@ private:
   cache::lru_cache<std::string, std::shared_ptr<ErasureCoding>> ecCache;
 
   //! epoll listener loop shared among all connections
-  SocketListener listener;
+  std::unique_ptr<SocketListener> listener;
 
   //! concurrency control
   std::mutex mutex;

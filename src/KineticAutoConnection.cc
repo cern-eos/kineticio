@@ -12,24 +12,29 @@ KineticAutoConnection::KineticAutoConnection(
         std::chrono::seconds r) :
         connection(), fd(0), options(o), timestamp(), ratelimit(r),
         status(kinetic::StatusCode::CLIENT_INTERNAL_ERROR,""),
-        mutex(new std::mutex()), sockwatch(&sw)
-{}
+        mutex(), sockwatch(sw), mt(), random(0,1)
+{
+    std::random_device rd;
+    mt.seed(rd());
+}
 
 KineticAutoConnection::~KineticAutoConnection()
 {
+  if(fd)
+    sockwatch.unsubscribe(fd);
 }
 
 void KineticAutoConnection::setError(kinetic::KineticStatus s)
 {
-  std::lock_guard<std::mutex> lck(*mutex);
+  std::lock_guard<std::mutex> lck(mutex);
   status = s;
-  sockwatch->unsubscribe(fd);
+  sockwatch.unsubscribe(fd);
   fd = 0;
 }
 
 std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConnection::get()
 {
-  std::lock_guard<std::mutex> lck(*mutex);
+  std::lock_guard<std::mutex> lck(mutex);
 
   if(!status.ok()){
     connect();
@@ -61,19 +66,22 @@ void KineticAutoConnection::connect()
   /* Remember this reconnection attempt. */
   timestamp = system_clock::now();
 
-  KineticConnectionFactory factory = NewKineticConnectionFactory();
+  /* Choose connection to prioritize at random. */
+  int r = random(mt);
+  printf("r is %d\n",r);
+  auto& primary = r ? options.first : options.second;
+  auto& secondary = r ? options.second : options.first;
 
-  /* Attempt connection. Prioritize first address, but take second if first
-   * failed. */
-  if(factory.NewThreadsafeNonblockingConnection(options.first,  connection).ok() ||
-     factory.NewThreadsafeNonblockingConnection(options.second, connection).ok()){
+  KineticConnectionFactory factory = NewKineticConnectionFactory();  
+  if(factory.NewThreadsafeNonblockingConnection(primary,  connection).ok() ||
+     factory.NewThreadsafeNonblockingConnection(secondary, connection).ok()){
     auto cb = std::make_shared<ConnectCallback>();
-    fd_set a; 
+    fd_set a;
     connection->NoOp(cb);
     connection->Run(&a,&a,&fd);
     if(fd){
-      fd--; 
-      sockwatch->subscribe(fd, this);
+      fd--;
+      sockwatch.subscribe(fd, this);
       status = KineticStatus(StatusCode::OK,"");
       return;
     }

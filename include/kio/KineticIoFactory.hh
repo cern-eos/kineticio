@@ -14,34 +14,21 @@ namespace kio{
 
   //----------------------------------------------------------------------------
   //! The only way for clients of the public library interface to construct
-  //! FileIo and FileAttr objects.
+  //! FileIo and FileAttr objects. Returns unique_ptr as the caller will
+  //! have exclusive ownership (if wanted, caller can transfer ownership to
+  //! shared_ptr himself. )
   //----------------------------------------------------------------------------
   class Factory{
   public:
     //--------------------------------------------------------------------------
-    //! Construct a FileIo object and store it in a shared pointer.
-    //!
-    //! @return shared pointer to constructed FileIo object.
-    //--------------------------------------------------------------------------
-    static std::shared_ptr<FileIoInterface> sharedFileIo();
-
-    //--------------------------------------------------------------------------
-    //! Construct a FileIo object and store it in a unique pointer.
+    //! Construct a FileIo object and return it in a unique pointer.
     //!
     //! @return unique pointer to constructed FileIo object.
     //--------------------------------------------------------------------------
     static std::unique_ptr<FileIoInterface> uniqueFileIo();
 
     //--------------------------------------------------------------------------
-    //! Construct a FileAttr object and store it in a shared pointer.
-    //!
-    //! @path the eos path to the FileIo object this attribute is associated with
-    //! @return shared pointer to constructed FileAttr object.
-    //--------------------------------------------------------------------------
-    static std::shared_ptr<FileAttrInterface> sharedFileAttr(const char* path);
-
-    //--------------------------------------------------------------------------
-    //! Construct a FileAttr object and store it in a unique pointer.
+    //! Construct a FileAttr object and return it in a unique pointer.
     //!
     //! @path the eos path to the FileIo object this attribute is associated with
     //! @return unique pointer to constructed FileAttr object.

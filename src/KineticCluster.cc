@@ -147,8 +147,10 @@ KineticCluster::KineticCluster(
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
 
   for(auto i = info.begin(); i != info.end(); i++){
-    auto ncon = KineticAutoConnection(listener, *i, min_reconnect_interval);
-    connections.push_back(ncon);
+    std::unique_ptr<KineticAutoConnection> ncon(
+        new KineticAutoConnection(listener, *i, min_reconnect_interval)
+    );
+    connections.push_back(std::move(ncon));
   }
 
   if(!getLog({
@@ -667,7 +669,7 @@ std::vector<KineticAsyncOperation> KineticCluster::initialize(
       KineticAsyncOperation{
           0,
           std::shared_ptr<kio::KineticCallback>(),
-          &connections[index]
+          connections[index].get()
       }
     );
     size--;

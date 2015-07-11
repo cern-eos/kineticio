@@ -35,7 +35,14 @@ endif (CMAKE_COMPILER_IS_GNUCXX)
 
 ################################################################################
 # Set CXX flags
-set(CMAKE_CXX_FLAGS "--std=c++0x -g -Wno-pragmas")
+if(DEBUG)
+    message("Building DEBUG configuration, switch with -DDEBUG=false argument")
+    set(CMAKE_CXX_FLAGS "--std=c++0x -g -Wno-pragmas")
+else()
+    message("Building RELEASE configuration, switch with -DDEBUG=true argument")
+    set(CMAKE_CXX_FLAGS "--std=c++0x -O2 -Wno-pragmas")
+endif(DEBUG)
+message("CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 
 include_directories(
     include/kio
@@ -66,33 +73,34 @@ target_link_libraries(kineticio
     ${KINETIC-C++_LIBRARIES}
 )
 
-add_executable(kinetic-test
-    test/TestMain.cc
-    test/ClusterChunkTest.cc
-    test/FileIoTest.cc
-    test/ClusterMapTest.cc
-    test/KineticClusterTest.cc
-    test/SocketListenerTest.cc
-    test/ErasureCodingTest.cc
-    test/UtilityTest.cc
-    src/ClusterChunk.cc
-    src/ClusterMap.cc
-    src/FileIo.cc
-    src/FileAttr.cc
-    src/Factory.cc
-    src/KineticAutoConnection.cc
-    src/SocketListener.cc
-    src/KineticCluster.cc
-    src/ErasureCoding.cc
-)
-target_link_libraries(kinetic-test
-   ${JSONC_LIBRARIES}
-   ${UUID_LIBRARIES}
-   ${Z_LIBRARIES}
-   ${ISAL_LIBRARIES}
-   ${KINETIC-C++_LIBRARIES}
-   ${CMAKE_THREAD_LIBS_INIT}
-)
-
+if(DEBUG)
+    add_executable(kinetic-test
+        test/TestMain.cc
+        test/ClusterChunkTest.cc
+        test/FileIoTest.cc
+        test/ClusterMapTest.cc
+        test/KineticClusterTest.cc
+        test/SocketListenerTest.cc
+        test/ErasureCodingTest.cc
+        test/UtilityTest.cc
+        src/ClusterChunk.cc
+        src/ClusterMap.cc
+        src/FileIo.cc
+        src/FileAttr.cc
+        src/Factory.cc
+        src/KineticAutoConnection.cc
+        src/SocketListener.cc
+        src/KineticCluster.cc
+        src/ErasureCoding.cc
+    )
+    target_link_libraries(kinetic-test
+       ${JSONC_LIBRARIES}
+       ${UUID_LIBRARIES}
+       ${Z_LIBRARIES}
+       ${ISAL_LIBRARIES}
+       ${KINETIC-C++_LIBRARIES}
+       ${CMAKE_THREAD_LIBS_INIT}
+    )
+endif(DEBUG)
 install(TARGETS kineticio LIBRARY DESTINATION lib64)
 install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)

@@ -11,6 +11,7 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <random>
 #include "SocketListener.hh"
 
 namespace kio{
@@ -60,7 +61,7 @@ private:
   //! the underlying connection
   std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> connection;
   //! the fd of an open connection
-  int fd; 
+  int fd;
   //! the two interfaces of the target drive, first interface will be prioritized
   std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > options;
   //! timestamp of the last connection attempt
@@ -69,15 +70,19 @@ private:
   std::chrono::seconds ratelimit;
   //! status of last reconnect attempt
   kinetic::KineticStatus status;
-  //! thread safety, mutex stored in shared_ptr to allow vector of AutoConnections
-  std::shared_ptr<std::mutex> mutex;
+  //! thread safety
+  std::mutex mutex;
   //! register connections with epoll listener
-  SocketListener* sockwatch;
+  SocketListener& sockwatch;
+  //! random number generator
+  std::mt19937 mt;
+  //! used to choose a host at random
+  std::uniform_int_distribution<int> random;
 
 private:
   //--------------------------------------------------------------------------
   //! Attempt to connect unless blocked by rate limit. Will attempt both host
-  //! names supplied to options, but prioritize the first host name.
+  //! names supplied to options and prioritize randomly.
   //--------------------------------------------------------------------------
   void connect();
 };

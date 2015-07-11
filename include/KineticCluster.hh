@@ -149,7 +149,7 @@ private:
   std::size_t nParity;
 
   //! all connections associated with this cluster
-  std::vector< KineticAutoConnection > connections;
+  std::vector< std::unique_ptr<KineticAutoConnection> > connections;
 
   //! timeout of asynchronous operations
   std::chrono::seconds operation_timeout;

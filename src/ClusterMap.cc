@@ -81,6 +81,9 @@ ClusterMap::~ClusterMap()
 std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string & id)
 {
   std::unique_lock<std::mutex> locker(mutex);
+  
+  if(!listener)
+    listener.reset(new SocketListener());
 
   if(!clustermap.count(id))
     throw LoggingException(ENODEV,__FUNCTION__,__FILE__,__LINE__,"Nonexisting "
@@ -109,7 +112,7 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string & id
             ki.numData, ki.numParity,
             cops, ki.min_reconnect_interval, ki.operation_timeout,
             ecCache.get(ectype),
-            listener
+            *listener
     );
   }
   return ki.cluster;
