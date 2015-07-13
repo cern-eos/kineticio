@@ -40,7 +40,7 @@ if(DEBUG)
     set(CMAKE_CXX_FLAGS "--std=c++0x -g -Wno-pragmas")
 else()
     message("Building RELEASE configuration, switch with -DDEBUG=true argument")
-    set(CMAKE_CXX_FLAGS "--std=c++0x -O2 -Wno-pragmas")
+    set(CMAKE_CXX_FLAGS "--std=c++0x -O2")
 endif(DEBUG)
 message("CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 
@@ -54,6 +54,7 @@ include_directories(
     ${ISAL_INCLUDE_DIRS}
 )
 add_library(kineticio SHARED
+    src/ClusterChunkCache.cc
     src/ClusterChunk.cc
     src/ClusterMap.cc
     src/FileIo.cc
@@ -83,6 +84,7 @@ if(DEBUG)
         test/SocketListenerTest.cc
         test/ErasureCodingTest.cc
         test/UtilityTest.cc
+        src/ClusterChunkCache.cc
         src/ClusterChunk.cc
         src/ClusterMap.cc
         src/FileIo.cc

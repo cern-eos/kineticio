@@ -14,16 +14,6 @@
 #include <chrono>
 #include <mutex>
 
-/* <cstdatomic> is part of gcc 4.4.x experimental C++0x support... <atomic> is
- * what actually made it into the standard.
- */
-//#if __GNUC__ == 4 && (__GNUC_MINOR__ == 4)
-//    #include <cstdatomic>
-//#else
-//    #include <atomic>
-//#endif
-
-
 namespace kio{
 
 //------------------------------------------------------------------------------

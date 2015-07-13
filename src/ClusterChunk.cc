@@ -19,7 +19,7 @@ const std::chrono::milliseconds ClusterChunk::expiration_time(1000);
 ClusterChunk::ClusterChunk(std::shared_ptr<ClusterInterface> c,
     const std::shared_ptr<const std::string> k, bool skip_initial_get) :
         cluster(c), key(k), version(), value(make_shared<string>()),
-        timestamp(), updates()
+        timestamp(), updates(), mutex()
 {
   if(!cluster) throw std::invalid_argument("no cluster supplied");
   if(skip_initial_get == false)
@@ -100,9 +100,9 @@ void ClusterChunk::read(char* const buffer, off_t offset, size_t length)
     throw std::invalid_argument("attempting to read past cluster limits");
 
   /*Ensure data is not too stale to read.*/
-  if(!validateVersion())
+  if(!version || !validateVersion())
     getRemoteValue();
-  
+
   /* return 0s if client reads non-existing data (e.g. file with holes) */
   if(offset+length > value->size())
     memset(buffer,0,length);

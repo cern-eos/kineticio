@@ -215,6 +215,10 @@ bool getVersionEqual(const KineticAsyncOperation& lhs ,const KineticAsyncOperati
 }
 bool getRecordVersionEqual(const KineticAsyncOperation& lhs ,const KineticAsyncOperation& rhs)
 {
+  if(!std::static_pointer_cast<GetCallback>(lhs.callback)->getRecord() ||
+     !std::static_pointer_cast<GetCallback>(rhs.callback)->getRecord() )
+    return false;
+
   return
     * std::static_pointer_cast<GetCallback>(lhs.callback)->getRecord()->version()
           ==
@@ -546,7 +550,7 @@ KineticStatus KineticCluster::range(
     int maxRequested,
     std::unique_ptr< std::vector<std::string> >& keys)
 {
-  auto ops = initialize(start_key, nData+nParity);
+  auto ops = initialize(start_key, connections.size());
   makeRangeOps(ops, start_key, end_key, maxRequested);
   auto status = execute(ops);
   if(!status.ok()) return status;

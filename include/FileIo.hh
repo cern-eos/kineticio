@@ -9,6 +9,7 @@
 /*----------------------------------------------------------------------------*/
 #include "FileIoInterface.hh"
 #include "ClusterInterface.hh"
+#include "ClusterChunkCache.hh"
 #include "ClusterChunk.hh"
 #include <unordered_map>
 #include <chrono>
@@ -23,6 +24,7 @@ namespace kio{
 //! except for using exceptions instead of return codes.
 //------------------------------------------------------------------------------
 class FileIo : public FileIoInterface {
+  friend class ChunkCache;
 public:
 //--------------------------------------------------------------------------
   //! Open file
@@ -132,7 +134,7 @@ public:
   //! Constructor
   //! @param cache_capacity maximum cache size
   //--------------------------------------------------------------------------
-  explicit FileIo (size_t cache_capacity=6);
+  explicit FileIo ();
 
   //--------------------------------------------------------------------------
   //! Destructor
@@ -193,69 +195,12 @@ private:
       std::chrono::system_clock::time_point last_chunk_number_timestamp;
   };
 
-  //----------------------------------------------------------------------------
-  //! Simple LRU cache for ClusterChunks. Is not threadsafe. Will obtain chunks
-  //! that are not in cache automatically from the backend.
-  //----------------------------------------------------------------------------
-  class ChunkCache {
-
-  public:
-    //--------------------------------------------------------------------------
-    //! Obtain 1 MB chunk associated with the file path set in constructor, chunk
-    //! numbers start at 0
-    //!
-    //! @param chunk_number specifies which 1 MB chunk in the file is requested,
-    //! @param chunk points to chunk on success, otherwise not changed
-    //! @param create if set implies the chunk (probably) does not exist on the
-    //!        cluster yet
-    //! @return the chunk on success, throws on error
-    //--------------------------------------------------------------------------
-    std::shared_ptr<ClusterChunk> get(int chunk_number, bool create=false);
-
-    //--------------------------------------------------------------------------
-    //! Blocking flush of the entire cache.
-    //--------------------------------------------------------------------------
-    void flush();
-
-    //--------------------------------------------------------------------------
-    //! Drop everything. Don't flush dirty chunks.
-    //--------------------------------------------------------------------------
-    void clear();
-
-    //--------------------------------------------------------------------------
-    //! Constructor.
-    //!
-    //! @param parent reference to the enclosing KineticFileIo object
-    //! @param cache_capacity maximum number of items in chache
-    //--------------------------------------------------------------------------
-    explicit ChunkCache(FileIo & parent, size_t cache_capacity);
-
-    //--------------------------------------------------------------------------
-    //! Destructor.
-    //--------------------------------------------------------------------------
-    ~ChunkCache();
-
-private:
-    //! reference to the enclosing KineticFileIo object
-    FileIo & parent;
-
-    //! maximum number of items allowed in the cache
-    size_t capacity;
-
-    //! keeping track of lru order
-    std::list<int> lru_order;
-
-    //! the cache... could increase performance a little bit using
-    //! <ListIterator, ClusterChunk> elements
-    std::unordered_map<int, std::shared_ptr<ClusterChunk>> cache;
-  };
-
 private:
   //! we don't want to have to look in the drive map for every access...
   std::shared_ptr<ClusterInterface> cluster;
 
   //! cache functionality
-  ChunkCache cache;
+  ChunkCache& cache;
 
   //! keep track of the last chunk to answer stat requests reasonably
   LastChunkNumber lastChunkNumber;

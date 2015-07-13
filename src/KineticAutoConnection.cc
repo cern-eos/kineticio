@@ -12,7 +12,7 @@ KineticAutoConnection::KineticAutoConnection(
         std::chrono::seconds r) :
         connection(), fd(0), options(o), timestamp(), ratelimit(r),
         status(kinetic::StatusCode::CLIENT_INTERNAL_ERROR,""),
-        mutex(), sockwatch(sw), mt(), random(0,1)
+        mutex(), sockwatch(sw), mt()
 {
     std::random_device rd;
     mt.seed(rd());
@@ -67,12 +67,11 @@ void KineticAutoConnection::connect()
   timestamp = system_clock::now();
 
   /* Choose connection to prioritize at random. */
-  int r = random(mt);
-  printf("r is %d\n",r);
+  int r = mt()%2;
   auto& primary = r ? options.first : options.second;
   auto& secondary = r ? options.second : options.first;
 
-  KineticConnectionFactory factory = NewKineticConnectionFactory();  
+  KineticConnectionFactory factory = NewKineticConnectionFactory();
   if(factory.NewThreadsafeNonblockingConnection(primary,  connection).ok() ||
      factory.NewThreadsafeNonblockingConnection(secondary, connection).ok()){
     auto cb = std::make_shared<ConnectCallback>();

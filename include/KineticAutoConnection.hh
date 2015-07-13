@@ -76,8 +76,6 @@ private:
   SocketListener& sockwatch;
   //! random number generator
   std::mt19937 mt;
-  //! used to choose a host at random
-  std::uniform_int_distribution<int> random;
 
 private:
   //--------------------------------------------------------------------------
