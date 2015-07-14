@@ -17,18 +17,16 @@ const std::chrono::milliseconds ClusterChunk::expiration_time(1000);
 
 
 ClusterChunk::ClusterChunk(std::shared_ptr<ClusterInterface> c,
-    const std::shared_ptr<const std::string> k, bool skip_initial_get) :
-        cluster(c), key(k), version(), value(make_shared<string>()),
-        timestamp(), updates(), mutex()
+    const std::shared_ptr<const std::string> k, ChunkMode m) :
+    mode(m), cluster(c), key(k), version(), value(make_shared<string>()),
+    timestamp(), updates(), mutex()
 {
   if(!cluster) throw std::invalid_argument("no cluster supplied");
-  if(skip_initial_get == false)
-    getRemoteValue();
 }
 
 ClusterChunk::~ClusterChunk()
 {
-  // take the mutex in order to prevent object deconsturction while flush 
+  // take the mutex in order to prevent object deconsturction while flush
   // operation is executed by non-owning thread.
   std::lock_guard<std::mutex> lock(mutex);
 }
@@ -40,6 +38,11 @@ bool ClusterChunk::validateVersion()
           system_clock::now() - timestamp)
           < expiration_time)
     return true;
+
+  /*If we are reading for the first time from a chunk opened in standard mode,
+    skip version validation and jump straight to the get operation. */
+  if(!version && mode == ChunkMode::standard)
+    return false;
 
   /* Check remote version & compare it to in-memory version. */
   shared_ptr<const string> remote_version;
@@ -76,7 +79,7 @@ void ClusterChunk::getRemoteValue()
     return;
 
   /* Merge all updates done on the local data copy (data) into the freshly
-     read-in data copy. */ 
+     read-in data copy. */
   auto merged_value = make_shared<string>(*remote_value);
   merged_value->resize(std::max(remote_value->size(), value->size()));
 
@@ -100,7 +103,7 @@ void ClusterChunk::read(char* const buffer, off_t offset, size_t length)
     throw std::invalid_argument("attempting to read past cluster limits");
 
   /*Ensure data is not too stale to read.*/
-  if(!version || !validateVersion())
+  if(!validateVersion())
     getRemoteValue();
 
   /* return 0s if client reads non-existing data (e.g. file with holes) */
@@ -166,9 +169,16 @@ void ClusterChunk::flush()
 bool ClusterChunk::dirty() const
 {
   std::lock_guard<std::mutex> lock(mutex);
-  if(!version)
+  if(!updates.empty())
     return true;
-  return !updates.empty();
+  
+  /* If we opened in create mode, we assume the chunk doesn't exist yet, it
+     is dirty even if we have written nothing to it. If we opened in standard
+     mode we assume it does already exist... we just haven't used it. */
+  if(!version){
+    if(mode==ChunkMode::create) return true;
+    else return false;
+  }
 }
 
 int ClusterChunk::size()

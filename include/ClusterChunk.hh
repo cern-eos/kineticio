@@ -17,6 +17,11 @@
 
 namespace kio{
 
+enum class ChunkMode{
+  standard,
+  create
+};
+
 //------------------------------------------------------------------------------
 //! High(er) level API for cluster keys. Handles incremental updates and
 //! resolves concurrency on chunk-basis. For multi-chunk atomic writes the
@@ -84,11 +89,11 @@ public:
   //!
   //! @param cluster the cluster that this chunk is (to be) stored on
   //! @param key the name of the chunk
-  //! @param skip_initial_get if true assume that the key does not yet exist
+  //! @param mode if mode::create assume that the key does not yet exist
   //--------------------------------------------------------------------------
   explicit ClusterChunk(std::shared_ptr<ClusterInterface> cluster,
                         const std::shared_ptr<const std::string> key,
-                        bool skip_initial_get=false);
+                        ChunkMode mode = ChunkMode::standard);
 
   //--------------------------------------------------------------------------
   //! Destructor.
@@ -112,6 +117,10 @@ private:
   void getRemoteValue();
 
 private:
+  //! setting the chunk mode can increase performance by preventing unnecessary
+  //! I/O in some cases.
+  ChunkMode mode;
+
   //! cluster this chunk is (to be) stored on
   std::shared_ptr<ClusterInterface> cluster;
 

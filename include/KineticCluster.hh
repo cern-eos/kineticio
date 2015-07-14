@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 //! @file KineticCluster.hh
 //! @author Paul Hermann Lensing
-//! @brief General purpose implementation of cluster interface for Kinetic. 
+//! @brief General purpose implementation of cluster interface for Kinetic.
 //------------------------------------------------------------------------------
 #ifndef KINETICCLUSTER_HH
 #define	KINETICCLUSTER_HH

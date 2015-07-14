@@ -75,12 +75,18 @@ int64_t FileIo::ReadWrite (long long off, char* buffer,
     off_t chunk_offset = (off+off_done) - chunk_number * chunk_capacity;
     size_t chunk_length = std::min(length_todo, chunk_capacity - chunk_offset);
 
-   /* Increase last chunk number if we write past currently known file size...*/
-
-    if(chunk_number > lastChunkNumber.get() && (mode == rw::WRITE)){
+    /* Increase last chunk number if we write past currently known file size...*/
+    ChunkMode cm = ChunkMode::standard;
+    if(mode == rw::WRITE && chunk_number > lastChunkNumber.get()){
       lastChunkNumber.set(chunk_number);
+      cm = ChunkMode::create;
     }
-    auto chunk = cache.get(this, chunk_number);
+    auto chunk = cache.get(this, chunk_number, cm);
+
+    /* If we are starting an aligned read, chances are we are reading 
+     * sequentially -> do some background read-ahead. */
+    if(mode == rw::READ && chunk_offset == 0)
+      cache.readahead(this, chunk_number+1);
 
     if(mode == rw::WRITE){
       chunk->write(buffer+off_done, chunk_offset, chunk_length);
@@ -91,9 +97,6 @@ int64_t FileIo::ReadWrite (long long off, char* buffer,
     }
     else if (mode == rw::READ){
       chunk->read(buffer+off_done, chunk_offset, chunk_length);
-      
-      if(chunk_offset == 0)
-        cache.readahead(this, chunk_number+1);
 
       /* If we are reading the last chunk (or past it) */
       if(chunk_number >= lastChunkNumber.get()){
@@ -134,7 +137,7 @@ void FileIo::Truncate (long long offset, uint16_t timeout)
   int chunk_offset = offset - chunk_number * chunk_capacity;
 
   /* Step 1) truncate the chunk containing the offset. */
-  cache.get(this, chunk_number)->truncate(chunk_offset);
+  cache.get(this, chunk_number, ChunkMode::standard)->truncate(chunk_offset);
 
   /* Step 2) Ensure we don't have chunks past chunk_number in the cache. Since
    * truncate isn't super common, go the easy way and just sync+drop the
@@ -193,7 +196,7 @@ void FileIo::Stat(struct stat* buf, uint16_t timeout)
          "No cluster set for FileIO object.");
 
   lastChunkNumber.verify();
-  std::shared_ptr<ClusterChunk> last_chunk = cache.get(this, lastChunkNumber.get());
+  std::shared_ptr<ClusterChunk> last_chunk = cache.get(this, lastChunkNumber.get(), ChunkMode::standard);
 
   memset(buf, 0, sizeof(struct stat));
   buf->st_blksize = cluster->limits().max_value_size;
@@ -207,7 +210,7 @@ void FileIo::Statfs (const char* p, struct statfs* sfs)
   if(obj_path.length() && obj_path.compare(p))
     throw LoggingException(EINVAL,__FUNCTION__,__FILE__,__LINE__,
          "Object concurrently used for both Statfs and FileIO");
- 
+
   if(!cluster){
     cluster = cmap().getCluster(utility::extractClusterID(p));
     obj_path=p;

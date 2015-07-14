@@ -24,7 +24,7 @@ namespace kio{
 //! except for using exceptions instead of return codes.
 //------------------------------------------------------------------------------
 class FileIo : public FileIoInterface {
-  friend class ChunkCache;
+  friend class ClusterChunkCache;
 public:
 //--------------------------------------------------------------------------
   //! Open file
@@ -200,7 +200,7 @@ private:
   std::shared_ptr<ClusterInterface> cluster;
 
   //! cache functionality
-  ChunkCache& cache;
+  ClusterChunkCache& cache;
 
   //! keep track of the last chunk to answer stat requests reasonably
   LastChunkNumber lastChunkNumber;

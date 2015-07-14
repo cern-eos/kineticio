@@ -37,7 +37,7 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
             listener
     );
 
-    ClusterChunk c(cluster, std::make_shared<std::string>("key"));
+    ClusterChunk c(cluster, std::make_shared<std::string>("key"), ChunkMode::create);
 
     THEN("Illegal writes to the chunk fail."){
       char buf[10];
