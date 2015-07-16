@@ -375,7 +375,7 @@ KineticStatus KineticCluster::get(
   /* Create a single value from stripe values. */
   auto v = make_shared<string>();
   for(int i=0; i<nData; i++){
-    v->append(stripe[i]->c_str());
+    v->append(*stripe[i]);
   }
   /* Resize value to size encoded in version (to support unaligned value sizes). */
   v->resize( utility::uuidDecodeSize(target_version));
@@ -450,13 +450,14 @@ KineticStatus KineticCluster::put(
   int chunk_size = (value->size() + nData-1) / (nData);
   std::vector< shared_ptr<const string> > stripe;
   for(int i=0; i<nData+nParity; i++){
-    if(value->size() > i*chunk_size)
-      stripe.push_back(
-            make_shared<string>(value->substr(i*chunk_size, chunk_size))
-            );
-    else
-      stripe.push_back(make_shared<string>());
-  }
+      if(i<nData){
+        auto subchunk = make_shared<string>(value->substr(i*chunk_size, chunk_size));
+        subchunk->resize(chunk_size); // ensure that all chunks are the same size
+        stripe.push_back(std::move(subchunk));
+      }
+      else
+        stripe.push_back(make_shared<string>());
+    }
   try{
     /*Do not try to erasure code data if we are putting an empty key. The
       erasure coding would assume all chunks are missing. and throw an error.*/
@@ -700,7 +701,7 @@ KineticStatus KineticCluster::execute(
       auto con  = o->connection->get();
       hkeys.push_back( o->function( con ) );
 //      printf("Called function on connection %p\n",o->connection);
-      
+
       fd_set a; int fd;
       if(!con->Run(&a,&a,&fd))
         throw std::runtime_error("Connection unusable.");

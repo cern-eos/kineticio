@@ -105,7 +105,7 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
         item.chunk->flush();
       }
       catch(const std::exception& e){
-          cache.splice( cache.begin(), cache, chunkmap[chunknumber] );
+          cache.splice( cache.begin(), cache, --cache.end() );
           std::lock_guard<std::mutex> lock(exception_mutex);
           exceptions[item.owner] = e;
           continue;
