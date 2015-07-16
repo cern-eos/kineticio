@@ -15,8 +15,9 @@ using kinetic::StatusCode;
 
 using namespace kio;
 
-FileIo::FileIo (size_t cache_capacity) :
-    cluster(), cache(*this, cache_capacity), lastChunkNumber(*this)
+
+FileIo::FileIo () :
+    cluster(), cache(ccache()), lastChunkNumber(*this)
 {
 }
 
@@ -53,15 +54,10 @@ void FileIo::Open (const std::string& p, int flags,
 void FileIo::Close (uint16_t timeout)
 {
   Sync(timeout);
+  cache.drop(this);
   cluster.reset();
   obj_path.clear();
   chunk_basename.clear();
-}
-
-void flush_noexcept(std::shared_ptr<ClusterChunk> chunk)
-{
-  try{chunk->flush();}
-  catch(...){}
 }
 
 int64_t FileIo::ReadWrite (long long off, char* buffer,
@@ -79,24 +75,25 @@ int64_t FileIo::ReadWrite (long long off, char* buffer,
     off_t chunk_offset = (off+off_done) - chunk_number * chunk_capacity;
     size_t chunk_length = std::min(length_todo, chunk_capacity - chunk_offset);
 
-   /* Increase last chunk number if we write past currently known file size...
-    * also assume the chunk doesn't exist yet in this case.  */
-    bool create=false;
-    if(chunk_number > lastChunkNumber.get() && (mode == rw::WRITE)){
+    /* Increase last chunk number if we write past currently known file size...*/
+    ChunkMode cm = ChunkMode::standard;
+    if(mode == rw::WRITE && chunk_number > lastChunkNumber.get()){
       lastChunkNumber.set(chunk_number);
-      create = true;
+      cm = ChunkMode::create;
     }
-    shared_ptr<ClusterChunk> chunk = cache.get(chunk_number, create);
+    auto chunk = cache.get(this, chunk_number, cm);
+
+    /* If we are starting an aligned read, chances are we are reading 
+     * sequentially -> do some background read-ahead. */
+    if(mode == rw::READ && chunk_offset == 0)
+      cache.readahead(this, chunk_number+1);
 
     if(mode == rw::WRITE){
       chunk->write(buffer+off_done, chunk_offset, chunk_length);
 
-      /* Flush chunk in background if writing to chunk capacity. Do not worry
-       * about creating too many threads: There can never be more
-       * chunks in memory than the size of the chunk cache, which implicitly
-       * limits the number of threads that could be concurrently created here.*/
+      /* Flush chunk in background if writing to chunk capacity.*/
       if(chunk_offset + chunk_length == chunk_capacity)
-        std::thread(flush_noexcept, chunk).detach();
+        cache.flush(this, chunk);
     }
     else if (mode == rw::READ){
       chunk->read(buffer+off_done, chunk_offset, chunk_length);
@@ -140,13 +137,13 @@ void FileIo::Truncate (long long offset, uint16_t timeout)
   int chunk_offset = offset - chunk_number * chunk_capacity;
 
   /* Step 1) truncate the chunk containing the offset. */
-  cache.get(chunk_number)->truncate(chunk_offset);
+  cache.get(this, chunk_number, ChunkMode::standard)->truncate(chunk_offset);
 
   /* Step 2) Ensure we don't have chunks past chunk_number in the cache. Since
    * truncate isn't super common, go the easy way and just sync+drop the
    * cache... this will also sync the just truncated chunk.  */
-  Sync();
-  cache.clear();
+  cache.flush(this);
+  cache.drop(this);
 
   /* Step 3) Delete all chunks past chunk_number. When truncating to size 0,
    * (and only then) also delete the first chunk. */
@@ -190,7 +187,7 @@ void FileIo::Sync (uint16_t timeout)
   if(!cluster) throw LoggingException(ENXIO,__FUNCTION__,__FILE__,__LINE__,
          "No cluster set for FileIO object.");
 
-  cache.flush();
+  cache.flush(this);
 }
 
 void FileIo::Stat(struct stat* buf, uint16_t timeout)
@@ -199,7 +196,7 @@ void FileIo::Stat(struct stat* buf, uint16_t timeout)
          "No cluster set for FileIO object.");
 
   lastChunkNumber.verify();
-  std::shared_ptr<ClusterChunk> last_chunk = cache.get(lastChunkNumber.get());
+  std::shared_ptr<ClusterChunk> last_chunk = cache.get(this, lastChunkNumber.get(), ChunkMode::standard);
 
   memset(buf, 0, sizeof(struct stat));
   buf->st_blksize = cluster->limits().max_value_size;
@@ -213,7 +210,7 @@ void FileIo::Statfs (const char* p, struct statfs* sfs)
   if(obj_path.length() && obj_path.compare(p))
     throw LoggingException(EINVAL,__FUNCTION__,__FILE__,__LINE__,
          "Object concurrently used for both Statfs and FileIO");
- 
+
   if(!cluster){
     cluster = cmap().getCluster(utility::extractClusterID(p));
     obj_path=p;
@@ -365,48 +362,3 @@ void FileIo::LastChunkNumber::verify()
               "File "+parent.obj_path+" does not exist.");
 }
 
-
-FileIo::ChunkCache::ChunkCache(FileIo & parent, size_t cache_capacity):
-    parent(parent), capacity(cache_capacity)
-{
-}
-
-FileIo::ChunkCache::~ChunkCache()
-{
-}
-
-void FileIo::ChunkCache::clear()
-{
-  cache.clear();
-  lru_order.clear();
-}
-
-void FileIo::ChunkCache::flush()
-{
-  for(auto it=cache.begin(); it!=cache.end(); ++it){
-    if(it->second->dirty())
-      it->second->flush();
-  }
-}
-
-std::shared_ptr<ClusterChunk> FileIo::ChunkCache::get(int chunk_number, bool create)
-{
-  if(cache.count(chunk_number)){
-    lru_order.remove(chunk_number);
-    lru_order.push_back(chunk_number);
-    return cache.at(chunk_number);
-  }
-
-  if(lru_order.size() >= capacity){
-    if(cache.at(lru_order.front())->dirty())
-      cache.at(lru_order.front())->flush();
-    cache.erase(lru_order.front());
-    lru_order.pop_front();
-  }
-
-  std::shared_ptr<ClusterChunk> chunk(new ClusterChunk(parent.cluster,
-      utility::constructChunkKey(parent.chunk_basename, chunk_number), create));
-  cache.insert(std::make_pair(chunk_number,chunk));
-  lru_order.push_back(chunk_number);
-  return chunk;
-}

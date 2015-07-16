@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 //! @file KineticCluster.hh
 //! @author Paul Hermann Lensing
-//! @brief General purpose implementation of cluster interface for Kinetic. 
+//! @brief General purpose implementation of cluster interface for Kinetic.
 //------------------------------------------------------------------------------
 #ifndef KINETICCLUSTER_HH
 #define	KINETICCLUSTER_HH
@@ -9,19 +9,10 @@
 #include "ClusterInterface.hh"
 #include "KineticAutoConnection.hh"
 #include "KineticAsyncOperation.hh"
+#include "SocketListener.hh"
 #include "ErasureCoding.hh"
 #include <chrono>
 #include <mutex>
-
-/* <cstdatomic> is part of gcc 4.4.x experimental C++0x support... <atomic> is
- * what actually made it into the standard.
- */
-//#if __GNUC__ == 4 && (__GNUC_MINOR__ == 4)
-//    #include <cstdatomic>
-//#else
-//    #include <atomic>
-//#endif
-
 
 namespace kio{
 
@@ -81,7 +72,8 @@ public:
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info,
     std::chrono::seconds min_reconnect_interval,
     std::chrono::seconds operation_timeout,
-    std::shared_ptr<ErasureCoding> erasure
+    std::shared_ptr<ErasureCoding> erasure,
+    SocketListener& sockwatch
   );
 
   //--------------------------------------------------------------------------
@@ -147,7 +139,7 @@ private:
   std::size_t nParity;
 
   //! all connections associated with this cluster
-  std::vector< KineticAutoConnection > connections;
+  std::vector< std::unique_ptr<KineticAutoConnection> > connections;
 
   //! timeout of asynchronous operations
   std::chrono::seconds operation_timeout;

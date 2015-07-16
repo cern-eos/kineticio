@@ -1,30 +1,40 @@
 #include "KineticAutoConnection.hh"
 #include "LoggingException.hh"
+#include "SocketListener.hh"
 #include <sstream>
 
 using namespace kinetic;
 using namespace kio;
 
 KineticAutoConnection::KineticAutoConnection(
+        SocketListener& sw,
         std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > o,
         std::chrono::seconds r) :
-        connection(), options(o), timestamp(), ratelimit(r), 
-        status(kinetic::StatusCode::CLIENT_INTERNAL_ERROR,""), mutex(new std::mutex())
-{}
+        connection(), fd(0), options(o), timestamp(), ratelimit(r),
+        status(kinetic::StatusCode::CLIENT_INTERNAL_ERROR,""),
+        mutex(), sockwatch(sw), mt()
+{
+    std::random_device rd;
+    mt.seed(rd());
+}
 
 KineticAutoConnection::~KineticAutoConnection()
 {
+  if(fd)
+    sockwatch.unsubscribe(fd);
 }
 
 void KineticAutoConnection::setError(kinetic::KineticStatus s)
 {
-  std::lock_guard<std::mutex> lck(*mutex);
+  std::lock_guard<std::mutex> lck(mutex);
   status = s;
+  sockwatch.unsubscribe(fd);
+  fd = 0;
 }
 
 std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConnection::get()
 {
-  std::lock_guard<std::mutex> lck(*mutex);
+  std::lock_guard<std::mutex> lck(mutex);
 
   if(!status.ok()){
     connect();
@@ -34,6 +44,15 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
   }
   return connection;
 }
+
+class ConnectCallback : public kinetic::SimpleCallbackInterface {
+public:
+    void Success() {}
+    void Failure(kinetic::KineticStatus error) {}
+
+    ConnectCallback(){}
+    ~ConnectCallback(){}
+};
 
 void KineticAutoConnection::connect()
 {
@@ -47,19 +66,28 @@ void KineticAutoConnection::connect()
   /* Remember this reconnection attempt. */
   timestamp = system_clock::now();
 
-  KineticConnectionFactory factory = NewKineticConnectionFactory();
+  /* Choose connection to prioritize at random. */
+  int r = mt()%2;
+  auto& primary = r ? options.first : options.second;
+  auto& secondary = r ? options.second : options.first;
 
-  /* Attempt connection. Prioritize first address, but take second if first
-   * failed. */
-  if(factory.NewThreadsafeNonblockingConnection(options.first,  connection).ok() ||
-     factory.NewThreadsafeNonblockingConnection(options.second, connection).ok()){
-    status = KineticStatus(StatusCode::OK,"");
+  KineticConnectionFactory factory = NewKineticConnectionFactory();
+  if(factory.NewThreadsafeNonblockingConnection(primary,  connection).ok() ||
+     factory.NewThreadsafeNonblockingConnection(secondary, connection).ok()){
+    auto cb = std::make_shared<ConnectCallback>();
+    fd_set a;
+    connection->NoOp(cb);
+    connection->Run(&a,&a,&fd);
+    if(fd){
+      fd--;
+      sockwatch.subscribe(fd, this);
+      status = KineticStatus(StatusCode::OK,"");
+      return;
+    }
   }
-  else{
-    std::stringstream ss;
-    ss << "Failed building connection to " << options.first.host << ":"
-       << options.first.port << " and " << options.second.host << ":"
-       << options.second.port;
-    status = KineticStatus(StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, ss.str());
-  }
+  std::stringstream ss;
+  ss << "Failed building connection to " << options.first.host << ":"
+     << options.first.port << " and " << options.second.host << ":"
+     << options.second.port;
+  status = KineticStatus(StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, ss.str());
 }

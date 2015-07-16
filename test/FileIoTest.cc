@@ -1,12 +1,16 @@
 #include "catch.hpp"
 #include "KineticIoFactory.hh"
 #include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
 #include <memory>
+#include <random>
 #include <kinetic/kinetic.h>
 
 using namespace kio;
-
+  std::string base_path("kinetic:Cluster1:");
+  std::string path(base_path+"filename");
+  
 SCENARIO("KineticIo Integration Test", "[Io]"){
 
   kinetic::ConnectionOptions tls_t1 = { "localhost", 8443, true, 1, "asdfasdf" };
@@ -21,8 +25,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
   REQUIRE(con2->InstantErase("NULL").ok());
 
   auto fileio = Factory::uniqueFileIo();
-  std::string base_path("kinetic:Cluster1:");
-  std::string path(base_path+"filename");
+
 
   int  buf_size = 64;
   char write_buf[] = "rcPOa12L3nhN5Cgvsa6Jlr3gn58VhazjA6oSpKacLFYqZBEu0khRwbWtEjge3BUA";
@@ -81,6 +84,33 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
   GIVEN("Open succeeds"){
     REQUIRE_NOTHROW(fileio->Open(path.c_str(), 0));
 
+    WHEN("A buffer is read into memory"){
+      int size = 20;
+      char abuf[size];
+      char bbuf[size];
+
+      int fd = open("/dev/random", O_RDONLY);
+      read(fd, abuf, size);
+      close(fd);
+      abuf[10]=0;
+
+
+      THEN("We can write it to the filio object."){
+          REQUIRE(fileio->Write(0,abuf,size) == size);
+
+          REQUIRE(fileio->Read(0,bbuf,size) == size);
+          REQUIRE(memcmp(abuf,bbuf,size) == 0);
+
+          fileio->Close();
+          AND_THEN("We can read it in again."){
+            REQUIRE_NOTHROW(fileio->Open(path.c_str(), 0));
+            REQUIRE(fileio->Read(0,bbuf,size) == size);
+            REQUIRE(memcmp(abuf,bbuf,size) == 0);
+            fileio->Close();
+          }
+      }
+    }
+
     THEN("The first ftsRead returns the full path, the second \"\"."){
       void * handle = fileio->ftsOpen(base_path);
       REQUIRE(handle != NULL);
@@ -89,7 +119,6 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
       REQUIRE(fileio->ftsClose(handle) == 0);
     }
 
-    
     THEN("Factory function for Attribute class succeeds"){
       auto a = Factory::uniqueFileAttr(path.c_str());
       REQUIRE(a);

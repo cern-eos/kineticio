@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <thread>
 #include <set>
-
+#include <condition_variable>
 
 using std::chrono::system_clock;
 using std::unique_ptr;
@@ -20,7 +20,7 @@ using namespace kio;
 
 class GetCallback : public KineticCallback, public GetCallbackInterface{
 public:
-  explicit GetCallback(){};
+  explicit GetCallback(shared_ptr<KineticOperationSync>& s):KineticCallback(s){};
   ~GetCallback(){};
 
   void Success(const std::string &key, std::unique_ptr<KineticRecord> r){
@@ -41,7 +41,7 @@ private:
 
 class GetVersionCallback : public KineticCallback, public GetVersionCallbackInterface{
 public:
-  explicit GetVersionCallback(){};
+  explicit GetVersionCallback(shared_ptr<KineticOperationSync>& s):KineticCallback(s){};
   ~GetVersionCallback(){};
 
   void Success(const std::string &v){
@@ -63,7 +63,7 @@ private:
 
 class GetLogCallback : public KineticCallback, public GetLogCallbackInterface{
 public:
-  explicit GetLogCallback(){};
+  explicit GetLogCallback(shared_ptr<KineticOperationSync>& s):KineticCallback(s){};
   ~GetLogCallback() {};
 
   void Success(unique_ptr<DriveLog> dlog){
@@ -83,7 +83,7 @@ private:
 
 class PutCallback : public KineticCallback, public PutCallbackInterface{
 public:
-  explicit PutCallback(){};
+  explicit PutCallback(shared_ptr<KineticOperationSync>& s):KineticCallback(s){};
   ~PutCallback() {};
 
   void Success(){
@@ -96,7 +96,7 @@ public:
 
 class DeleteCallback : public KineticCallback, public SimpleCallbackInterface{
 public:
-  explicit DeleteCallback(){};
+  explicit DeleteCallback(shared_ptr<KineticOperationSync>& s):KineticCallback(s){};
   ~DeleteCallback() {};
 
   void Success(){
@@ -109,7 +109,7 @@ public:
 
 class RangeCallback : public KineticCallback, public GetKeyRangeCallbackInterface{
 public:
-  explicit RangeCallback(){};
+  explicit RangeCallback(shared_ptr<KineticOperationSync>& s):KineticCallback(s){};
   ~RangeCallback() {};
 
   void Success(unique_ptr<vector<string>> k){
@@ -133,7 +133,8 @@ KineticCluster::KineticCluster(
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info,
     std::chrono::seconds min_reconnect_interval,
     std::chrono::seconds op_timeout,
-    std::shared_ptr<ErasureCoding> ec
+    std::shared_ptr<ErasureCoding> ec, 
+    SocketListener& listener
 ) :
     nData(stripe_size), nParity(num_parities),
     connections(), operation_timeout(op_timeout),
@@ -146,8 +147,10 @@ KineticCluster::KineticCluster(
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
 
   for(auto i = info.begin(); i != info.end(); i++){
-    auto ncon = KineticAutoConnection(*i, min_reconnect_interval);
-    connections.push_back(ncon);
+    std::unique_ptr<KineticAutoConnection> ncon(
+        new KineticAutoConnection(listener, *i, min_reconnect_interval)
+    );
+    connections.push_back(std::move(ncon));
   }
 
   if(!getLog({
@@ -200,7 +203,7 @@ KineticAsyncOperation& mostFrequent(
 
 bool resultsEqual(const KineticAsyncOperation& lhs ,const KineticAsyncOperation& rhs)
 {
-  return lhs.callback->getResult().statusCode() == rhs.callback->getResult().statusCode(); 
+  return lhs.callback->getResult().statusCode() == rhs.callback->getResult().statusCode();
 }
 
 bool getVersionEqual(const KineticAsyncOperation& lhs ,const KineticAsyncOperation& rhs)
@@ -212,6 +215,10 @@ bool getVersionEqual(const KineticAsyncOperation& lhs ,const KineticAsyncOperati
 }
 bool getRecordVersionEqual(const KineticAsyncOperation& lhs ,const KineticAsyncOperation& rhs)
 {
+  if(!std::static_pointer_cast<GetCallback>(lhs.callback)->getRecord() ||
+     !std::static_pointer_cast<GetCallback>(rhs.callback)->getRecord() )
+    return false;
+
   return
     * std::static_pointer_cast<GetCallback>(lhs.callback)->getRecord()->version()
           ==
@@ -220,30 +227,32 @@ bool getRecordVersionEqual(const KineticAsyncOperation& lhs ,const KineticAsyncO
 
 
 
-void makeGetVersionOp(
-  KineticAsyncOperation& o,
+void makeGetVersionOps(
+  std::vector<KineticAsyncOperation>& ops,
   const std::shared_ptr<const std::string>& key
 )
 {
-  auto cb = std::make_shared<GetVersionCallback>();
-  o.callback = cb;
-  o.function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
-            const std::shared_ptr<const std::string>,
-            const shared_ptr<GetVersionCallbackInterface>)>(
-    &ThreadsafeNonblockingKineticConnection::GetVersion,
-          std::placeholders::_1,
-          std::cref(key),
-          cb);
+  auto sync = std::make_shared<KineticOperationSync>();
+  for(auto o = ops.begin(); o != ops.end(); o++){
+    auto cb   = std::make_shared<GetVersionCallback>(sync);
+    o->callback = cb;
+    o->function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
+              const std::shared_ptr<const std::string>,
+              const shared_ptr<GetVersionCallbackInterface>)>(
+      &ThreadsafeNonblockingKineticConnection::GetVersion,
+            std::placeholders::_1,
+            std::cref(key),
+            cb);
+  }
 }
 
 KineticStatus KineticCluster::getVersion(
     const std::shared_ptr<const std::string>& key,
           std::shared_ptr<const std::string>& version
 )
-{
+{ 
   auto ops = initialize(key, nData+nParity);
-  for(auto o = ops.begin(); o != ops.end(); o++)
-    makeGetVersionOp(*o, key);
+  makeGetVersionOps(ops, key);
   auto status = execute(ops);
   if(!status.ok()) return status;
 
@@ -264,20 +273,23 @@ KineticStatus KineticCluster::getVersion(
 }
 
 
-void makeGetOp(
-  KineticAsyncOperation& o,
+void makeGetOps(
+  std::vector<KineticAsyncOperation>& ops,
   const std::shared_ptr<const std::string>& key
 )
 {
-  auto cb = std::make_shared<GetCallback>();
-  o.callback = cb;
-  o.function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
-            const std::shared_ptr<const std::string>,
-            const shared_ptr<GetCallbackInterface>)>(
-    &ThreadsafeNonblockingKineticConnection::Get,
-          std::placeholders::_1,
-          std::cref(key),
-          cb);
+  auto sync = std::make_shared<KineticOperationSync>();
+  for(auto o = ops.begin(); o != ops.end(); o++){
+    auto cb = std::make_shared<GetCallback>(sync);
+    o->callback = cb;
+    o->function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
+              const std::shared_ptr<const std::string>,
+              const shared_ptr<GetCallbackInterface>)>(
+      &ThreadsafeNonblockingKineticConnection::Get,
+            std::placeholders::_1,
+            std::cref(key),
+            cb);
+  }
 }
 /* Build a stripe vector from the records returned by a get operation. Only
  * accept values with valid CRC. */
@@ -325,8 +337,7 @@ KineticStatus KineticCluster::get(
     return getVersion(key,version);
 
   auto ops = initialize(key, nData+nParity);
-  for(auto o = ops.begin(); o != ops.end(); o++)
-    makeGetOp(*o, key);
+  makeGetOps(ops, key);
   auto status = execute(ops);
   if(!status.ok()) return status;
 
@@ -364,7 +375,7 @@ KineticStatus KineticCluster::get(
   /* Create a single value from stripe values. */
   auto v = make_shared<string>();
   for(int i=0; i<nData; i++){
-    v->append(stripe[i]->c_str());
+    v->append(*stripe[i]);
   }
   /* Resize value to size encoded in version (to support unaligned value sizes). */
   v->resize( utility::uuidDecodeSize(target_version));
@@ -374,17 +385,35 @@ KineticStatus KineticCluster::get(
 }
 
 
-void makePutOp(
-  KineticAsyncOperation& o,
+void makePutOps(
+  std::vector<KineticAsyncOperation>& ops,
+  std::vector< shared_ptr<const string> >& stripe,
   const std::shared_ptr<const std::string>& key,
-  const shared_ptr<const string>& version,
-  WriteMode wmode,
-  const shared_ptr<KineticRecord>& record
+  const shared_ptr<const string>& version_new,
+  const std::shared_ptr<const string>& version_old,
+  WriteMode wmode
 )
 {
-  auto cb = std::make_shared<PutCallback>();
-  o.callback = cb;
-  o.function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
+  auto sync = std::make_shared<KineticOperationSync>();
+
+  for(int i=0; i<ops.size(); i++){
+    auto& v = stripe[i];
+
+    /* Generate Checksum. */
+    auto checksum = crc32(0, (const Bytef*) v->c_str(), v->length());
+    auto tag = std::make_shared<string>(
+        std::to_string((long long unsigned int) checksum)
+    );
+
+    /* Construct record structure. */
+    shared_ptr<KineticRecord> record(
+      new KineticRecord(v, version_new, tag,
+        com::seagate::kinetic::client::proto::Command_Algorithm_CRC32)
+    );
+
+    auto cb = std::make_shared<PutCallback>(sync);
+    ops[i].callback = cb;
+    ops[i].function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
             const shared_ptr<const string>,
             const shared_ptr<const string>,
             WriteMode,
@@ -394,11 +423,12 @@ void makePutOp(
     &ThreadsafeNonblockingKineticConnection::Put,
           std::placeholders::_1,
           std::cref(key),
-          std::cref(version),
+          std::cref(version_old),
           wmode,
           record,
           cb,
           PersistMode::WRITE_BACK);
+  }
 }
 
 KineticStatus KineticCluster::put(
@@ -420,13 +450,14 @@ KineticStatus KineticCluster::put(
   int chunk_size = (value->size() + nData-1) / (nData);
   std::vector< shared_ptr<const string> > stripe;
   for(int i=0; i<nData+nParity; i++){
-    if(value->size() > i*chunk_size)
-      stripe.push_back(
-            make_shared<string>(value->substr(i*chunk_size, chunk_size))
-            );
-    else
-      stripe.push_back(make_shared<string>());
-  }
+      if(i<nData){
+        auto subchunk = make_shared<string>(value->substr(i*chunk_size, chunk_size));
+        subchunk->resize(chunk_size); // ensure that all chunks are the same size
+        stripe.push_back(std::move(subchunk));
+      }
+      else
+        stripe.push_back(make_shared<string>());
+    }
   try{
     /*Do not try to erasure code data if we are putting an empty key. The
       erasure coding would assume all chunks are missing. and throw an error.*/
@@ -436,30 +467,9 @@ KineticStatus KineticCluster::put(
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
   }
 
-  /* Set up execution to write stripe to drives. */
-  for(int i=0; i<ops.size(); i++){
-    auto& v = stripe[i];
-
-    /* Generate Checksum. */
-    auto checksum = crc32(0, (const Bytef*) v->c_str(), v->length());
-    auto tag = std::make_shared<string>(
-        std::to_string((long long unsigned int) checksum)
-    );
-
-    /* Construct record structure. */
-    shared_ptr<KineticRecord> record(
-      new KineticRecord(v, version_new, tag,
-        com::seagate::kinetic::client::proto::Command_Algorithm_CRC32)
-    );
-
-    makePutOp(
-        ops[i],
-        key,
-        version_old,
-        force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION,
-        record
-    );
-  }
+  makePutOps(ops, stripe, key, version_new, version_old,
+      force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION
+  );
   auto status = execute(ops);
 
   if(status.ok()){
@@ -469,28 +479,31 @@ KineticStatus KineticCluster::put(
 }
 
 
-void makeDeleteOp(
-  KineticAsyncOperation& o,
-  const shared_ptr<const string>& key,
-  const shared_ptr<const string>& version,
-  WriteMode wmode
+void makeDeleteOps(
+    std::vector<KineticAsyncOperation>& ops,
+    const shared_ptr<const string>& key,
+    const shared_ptr<const string>& version,
+    WriteMode wmode
 )
 {
-  auto cb = std::make_shared<DeleteCallback>();
-  o.callback = cb;
-  o.function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
-            const shared_ptr<const string>,
-            const shared_ptr<const string>,
-            WriteMode,
-            const shared_ptr<SimpleCallbackInterface>,
-            PersistMode)>(
-    &ThreadsafeNonblockingKineticConnection::Delete,
-          std::placeholders::_1,
-          std::cref(key),
-          std::cref(version),
-          wmode,
-          cb,
-          PersistMode::WRITE_BACK);
+  auto sync = std::make_shared<KineticOperationSync>();
+  for(auto o = ops.begin(); o != ops.end(); o++){
+    auto cb = std::make_shared<DeleteCallback>(sync);
+    o->callback = cb;
+    o->function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
+              const shared_ptr<const string>,
+              const shared_ptr<const string>,
+              WriteMode,
+              const shared_ptr<SimpleCallbackInterface>,
+              PersistMode)>(
+      &ThreadsafeNonblockingKineticConnection::Delete,
+            std::placeholders::_1,
+            std::cref(key),
+            std::cref(version),
+            wmode,
+            cb,
+            PersistMode::WRITE_BACK);
+  }
 }
 
 KineticStatus KineticCluster::remove(
@@ -499,35 +512,37 @@ KineticStatus KineticCluster::remove(
     bool force)
 {
   auto ops = initialize(key, nData+nParity);
-  for(auto o = ops.begin(); o != ops.end(); o++)
-    makeDeleteOp(*o, key, version,
-            force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION
-            );
+  makeDeleteOps(ops,key, version,
+      force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION
+  );
   return execute(ops);
 }
 
-void makeRangeOp(
-    KineticAsyncOperation& o,
+void makeRangeOps(
+    std::vector<KineticAsyncOperation>& ops,
     const std::shared_ptr<const std::string>& start_key,
     const std::shared_ptr<const std::string>& end_key,
     int maxRequested
 )
 {
-  auto cb = std::make_shared<RangeCallback>();
-  o.callback = cb;
-  o.function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
-          const shared_ptr<const string>, bool,
-          const shared_ptr<const string>, bool,
-          bool,
-          int32_t,
-          const shared_ptr<GetKeyRangeCallbackInterface>)>(
-  &ThreadsafeNonblockingKineticConnection::GetKeyRange,
-        std::placeholders::_1,
-        std::cref(start_key), true,
-        std::cref(end_key), true,
-        false,
-        maxRequested,
-        cb);
+  auto sync = std::make_shared<KineticOperationSync>();
+  for(auto o = ops.begin(); o != ops.end(); o++){
+    auto cb = std::make_shared<RangeCallback>(sync);
+    o->callback = cb;
+    o->function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
+            const shared_ptr<const string>, bool,
+            const shared_ptr<const string>, bool,
+            bool,
+            int32_t,
+            const shared_ptr<GetKeyRangeCallbackInterface>)>(
+    &ThreadsafeNonblockingKineticConnection::GetKeyRange,
+          std::placeholders::_1,
+          std::cref(start_key), true,
+          std::cref(end_key), true,
+          false,
+          maxRequested,
+          cb);
+  }
 }
 
 KineticStatus KineticCluster::range(
@@ -536,9 +551,8 @@ KineticStatus KineticCluster::range(
     int maxRequested,
     std::unique_ptr< std::vector<std::string> >& keys)
 {
-  auto ops = initialize(start_key, nData+nParity);
-  for(auto o = ops.begin(); o != ops.end(); o++)
-    makeRangeOp(*o, start_key, end_key, maxRequested);
+  auto ops = initialize(start_key, connections.size());
+  makeRangeOps(ops, start_key, end_key, maxRequested);
   auto status = execute(ops);
   if(!status.ok()) return status;
 
@@ -561,20 +575,23 @@ KineticStatus KineticCluster::range(
   return status;
 }
 
-void makeGetLogOp(
-    KineticAsyncOperation& o,
+void makeGetLogOps(
+    std::vector<KineticAsyncOperation>& ops,
     const std::vector<Command_GetLog_Type>& types
 )
 {
-  auto cb = std::make_shared<GetLogCallback>();
-  o.callback = cb;
-  o.function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
-            const vector<Command_GetLog_Type>&,
-            const shared_ptr<GetLogCallbackInterface>)>(
-    &ThreadsafeNonblockingKineticConnection::GetLog,
-          std::placeholders::_1,
-          std::cref(types),
-          cb);
+  auto sync = std::make_shared<KineticOperationSync>();
+  for(auto o = ops.begin(); o != ops.end(); o++){
+    auto cb = std::make_shared<GetLogCallback>(sync);
+    o->callback = cb;
+    o->function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
+              const vector<Command_GetLog_Type>&,
+              const shared_ptr<GetLogCallbackInterface>)>(
+      &ThreadsafeNonblockingKineticConnection::GetLog,
+            std::placeholders::_1,
+            std::cref(types),
+            cb);
+  }
 }
 
 KineticStatus KineticCluster::getLog(std::vector<Command_GetLog_Type> types)
@@ -584,8 +601,7 @@ KineticStatus KineticCluster::getLog(std::vector<Command_GetLog_Type> types)
   try{
 
   auto ops = initialize( make_shared<string>("all"), connections.size() );
-  for(auto o = ops.begin(); o != ops.end(); o++)
-    makeGetLogOp(*o, types);
+  makeGetLogOps(ops, types);
   auto status = execute(ops);
 
   /* Step 4) Evaluate Operation Result. */
@@ -658,32 +674,37 @@ std::vector<KineticAsyncOperation> KineticCluster::initialize(
       KineticAsyncOperation{
           0,
           std::shared_ptr<kio::KineticCallback>(),
-          &connections[index]
+          connections[index].get()
       }
     );
     size--;
   }
-
   return ops;
 }
 
 
- struct Execution{
-    shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> con;
-    kinetic::HandlerKey hkey;
-    KineticAsyncOperation* op;
-};
 
-KineticStatus KineticCluster::execute(std::vector< KineticAsyncOperation >& ops)
+
+KineticStatus KineticCluster::execute(
+    std::vector< KineticAsyncOperation >& ops)
 {
-  std::vector< Execution > ex;
+  using std::chrono::duration_cast;
+  using std::chrono::system_clock;
+  using std::chrono::seconds;
 
-  /* Call functions on connections */
+  auto& sync = ops.begin()->callback->getSync();
+  std::vector<kinetic::HandlerKey> hkeys;
+
+   /* Call functions on connections */
   for(auto o = ops.begin(); o != ops.end(); o++){
     try{
       auto con  = o->connection->get();
-      auto hkey = o->function( con );
-      ex.push_back(Execution{con, hkey, &(*o)});
+      hkeys.push_back( o->function( con ) );
+//      printf("Called function on connection %p\n",o->connection);
+
+      fd_set a; int fd;
+      if(!con->Run(&a,&a,&fd))
+        throw std::runtime_error("Connection unusable.");
     }
     catch(const std::exception& e) {
       o->callback->OnResult(
@@ -692,76 +713,33 @@ KineticStatus KineticCluster::execute(std::vector< KineticAsyncOperation >& ops)
     }
   }
 
-  /* Wait until all callback functions have been called. */
-  fd_set read_fds, write_fds, tmp_r, tmp_w;
-  int num_fds=0, fd=0, count=0;
-
-  do{
-    FD_ZERO(&read_fds);
-    FD_ZERO(&write_fds);
-    count = 0;
-
-    /* Call Run() on all connections with outstanding results. */
-    for(auto e = ex.cbegin(); e != ex.cend(); e++){
-      if(e->op->callback->finished())
-        continue;
-
-      if(e->con->Run(&tmp_r, &tmp_w, &fd)){
-        /* We could have just finished */
-        if(e->op->callback->finished())
-          continue;
-        /* This is pretty hacky. But since Nonblocking connection uses fd_sets to
-        * return a single fd it is just faster. */
-        if(FD_ISSET(fd-1, &tmp_r)) FD_SET(fd-1, &read_fds);
-        if(FD_ISSET(fd-1, &tmp_w)) FD_SET(fd-1, &write_fds);
-        num_fds=std::max(fd,num_fds);
-        count ++;
-      }
-      else{
-        KineticStatus err(StatusCode::CLIENT_IO_ERROR, "Connection Error");
-        e->con->RemoveHandler(e->hkey);
-        e->op->callback->OnResult(err);
-        e->op->connection->setError(err);
-      }
+  /* Wait until sufficient requests returned or we pass operation timeout. */
+  {
+    system_clock::time_point timeout_time = system_clock::now() + operation_timeout;
+    std::unique_lock<std::mutex> lck(sync->mutex);
+    while (sync->outstanding && system_clock::now() < timeout_time){
+      sync->cv.wait_until(lck, timeout_time);
     }
+  }
 
-    /* Count stores the number of outstanding results. If we have none, we
-     * are finished.  */
-    if(!count)
-      break;
-
-    /* Wait on previously set fds until timeout */
-    struct timeval tv {operation_timeout.count(), 0};
-    num_fds  = select(num_fds+1, &read_fds, &write_fds, NULL, &tv);
-
-    if (num_fds <= 0) {
-      KineticStatus err(StatusCode::CLIENT_IO_ERROR, 
-            num_fds < 0 ? "Select returned error." : "Network Timeout");
-
-      for(auto e = ex.cbegin(); e != ex.cend(); e++){
-        if(!e->op->callback->finished()){
-          e->con->RemoveHandler(e->hkey);
-          e->op->callback->OnResult(err);
-          e->op->connection->setError(err);
-        }
+  /* timeout any unfinished request, do not mark the associated connection
+   * as broken, if Run() failed it has already been done, otherwise it is an
+   * honest time out. */
+  for(int i=0; i<ops.size(); i++){
+    if(!ops[i].callback->finished()){
+        ops[i].connection->get()->RemoveHandler(hkeys[i]);
+        ops[i].callback->OnResult(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
       }
-    }
-  }while(count);
+  }
 
   /* In almost all cases this loop will terminate after a single iteration. */
-  for(auto o = ops.cbegin(); o != ops.cend(); o++){
-    int frequency = 0;
-    for(auto l = ops.cbegin(); l!= ops.cend(); l++)
-      if(o->callback->getResult().statusCode() == l->callback->getResult().statusCode())
-        frequency++;
-
-    if(frequency >= nData)
-      return o->callback->getResult();
-    if(frequency > nParity)
-      break;
+  int count=0;
+  auto& op = mostFrequent(ops, count, resultsEqual);
+  if(count<nData){
+    return KineticStatus(
+              StatusCode::CLIENT_IO_ERROR,
+              "Failed to get quorum of conforming return results from drives."
+            );
   }
-  return KineticStatus(
-          StatusCode::CLIENT_IO_ERROR,
-          "Failed to get sufficient conforming return results from drives."
-          );
+  return op.callback->getResult();
 }
