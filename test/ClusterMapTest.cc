@@ -30,7 +30,6 @@ SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
 
     GIVEN("A valid path."){
         ClusterMap kcm;
-        std::shared_ptr<ClusterInterface> c;
 
         THEN("Map size equals number of entries."){
             REQUIRE(kcm.getSize() == 3);

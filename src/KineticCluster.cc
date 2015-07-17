@@ -303,17 +303,17 @@ std::vector< shared_ptr<const string> > getOperationToStripe(
   count = 0;
 
   for(auto o = ops.begin(); o != ops.end(); o++){
-    auto& record = std::static_pointer_cast<GetCallback>(o->callback)->getRecord();
     stripe.push_back(make_shared<const string>());
+    auto& record = std::static_pointer_cast<GetCallback>(o->callback)->getRecord();
 
     if( record &&
        *record->version() == *target_version &&
         record->value() &&
         record->value()->size()
     ){
-      /* validate the checksum */
+      /* validate the checksum, computing takes ~1ms per checksum */
       auto checksum = crc32(0,
-                        (const Bytef*) record->value()->c_str(), 
+                        (const Bytef*) record->value()->c_str(),
                         record->value()->length()
                       );
       auto tag = std::to_string((long long unsigned int) checksum);
@@ -372,15 +372,17 @@ KineticStatus KineticCluster::get(
     }
   }
 
-  /* Create a single value from stripe values. */
+  /* Create a single value from stripe values, around 0.5 ms per data subchunk. */
   auto v = make_shared<string>();
+  v->reserve(stripe.front()->size()*nData);
   for(int i=0; i<nData; i++){
-    v->append(*stripe[i]);
+    *v += *stripe[i];
   }
+
   /* Resize value to size encoded in version (to support unaligned value sizes). */
   v->resize( utility::uuidDecodeSize(target_version));
   value = std::move(v);
-  version = target_version;
+  version = std::move(target_version);
   return status;
 }
 
@@ -399,7 +401,7 @@ void makePutOps(
   for(int i=0; i<ops.size(); i++){
     auto& v = stripe[i];
 
-    /* Generate Checksum. */
+    /* Generate Checksum, computing takes ~1ms per checksum */
     auto checksum = crc32(0, (const Bytef*) v->c_str(), v->length());
     auto tag = std::make_shared<string>(
         std::to_string((long long unsigned int) checksum)
@@ -700,7 +702,6 @@ KineticStatus KineticCluster::execute(
     try{
       auto con  = o->connection->get();
       hkeys.push_back( o->function( con ) );
-//      printf("Called function on connection %p\n",o->connection);
 
       fd_set a; int fd;
       if(!con->Run(&a,&a,&fd))

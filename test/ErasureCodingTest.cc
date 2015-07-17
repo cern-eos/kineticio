@@ -7,21 +7,20 @@ using std::make_shared;
 
 using namespace kio;
 
-std::string value(
-"0 Eine entscheidende Sitzung gibt es noch: Im Schuldenstreit zwischen "
-"1 Griechenland und seinen Geldgebern kommt nun alles auf das Treffen "
-"2 der Finanzminister der Eurozone am Samstag an. So haben es Angela "
-"3 Merkel und andere Staats- und Regierungschefs nach dem EU-Gipfel in "
-"4 der Nacht auf Freitag verkündet. Sie selbst wolle nicht über Einzelheiten "
-"5 heiten entscheiden, das stellte die Kanzlerin vor den Journalisten  "
-"6 in Brüssel ungewöhnlich deutlich klar. Bereits dieser Aspekt ist "
-"7 eine deutliche Botschaft in Richtung der griechischen Regierung. "
-"8 Ministerpräsident Alexis Tsipras hat in den vergangenen Monaten den"
-"9 Schuldenstreit stets als politische Auseinandersetzung. "
-);
-
 SCENARIO("Erasure Encoding Test.", "[Erasure]"){
-
+  std::string value(
+  "0 Eine entscheidende Sitzung gibt es noch: Im Schuldenstreit zwischen "
+  "1 Griechenland und seinen Geldgebern kommt nun alles auf das Treffen "
+  "2 der Finanzminister der Eurozone am Samstag an. So haben es Angela "
+  "3 Merkel und andere Staats- und Regierungschefs nach dem EU-Gipfel in "
+  "4 der Nacht auf Freitag verkündet. Sie selbst wolle nicht über Einzelheiten "
+  "5 heiten entscheiden, das stellte die Kanzlerin vor den Journalisten  "
+  "6 in Brüssel ungewöhnlich deutlich klar. Bereits dieser Aspekt ist "
+  "7 eine deutliche Botschaft in Richtung der griechischen Regierung. "
+  "8 Ministerpräsident Alexis Tsipras hat in den vergangenen Monaten den"
+  "9 Schuldenstreit stets als politische Auseinandersetzung. "
+  );
+  
   GIVEN ("An Erasure Code"){
     int nData = 10;
     int nParity = 3;

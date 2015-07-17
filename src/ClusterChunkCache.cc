@@ -129,10 +129,8 @@ void ClusterChunkCache::threadsafe_readahead(kio::FileIo* owner, std::shared_ptr
 {
   numthreads++;
   try{
-    if(chunk->dirty()){
-      char buf[1];
-      chunk->read(buf, 0, 1);
-    }
+    char buf[1];
+    chunk->read(buf, 0, 1);
   }
   catch(...){}
   numthreads--;

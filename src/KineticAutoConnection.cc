@@ -20,16 +20,16 @@ KineticAutoConnection::KineticAutoConnection(
 
 KineticAutoConnection::~KineticAutoConnection()
 {
-  if(fd)
-    sockwatch.unsubscribe(fd);
 }
 
 void KineticAutoConnection::setError(kinetic::KineticStatus s)
 {
   std::lock_guard<std::mutex> lck(mutex);
   status = s;
-  sockwatch.unsubscribe(fd);
-  fd = 0;
+  if(fd){
+    sockwatch.unsubscribe(fd);
+    fd = 0;
+  }
 }
 
 std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConnection::get()

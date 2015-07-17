@@ -25,9 +25,9 @@ SCENARIO("Cluster integration test.", "[Cluster]"){
   std::vector< std::pair<ConnectionOptions,ConnectionOptions> > info;
     info.push_back(std::pair<ConnectionOptions,ConnectionOptions>(target1,target1));
     info.push_back(std::pair<ConnectionOptions,ConnectionOptions>(target2,target2));
-    
+
     SocketListener listener;
-  
+
   GIVEN ("A drive cluster"){
     std::size_t nData = 1;
     std::size_t nParity = 1;

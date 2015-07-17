@@ -152,7 +152,7 @@ void FileIo::Truncate (long long offset, uint16_t timeout)
   do{
     KineticStatus status = cluster->range(
             utility::constructChunkKey(chunk_basename, offset ? chunk_number+1 : 0),
-            utility::constructChunkKey(chunk_basename, 99999999),
+            utility::constructChunkKey(chunk_basename, std::numeric_limits<int>::max()),
             max_keys_requested, keys);
     if(!status.ok())
       throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
@@ -325,7 +325,7 @@ void FileIo::LastChunkNumber::verify()
     KineticStatus status = parent.cluster->range(keys ?
             make_shared<const string>(keys->back()) :
             utility::constructChunkKey(parent.chunk_basename, last_chunk_number),
-            utility::constructChunkKey(parent.chunk_basename, 99999999),
+            utility::constructChunkKey(parent.chunk_basename, std::numeric_limits<int>::max()),
             max_keys_requested,
             keys);
 

@@ -30,11 +30,6 @@ void epoll_listen(int epoll_fd, bool* shutdown)
       }catch(const std::exception& e){
         con->setError( KineticStatus(StatusCode::CLIENT_IO_ERROR,e.what()) );
       }
-//      printf("event %d of %d is of type %s: run on pointer %p returned fd %d\n",
-//        i,ret,
-//        events[i].events & EPOLLIN ? "EPOLLIN" : events[i].events & EPOLLOUT ? "EPOLLOUT" : "UNKNOWN",
-//        con, fd ? fd-1 : 0);
-
     }
   }
 }
@@ -56,11 +51,11 @@ shutdown(false)
 
 SocketListener::~SocketListener()
 {
-  shutdown=true;
   int _eventfd = eventfd(0, EFD_NONBLOCK);
-  struct epoll_event e;
-  e.events = EPOLLIN | EPOLLOUT;
-  epoll_ctl( epoll_fd, EPOLL_CTL_ADD, _eventfd, &e);
+  struct epoll_event e={EPOLLIN | EPOLLOUT, NULL};
+  epoll_ctl( epoll_fd, EPOLL_CTL_ADD, _eventfd, &e );
+
+  shutdown=true;
   eventfd_write(_eventfd, 1);
   listener.join();
   close(epoll_fd);
