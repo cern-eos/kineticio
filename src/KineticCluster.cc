@@ -462,7 +462,8 @@ KineticStatus KineticCluster::put(
     }
   try{
     /*Do not try to erasure code data if we are putting an empty key. The
-      erasure coding would assume all chunks are missing. and throw an error.*/
+      erasure coding would assume all chunks are missing. and throw an error.
+      Computing takes about 4 ms for 8-2 and 60 ms for 38-4 */
     if(chunk_size)
       erasure->compute(stripe);
   }catch(const std::exception& e){

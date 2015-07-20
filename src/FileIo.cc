@@ -83,11 +83,6 @@ int64_t FileIo::ReadWrite (long long off, char* buffer,
     }
     auto chunk = cache.get(this, chunk_number, cm);
 
-    /* If we are starting an aligned read, chances are we are reading 
-     * sequentially -> do some background read-ahead. */
-    if(mode == rw::READ && chunk_offset == 0)
-      cache.readahead(this, chunk_number+1);
-
     if(mode == rw::WRITE){
       chunk->write(buffer+off_done, chunk_offset, chunk_length);
 

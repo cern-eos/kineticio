@@ -104,7 +104,7 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string & id
     for(auto wwn = ki.drives.begin(); wwn != ki.drives.end(); wwn++){
       if(!drivemap.count(*wwn))
       throw LoggingException(ENODEV,__FUNCTION__,__FILE__,__LINE__,"Nonexisting "
-        "drive wwn '"+id+"' requested.");
+        "drive wwn '"+*wwn+"' requested.");
       cops.push_back(drivemap.at(*wwn));
     }
 

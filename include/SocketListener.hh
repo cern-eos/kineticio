@@ -12,7 +12,7 @@
 
 namespace kio{
 
-//! Forward declaraction as AutoConnection includes this class. 
+//! Forward declaraction as AutoConnection includes this class.
 class KineticAutoConnection;
 
 

@@ -32,8 +32,13 @@ void ClusterChunkCache::drop(kio::FileIo* owner)
       exceptions.erase(owner);
   }
 
-  std::lock_guard<std::mutex> lock(cache_mutex);
+  {
+    std::lock_guard<std::mutex> lock(readahead_mutex);
+    if(prefetch.count(owner))
+      prefetch.erase(owner);
+  }
 
+  std::lock_guard<std::mutex> lock(cache_mutex);
   if(lookup.count(owner)){
     auto& chunkmap = lookup[owner];
 
@@ -72,7 +77,7 @@ void ClusterChunkCache::flush(kio::FileIo* owner)
 }
 
 std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
-  kio::FileIo* owner, int chunknumber, ChunkMode mode)
+  kio::FileIo* owner, int chunknumber, ChunkMode mode, RequestMode rm)
 {
   {
     std::lock_guard<std::mutex> lock(exception_mutex);
@@ -81,6 +86,15 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
       exceptions.erase(owner);
       throw e;
     }
+  }
+
+  if(mode == ChunkMode::standard && rm == RequestMode::STANDARD){
+    std::lock_guard<std::mutex> lock(readahead_mutex);
+    auto& sequence = prefetch[owner];
+    sequence.add(chunknumber);
+    auto prediction = sequence.predict(SequencePatternRecognition::PredictionType::CONTINUE);
+    for(auto it = prediction.cbegin(); it != prediction.cend(); it++)
+      readahead(owner, *it);
   }
 
   std::lock_guard<std::mutex> lock(cache_mutex);
@@ -165,7 +179,7 @@ void ClusterChunkCache::flush(kio::FileIo* owner, std::shared_ptr<ClusterChunk> 
 void ClusterChunkCache::readahead(kio::FileIo* owner, int chunknumber)
 {
   if(numthreads.load() < thread_capacity){
-    auto chunk = get(owner, chunknumber, ChunkMode::standard);
+    auto chunk = get(owner, chunknumber, ChunkMode::standard, RequestMode::READAHEAD);
     std::thread(&ClusterChunkCache::threadsafe_readahead, this, owner, chunk).detach();
   }
 }

@@ -64,6 +64,7 @@ add_library(kineticio SHARED
     src/SocketListener.cc
     src/KineticCluster.cc
     src/ErasureCoding.cc
+    src/SequencePatternRecognition.cc
 )
 
 target_link_libraries(kineticio
@@ -84,6 +85,7 @@ if(DEBUG)
         test/SocketListenerTest.cc
         test/ErasureCodingTest.cc
         test/UtilityTest.cc
+        test/SequencePatternRecognitionTest.cc
         src/ClusterChunkCache.cc
         src/ClusterChunk.cc
         src/ClusterMap.cc
@@ -94,6 +96,7 @@ if(DEBUG)
         src/SocketListener.cc
         src/KineticCluster.cc
         src/ErasureCoding.cc
+        src/SequencePatternRecognition.cc
     )
     target_link_libraries(kinetic-test
        ${JSONC_LIBRARIES}

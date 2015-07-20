@@ -7,6 +7,7 @@
 #define	CLUSTERCHUNKCACHE_HH
 
 /*----------------------------------------------------------------------------*/
+#include "SequencePatternRecognition.hh"
 #include "ClusterChunk.hh"
 #include <unordered_map>
 #include <condition_variable>
@@ -35,6 +36,8 @@ class FileIo;
 class ClusterChunkCache {
 
 public:
+  enum class RequestMode{READAHEAD,STANDARD};
+
   //--------------------------------------------------------------------------
   //! Return the cluster chunk associated with the supplied owner and chunk
   //! number. Throws on error. ALSO throws, if a background flush has failed
@@ -45,7 +48,12 @@ public:
   //! @param mode argument to pass to a chunk if it has to be created
   //! @return the chunk on success, throws on error
   //--------------------------------------------------------------------------
-  std::shared_ptr<kio::ClusterChunk> get(kio::FileIo* owner, int chunknumber, ChunkMode mode);
+  std::shared_ptr<kio::ClusterChunk> get(
+          kio::FileIo* owner,
+          int chunknumber,
+          ChunkMode cm,
+          RequestMode rm = RequestMode::STANDARD
+  );
 
   //--------------------------------------------------------------------------
   //! Flushes all dirty chunks associated with the owner.
@@ -74,19 +82,6 @@ public:
   void flush(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk);
 
   //--------------------------------------------------------------------------
-  //! Attempt to read the requested chunk number for the owner in a background
-  //! thread. If this is not possible due to the number of active background
-  //! threads already reaching thread_capacity just skip the readahead request.
-  //! Errors during readahead will be swallowed, error handling can safely occur
-  //! during the following regular read of the chunk.
-  //!
-  //! @param owner a pointer to the kio::FileIo object the chunk belongs to
-  //! @param chunknumber the chunk number to read in
-  //--------------------------------------------------------------------------
-  
-  void readahead(kio::FileIo* owner, int chunknumber);
-
-  //--------------------------------------------------------------------------
   //! Constructor.
   //!
   //! @param item_capacity maximum number of items in cache
@@ -101,6 +96,18 @@ public:
   ~ClusterChunkCache();
 
 private:
+  //--------------------------------------------------------------------------
+  //! Attempt to read the requested chunk number for the owner in a background
+  //! thread. If this is not possible due to the number of active background
+  //! threads already reaching thread_capacity just skip the readahead request.
+  //! Errors during readahead will be swallowed, error handling can safely occur
+  //! during the following regular read of the chunk.
+  //!
+  //! @param owner a pointer to the kio::FileIo object the chunk belongs to
+  //! @param chunknumber the chunk number to read in
+  //--------------------------------------------------------------------------
+  void readahead(kio::FileIo* owner, int chunknumber);
+
   //--------------------------------------------------------------------------
   //! Readahead functionality that can be safely called in a detached
   //! std::thread
@@ -135,10 +142,12 @@ private:
     //! the actual chunk
     std::shared_ptr<kio::ClusterChunk> chunk;
   };
+  
   //! A linked list of CacheItems stored in LRU order
   std::list<CacheItem> cache;
   typedef std::list<CacheItem>::iterator cache_iterator;
   typedef std::unordered_map<int, cache_iterator> chunk_map;
+
   //! the primary lookup table contains a chunk lookup table for every owner
   std::unordered_map<const FileIo*, chunk_map> lookup;
 
@@ -146,8 +155,14 @@ private:
   //! the next get request of the owner.
   std::unordered_map<const kio::FileIo*, std::exception>  exceptions;
 
+  //! Track per FileIo access patterns and attempt to pre-fetch intelligently
+  std::unordered_map<const kio::FileIo*, SequencePatternRecognition> prefetch;
+
   //! Thread safety when accessing exception map
   std::mutex exception_mutex;
+
+  //! Thread safety when accessing pre-fetch map
+  std::mutex readahead_mutex;
 
   //! Thread safety when accessing cache structures (lookup table and lru list)
   std::mutex cache_mutex;
