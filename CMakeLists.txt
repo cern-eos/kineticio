@@ -61,12 +61,13 @@ add_library(kineticio SHARED
     src/FileAttr.cc
     src/Factory.cc
     src/KineticAutoConnection.cc
-    src/SocketListener.cc
+    src/KineticAsyncOperation.cc
+    src/KineticCallbacks.cc
     src/KineticCluster.cc
+    src/SocketListener.cc
     src/ErasureCoding.cc
     src/SequencePatternRecognition.cc
 )
-
 target_link_libraries(kineticio
     ${JSONC_LIBRARIES}
     ${UUID_LIBRARIES}
@@ -93,8 +94,10 @@ if(DEBUG)
         src/FileAttr.cc
         src/Factory.cc
         src/KineticAutoConnection.cc
-        src/SocketListener.cc
+        src/KineticAsyncOperation.cc
+        src/KineticCallbacks.cc
         src/KineticCluster.cc
+        src/SocketListener.cc
         src/ErasureCoding.cc
         src/SequencePatternRecognition.cc
     )

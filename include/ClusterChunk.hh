@@ -15,12 +15,7 @@
 #include "ClusterInterface.hh"
 /*----------------------------------------------------------------------------*/
 
-namespace kio{
-
-enum class ChunkMode{
-  standard,
-  create
-};
+namespace kio {
 
 //------------------------------------------------------------------------------
 //! High(er) level API for cluster keys. Handles incremental updates and
@@ -28,10 +23,14 @@ enum class ChunkMode{
 //! caller will have to do appropriate locking himself. Chunk size depends on
 //! cluster configuration. Is threadsafe to enable background flushing.
 //------------------------------------------------------------------------------
-class ClusterChunk {
+class ClusterChunk
+{
 public:
   //! Initialized to 1 second staleness
   static const std::chrono::milliseconds expiration_time;
+
+  //! Enum for different chunk modes
+  enum class Mode { STANDARD, CREATE };
 
 public:
   //--------------------------------------------------------------------------
@@ -74,7 +73,7 @@ public:
   //!
   //! @return size in bytes of underlying value
   //--------------------------------------------------------------------------
-  int size();
+  std::size_t size();
 
   //--------------------------------------------------------------------------
   //! Test for your flushing needs. Chunk is considered dirty if it is either
@@ -93,7 +92,7 @@ public:
   //--------------------------------------------------------------------------
   explicit ClusterChunk(std::shared_ptr<ClusterInterface> cluster,
                         const std::shared_ptr<const std::string> key,
-                        ChunkMode mode = ChunkMode::standard);
+                        Mode mode = Mode::STANDARD);
 
   //--------------------------------------------------------------------------
   //! Destructor.
@@ -119,7 +118,7 @@ private:
 private:
   //! setting the chunk mode can increase performance by preventing unnecessary
   //! I/O in some cases.
-  ChunkMode mode;
+  Mode mode;
 
   //! cluster this chunk is (to be) stored on
   std::shared_ptr<ClusterInterface> cluster;

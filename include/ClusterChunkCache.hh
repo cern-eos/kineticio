@@ -4,7 +4,7 @@
 //! @brief An fst-wide cache for cluster chunks. 
 //------------------------------------------------------------------------------
 #ifndef CLUSTERCHUNKCACHE_HH
-#define	CLUSTERCHUNKCACHE_HH
+#define  CLUSTERCHUNKCACHE_HH
 
 /*----------------------------------------------------------------------------*/
 #include "SequencePatternRecognition.hh"
@@ -20,11 +20,13 @@
 #if __GNUC__ == 4 && (__GNUC_MINOR__ == 4)
     #include <cstdatomic>
 #else
-    #include <atomic>
+
+#include <atomic>
+
 #endif
 /*----------------------------------------------------------------------------*/
 
-namespace kio{
+namespace kio {
 
 //! forward declare FileIo since FileIo includes the cache.
 class FileIo;
@@ -33,10 +35,11 @@ class FileIo;
 //! LRU cache for ClusterChunks. Threadsafe. Will create chunks
 //! that are not in cache automatically during get()
 //----------------------------------------------------------------------------
-class ClusterChunkCache {
+class ClusterChunkCache
+{
 
 public:
-  enum class RequestMode{READAHEAD,STANDARD};
+  enum class RequestMode { READAHEAD, STANDARD };
 
   //--------------------------------------------------------------------------
   //! Return the cluster chunk associated with the supplied owner and chunk
@@ -49,10 +52,10 @@ public:
   //! @return the chunk on success, throws on error
   //--------------------------------------------------------------------------
   std::shared_ptr<kio::ClusterChunk> get(
-          kio::FileIo* owner,
-          int chunknumber,
-          ChunkMode cm,
-          RequestMode rm = RequestMode::STANDARD
+      kio::FileIo* owner,
+      int chunknumber,
+      ClusterChunk::Mode cm,
+      RequestMode rm = RequestMode::STANDARD
   );
 
   //--------------------------------------------------------------------------
@@ -82,6 +85,16 @@ public:
   void flush(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk);
 
   //--------------------------------------------------------------------------
+  //! Cache is shared among all FileIo objects.
+  //--------------------------------------------------------------------------
+  static ClusterChunkCache& getInstance(){
+    static ClusterChunkCache cc(200, 20);
+    return cc;
+  }
+
+
+private:
+  //--------------------------------------------------------------------------
   //! Constructor.
   //!
   //! @param item_capacity maximum number of items in cache
@@ -95,7 +108,16 @@ public:
   //--------------------------------------------------------------------------
   ~ClusterChunkCache();
 
-private:
+  //--------------------------------------------------------------------------
+  //! Copy constructing makes no sense
+  //--------------------------------------------------------------------------
+  ClusterChunkCache(ClusterChunkCache&) = delete;
+
+  //--------------------------------------------------------------------------
+  //! Assignment make no sense
+  //--------------------------------------------------------------------------
+  void operator=(ClusterChunkCache&) = delete;
+
   //--------------------------------------------------------------------------
   //! Attempt to read the requested chunk number for the owner in a background
   //! thread. If this is not possible due to the number of active background
@@ -115,7 +137,7 @@ private:
   //! @param owner a pointer to the kio::FileIo object the chunk belongs to
   //! @param chunk the chunk to read from the backend
   //--------------------------------------------------------------------------
-  void threadsafe_readahead(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk);
+  void threadsafe_readahead(std::shared_ptr<kio::ClusterChunk> chunk);
 
   //--------------------------------------------------------------------------
   //! Flush functionality that can be safely called in a detached std::thread
@@ -134,7 +156,8 @@ private:
   std::atomic<int> numthreads;
 
   //! The cache item structure
-  struct CacheItem{
+  struct CacheItem
+  {
     //! the chunk number
     const int id;
     //! the chunk owner
@@ -142,7 +165,7 @@ private:
     //! the actual chunk
     std::shared_ptr<kio::ClusterChunk> chunk;
   };
-  
+
   //! A linked list of CacheItems stored in LRU order
   std::list<CacheItem> cache;
   typedef std::list<CacheItem>::iterator cache_iterator;
@@ -153,7 +176,7 @@ private:
 
   //! Exceptions occurring during background execution are stored and thrown at
   //! the next get request of the owner.
-  std::unordered_map<const kio::FileIo*, std::exception>  exceptions;
+  std::unordered_map<const kio::FileIo*, std::exception> exceptions;
 
   //! Track per FileIo access patterns and attempt to pre-fetch intelligently
   std::unordered_map<const kio::FileIo*, SequencePatternRecognition> prefetch;
@@ -168,12 +191,7 @@ private:
   std::mutex cache_mutex;
 };
 
-//! Static ClusterMap for all KineticFileIo objects
-static ClusterChunkCache & ccache()
-{
-  static ClusterChunkCache cc(200,10);
-  return cc;
-}
+
 
 }
 

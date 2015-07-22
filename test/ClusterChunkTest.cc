@@ -27,7 +27,6 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
     
     SocketListener listener; 
 
-
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info;
     info.push_back(std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>(options,options));
     auto cluster = std::make_shared<KineticCluster>(nData, nParity, info,
@@ -37,7 +36,7 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
             listener
     );
 
-    ClusterChunk c(cluster, std::make_shared<std::string>("key"), ChunkMode::create);
+    ClusterChunk c(cluster, std::make_shared<std::string>("key"), ClusterChunk::Mode::CREATE);
 
     THEN("Illegal writes to the chunk fail."){
       char buf[10];

@@ -4,7 +4,7 @@
 //! @brief Class for computing parities and recovering data
 //------------------------------------------------------------------------------
 #ifndef ERASURECODING_HH
-#define	ERASURECODING_HH
+#define  ERASURECODING_HH
 
 #include <memory>
 #include <vector>
@@ -12,9 +12,9 @@
 #include <unordered_map>
 #include <mutex>
 
-namespace kio{
+namespace kio {
 
-class ErasureCoding{
+class ErasureCoding {
 public:
   //--------------------------------------------------------------------------
   //! Compute all missing data and parity blocks in the the stripe. Stripe size
@@ -35,6 +35,7 @@ public:
   //! @param nParity number of parity blocks in stripes
   //--------------------------------------------------------------------------
   explicit ErasureCoding(std::size_t nData, std::size_t nParity);
+
   ~ErasureCoding();
 
 private:
@@ -42,7 +43,7 @@ private:
   //! Data structure to store all information required for a decode process with
   //! a known error pattern.
   //--------------------------------------------------------------------------
-  struct CodingTable{
+  struct CodingTable {
     //! the coding table
     std::vector<unsigned char> table;
     //! array of nData size, containing stripe indices to input blocks

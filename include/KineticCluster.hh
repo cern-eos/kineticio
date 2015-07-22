@@ -9,6 +9,7 @@
 #include "ClusterInterface.hh"
 #include "KineticAutoConnection.hh"
 #include "KineticAsyncOperation.hh"
+#include "KineticCallbacks.hh"
 #include "SocketListener.hh"
 #include "ErasureCoding.hh"
 #include <chrono>
@@ -60,16 +61,16 @@ public:
   //--------------------------------------------------------------------------
   //! Constructor.
   //!
-  //! @param num_data the number of data chunks generated for a single value 
+  //! @param num_data the number of data chunks generated for a single value
   //! @param num_parities the number of parities to be computed for a stripe
-  //! @param info host / port / key of target kinetic drives
+  //! @param targets host / port / key of target kinetic drives
   //! @param min_reconnect_interval minimum time between reconnection attempts
   //! @param operation_timeout the maximum interval an operation is allowed
   //! @param erasure pointer to an ErasureCoding object
   //--------------------------------------------------------------------------
   explicit KineticCluster(
     std::size_t num_data, std::size_t num_parities,
-    std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info,
+    std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > targets,
     std::chrono::seconds min_reconnect_interval,
     std::chrono::seconds operation_timeout,
     std::shared_ptr<ErasureCoding> erasure,
@@ -87,12 +88,13 @@ private:
   //!
   //! @param key the key used to assign connections to AsyncOperations
   //! @param size the number of KineticAsyncOperations to initialize
+  //! @param offset start vector at offset drive
   //! @return vector of KineticAsyncOperations of size size with
   //!         assigned connections
   //--------------------------------------------------------------------------
   std::vector<KineticAsyncOperation> initialize(
       const std::shared_ptr<const std::string>& key,
-      std::size_t size
+      std::size_t size, off_t offset=0
   );
 
   //--------------------------------------------------------------------------
@@ -104,19 +106,18 @@ private:
   //! @return status of operation
   //--------------------------------------------------------------------------
   kinetic::KineticStatus execute(
-      std::vector< KineticAsyncOperation >& operations
+      std::shared_ptr<CallbackSynchronization>& sync,
+      std::vector<KineticAsyncOperation>& operations
   );
 
   //--------------------------------------------------------------------------
-  //! Update the clustersize / clusterlimits variables. This function is
+  //! Update the clustersize variable. This function is
   //! thread-safe and can be called in the background.
   //!
   //! @param types the log types to request from the backend.
   //! @return status of operation
   //--------------------------------------------------------------------------
-  kinetic::KineticStatus getLog(
-      std::vector<kinetic::Command_GetLog_Type> types
-  );
+  void updateSize();
 
   //--------------------------------------------------------------------------
   //! Get the version of the supplied key. This function will be called by
@@ -151,13 +152,13 @@ private:
   ClusterSize clustersize;
 
   //! status of last attempt to update the drive log
-  kinetic::KineticStatus getlog_status;
+  kinetic::KineticStatus sizeStatus;
 
   //! true if there is an outstanding background thread
-  bool getlog_outstanding;
+  bool sizeOutstanding;
 
   //! concurrency control
-  std::mutex getlog_mutex;
+  std::mutex mutex;
 
   //! erasure coding
   std::shared_ptr<ErasureCoding> erasure;

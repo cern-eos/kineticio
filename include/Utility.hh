@@ -64,7 +64,6 @@ namespace utility {
     std::ostringstream ss;
     ss << std::setw(10) << std::setfill('0') << size;
 
-
     return std::make_shared<std::string>(
         ss.str() +
         std::string(reinterpret_cast<const char *>(uuid), sizeof(uuid_t))

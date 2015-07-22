@@ -4,98 +4,17 @@
 //! @brief Structure used to describe an asynchronous kinetic operation
 //------------------------------------------------------------------------------
 #ifndef KINETICASYNCOPERATION_HH
-#define	KINETICASYNCOPERATION_HH
+#define  KINETICASYNCOPERATION_HH
 
 #include <kinetic/kinetic.h>
-#include <condition_variable>
 #include <functional>
 #include <memory>
-#include <mutex>
+#include <vector>
+#include <string>
+#include "KineticCallbacks.hh"
+#include "KineticAutoConnection.hh"
 
-namespace kio{
-
-
-
-struct KineticOperationSync {
-  std::condition_variable cv;
-  std::mutex mutex;
-  int outstanding;
-  
-  KineticOperationSync() : cv(), mutex(), outstanding(0) {}
-  ~KineticOperationSync() {}
-};
-
-//------------------------------------------------------------------------------
-//! The base class of all callback used by KineticCluster, providing a unified
-//! interface to check for completion and return status.
-//------------------------------------------------------------------------------
-class KineticCallback {
-public:
-  //----------------------------------------------------------------------------
-  //! Marks the callback as finished and sets the supplied result. This function
-  //! is called by all subclasses of KineticCallback, but also can be called
-  //! directly in case of errors (e.g. connection timeout).
-  //!
-  //! @param result the result of the operation this callback belongs to.
-  //----------------------------------------------------------------------------
-  void OnResult(kinetic::KineticStatus result) {
-    status = result;
-    done   = true;
-
-    std::unique_lock<std::mutex> lck(sync->mutex);
-    sync->outstanding--;
-    if(!sync->outstanding){
-      lck.unlock();
-      sync->cv.notify_one();
-    }
-  }
-
-  //----------------------------------------------------------------------------
-  //! Obtain the result of the operation this callback belongs to. Note that
-  //! the returned result will only be valid if finished()==true
-  //!
-  //! @param result the result of the operation this callback belongs to.
-  //----------------------------------------------------------------------------
-  kinetic::KineticStatus& getResult() {
-    return status;
-  }
-
-  //----------------------------------------------------------------------------
-  //! Check if the callback has been called (and the operation thus completed)
-  //!
-  //! @return true if the operation has completed, false otherwise.
-  //----------------------------------------------------------------------------
-  bool finished(){
-    return done;
-  }
-  
-  std::shared_ptr<kio::KineticOperationSync>& getSync(){
-    return sync;
-  }
-
-  //----------------------------------------------------------------------------
-  //! Constructor
-  //----------------------------------------------------------------------------
-  KineticCallback(std::shared_ptr<kio::KineticOperationSync>& s) :
-    status(kinetic::KineticStatus(kinetic::StatusCode::CLIENT_INTERNAL_ERROR, "no result")),
-    sync(s), done(false)
-    {sync->outstanding++;}
-
-  //----------------------------------------------------------------------------
-  //! Destructor
-  //----------------------------------------------------------------------------
-  virtual ~KineticCallback()
-  {}
-
-private:
-  //! the status / result of the kinetic operation this callback belongs to
-  kinetic::KineticStatus status;
-  //! count outstanding operations and wake blocked thread when all are ready
-  std::shared_ptr<kio::KineticOperationSync> sync;
-  //! true if the associated kinetic operation has completed, false otherwise
-  bool done;
-};
-
+namespace kio {
 
 struct KineticAsyncOperation {
   //! The assigned kinetic function, all arguments except the connection have to be bound.
@@ -107,11 +26,49 @@ struct KineticAsyncOperation {
 };
 
 
+//! These are helper functions to fill in the function and callback fields in
+//! a vector of KineticAsyncOperations
+namespace asyncop_fill {
 
+std::shared_ptr<CallbackSynchronization> getVersion(
+    std::vector<KineticAsyncOperation>& ops,
+    const std::shared_ptr<const std::string>& key
+);
 
+std::shared_ptr<CallbackSynchronization> get(
+    std::vector<KineticAsyncOperation>& ops,
+    const std::shared_ptr<const std::string>& key
+);
 
+std::shared_ptr<CallbackSynchronization> put(
+    std::vector<KineticAsyncOperation>& ops,
+    std::vector<std::shared_ptr<const std::string> >& stripe,
+    const std::shared_ptr<const std::string>& key,
+    const std::shared_ptr<const std::string>& version_new,
+    const std::shared_ptr<const std::string>& version_old,
+    kinetic::WriteMode wmode
+);
 
+std::shared_ptr<CallbackSynchronization> remove(
+    std::vector<KineticAsyncOperation>& ops,
+    const std::shared_ptr<const std::string>& key,
+    const std::shared_ptr<const std::string>& version,
+    kinetic::WriteMode wmode
+);
 
+std::shared_ptr<CallbackSynchronization> range(
+    std::vector<KineticAsyncOperation>& ops,
+    const std::shared_ptr<const std::string>& start_key,
+    const std::shared_ptr<const std::string>& end_key,
+    int maxRequested
+);
+
+std::shared_ptr<CallbackSynchronization> log(
+    std::vector<KineticAsyncOperation>& ops,
+    const std::vector<kinetic::Command_GetLog_Type> types
+);
+
+}
 }
 
 #endif	/* KINETICASYNCOPERATION_HH */

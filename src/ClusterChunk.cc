@@ -1,8 +1,5 @@
 #include "ClusterChunk.hh"
-#include "ClusterInterface.hh"
 #include "LoggingException.hh"
-#include <algorithm>
-#include <errno.h>
 
 using std::unique_ptr;
 using std::shared_ptr;
@@ -17,11 +14,11 @@ const std::chrono::milliseconds ClusterChunk::expiration_time(1000);
 
 
 ClusterChunk::ClusterChunk(std::shared_ptr<ClusterInterface> c,
-    const std::shared_ptr<const std::string> k, ChunkMode m) :
+                           const std::shared_ptr<const std::string> k, Mode m) :
     mode(m), cluster(c), key(k), version(), value(make_shared<string>()),
     timestamp(), updates(), mutex()
 {
-  if(!cluster) throw std::invalid_argument("no cluster supplied");
+  if (!cluster) throw std::invalid_argument("no cluster supplied");
 }
 
 ClusterChunk::~ClusterChunk()
@@ -34,14 +31,14 @@ ClusterChunk::~ClusterChunk()
 bool ClusterChunk::validateVersion()
 {
   /* See if check is unnecessary based on expiration. */
-  if(std::chrono::duration_cast<std::chrono::milliseconds>(
-          system_clock::now() - timestamp)
-          < expiration_time)
+  if (std::chrono::duration_cast<std::chrono::milliseconds>(
+      system_clock::now() - timestamp)
+      < expiration_time)
     return true;
 
-  /*If we are reading for the first time from a chunk opened in standard mode,
+  /*If we are reading for the first time from a chunk opened in STANDARD mode,
     skip version validation and jump straight to the get operation. */
-  if(!version && mode == ChunkMode::standard)
+  if (!version && mode == Mode::STANDARD)
     return false;
 
   /* Check remote version & compare it to in-memory version. */
@@ -49,14 +46,14 @@ bool ClusterChunk::validateVersion()
   shared_ptr<const string> remote_value;
   KineticStatus status = cluster->get(key, true, remote_version, remote_value);
 
-   /*If no version is set, the entry has never been flushed. In this case,
-     not finding an entry with that key in the cluster is expected. */
-  if( (!version && status.statusCode() == StatusCode::REMOTE_NOT_FOUND) ||
+  /*If no version is set, the entry has never been flushed. In this case,
+    not finding an entry with that key in the cluster is expected. */
+  if ((!version && status.statusCode() == StatusCode::REMOTE_NOT_FOUND) ||
       (status.ok() && remote_version && version && *version == *remote_version)
-    ){
-      /* In memory version equals remote version. Remember the time. */
-      timestamp = system_clock::now();
-      return true;
+      ) {
+    /* In memory version equals remote version. Remember the time. */
+    timestamp = system_clock::now();
+    return true;
   }
   return false;
 }
@@ -66,16 +63,16 @@ void ClusterChunk::getRemoteValue()
   std::shared_ptr<const string> remote_value;
   auto status = cluster->get(key, false, version, remote_value);
 
-  if(!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-    throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
-            "Attempting to read key '"+ *key+"' from cluster returned error "
-            "message '"+status.message()+"'");
+  if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
+    throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
+                           "Attempting to read key '" + *key + "' from cluster returned error "
+                               "message '" + status.message() + "'");
 
   /* We read in the current value from the drive. Remember the time. */
   timestamp = system_clock::now();
 
   /* If remote is not available, keep the current value. */
-  if(status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
+  if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
     return;
 
   /* Merge all updates done on the local data copy (data) into the freshly
@@ -83,9 +80,9 @@ void ClusterChunk::getRemoteValue()
   auto merged_value = make_shared<string>(*remote_value);
   merged_value->resize(std::max(remote_value->size(), value->size()));
 
-  for (auto iter = updates.begin(); iter != updates.end(); ++iter){
+  for (auto iter = updates.begin(); iter != updates.end(); ++iter) {
     auto update = *iter;
-    if(update.second)
+    if (update.second)
       merged_value->replace(update.first, update.second, *value, update.first, update.second);
     else
       merged_value->resize(update.first);
@@ -93,36 +90,36 @@ void ClusterChunk::getRemoteValue()
   value = merged_value;
 }
 
-void ClusterChunk::read(char* const buffer, off_t offset, size_t length)
+void ClusterChunk::read(char *const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
-  if(buffer==NULL) throw std::invalid_argument("null buffer supplied");
-  if(offset<0) throw std::invalid_argument("negative offset");
-  if(offset+length > cluster->limits().max_value_size)
+  if (buffer == NULL) throw std::invalid_argument("null buffer supplied");
+  if (offset < 0) throw std::invalid_argument("negative offset");
+  if (offset + length > cluster->limits().max_value_size)
     throw std::invalid_argument("attempting to read past cluster limits");
 
   /*Ensure data is not too stale to read.*/
-  if(!validateVersion())
+  if (!validateVersion())
     getRemoteValue();
 
   /* return 0s if client reads non-existing data (e.g. file with holes) */
-  if(offset+length > value->size())
-    memset(buffer,0,length);
+  if (offset + length > value->size())
+    memset(buffer, 0, length);
 
-  if(value->size()>(size_t)offset){
-    size_t copy_length = std::min(length, (size_t)(value->size()-offset));
+  if (value->size() > (size_t) offset) {
+    size_t copy_length = std::min(length, (size_t) (value->size() - offset));
     value->copy(buffer, copy_length, offset);
   }
 }
 
-void ClusterChunk::write(const char* const buffer, off_t offset, size_t length)
+void ClusterChunk::write(const char *const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
-  if(buffer==NULL) throw std::invalid_argument("null buffer supplied");
-  if(offset<0) throw std::invalid_argument("negative offset");
-  if(offset+length > cluster->limits().max_value_size)
+  if (buffer == NULL) throw std::invalid_argument("null buffer supplied");
+  if (offset < 0) throw std::invalid_argument("negative offset");
+  if (offset + length > cluster->limits().max_value_size)
     throw std::invalid_argument("attempting to write past cluster limits");
 
   /* Set new entry size. */
@@ -137,8 +134,8 @@ void ClusterChunk::truncate(off_t offset)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
-  if(offset<0) throw std::invalid_argument("negative offset");
-  if(offset > cluster->limits().max_value_size)
+  if (offset < 0) throw std::invalid_argument("negative offset");
+  if (offset > cluster->limits().max_value_size)
     throw std::invalid_argument("attempting to truncate past cluster limits");
 
   value->resize(offset);
@@ -149,16 +146,16 @@ void ClusterChunk::flush()
 {
   std::lock_guard<std::mutex> lock(mutex);
 
-  auto status = cluster->put(key,version,value,false,version);
-  while(status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH){
+  auto status = cluster->put(key, version, value, false, version);
+  while (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH) {
     getRemoteValue();
-    status = cluster->put(key,version,value,false,version);
+    status = cluster->put(key, version, value, false, version);
   }
 
   if (!status.ok())
-    throw LoggingException(EIO,__FUNCTION__,__FILE__,__LINE__,
-        "Attempting to write key '"+ *key+"' to the cluster returned error "
-        "message '"+status.message()+"'");
+    throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
+                           "Attempting to write key '" + *key + "' to the cluster returned error "
+                               "message '" + status.message() + "'");
 
   /* Success... we can forget about in-memory changes and set timestamp
      to current time. */
@@ -169,24 +166,23 @@ void ClusterChunk::flush()
 bool ClusterChunk::dirty() const
 {
   std::lock_guard<std::mutex> lock(mutex);
-  if(!updates.empty())
+  if (!updates.empty())
     return true;
-  
+
   /* If we opened in create mode, we assume the chunk doesn't exist yet, it
-     is dirty even if we have written nothing to it. If we opened in standard
+     is dirty even if we have written nothing to it. If we opened in STANDARD
      mode we assume it does already exist... we just haven't used it. */
-  if(!version){
-    if(mode==ChunkMode::create) return true;
-    else return false;
-  }
+  if (!version && mode == Mode::CREATE)
+    return true;
+  return false;
 }
 
-int ClusterChunk::size()
+size_t ClusterChunk::size()
 {
   std::lock_guard<std::mutex> lock(mutex);
 
   /* Ensure size is not too stale. */
-  if(!validateVersion())
+  if (!validateVersion())
     getRemoteValue();
 
   return value->size();
