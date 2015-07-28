@@ -72,6 +72,12 @@ private:
   kinetic::KineticStatus status;
   //! thread safety
   std::mutex mutex;
+  //! async reconnect attempts
+  std::thread background;
+  //! background thread hasn't completed
+  bool background_running;
+  //! use calling thread for initial connect
+  std::once_flag intial_connect;
   //! register connections with epoll listener
   SocketListener& sockwatch;
   //! random number generator

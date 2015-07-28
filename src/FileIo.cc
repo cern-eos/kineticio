@@ -49,7 +49,7 @@ void FileIo::Open(const std::string &p, int flags,
   else if (s.statusCode() != StatusCode::REMOTE_VERSION_MISMATCH)
     throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
                            "Attempting to write metadata key '" + obj_path + "' to cluster "
-                               "returned unexpected error: '" + s.message() + "'");
+                           "returned unexpected error: " +toString(s.statusCode())+" "+s.message());
 }
 
 void FileIo::Close(uint16_t timeout)
@@ -154,15 +154,15 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
         max_keys_requested, keys);
     if (!status.ok())
       throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
-                             "KeyRange request unexpectedly failed for object " + obj_path + "': "
-                             + status.message());
+                             "KeyRange request unexpectedly failed for object " + obj_path + ": "
+                             +toString(status.statusCode())+" "+status.message());
 
     for (auto iter = keys->begin(); iter != keys->end(); ++iter) {
       status = cluster->remove(make_shared<string>(*iter),
                                make_shared<string>(""), true);
       if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
         throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
-                               "Deleting chunk " + *iter + " failed: " + status.message());
+                               "Deleting chunk " + *iter + " failed: " +toString(status.statusCode())+" "+status.message());
     }
   } while (keys->size() == max_keys_requested);
 
@@ -177,7 +177,7 @@ void FileIo::Remove(uint16_t timeout)
                                          make_shared<string>(), true);
   if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
     throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
-                           "Could not delete metdata key " + obj_path + ": " + status.message());
+                           "Could not delete metdata key " + obj_path + ": " +toString(status.statusCode())+" "+status.message());
 }
 
 void FileIo::Sync(uint16_t timeout)
@@ -333,7 +333,7 @@ void FileIo::LastChunkNumber::verify()
     if (!status.ok())
       throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
                              "KeyRange request unexpectedly failed for chunks with base name: "
-                             + parent.chunk_basename + ": " + status.message());
+                             + parent.chunk_basename + ": " +toString(status.statusCode())+" "+status.message());
   } while (keys->size() == max_keys_requested);
 
   /* Success: get chunk number from last key.*/

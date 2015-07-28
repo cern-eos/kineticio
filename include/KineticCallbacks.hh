@@ -16,6 +16,7 @@ namespace kio{
 //! completion. Primarily offer wait_until functionality.
 //------------------------------------------------------------------------------
 class CallbackSynchronization {
+  friend class KineticCallback;
 public:
   //----------------------------------------------------------------------------
   //! Blocking wait until either the timeout point has passed or the number of
@@ -24,17 +25,7 @@ public:
   //! @param timeout_time the point of time the function is guaranteed to return
   //! @param min_outstanding the number of outstanding results to wait for
   //----------------------------------------------------------------------------
-  void wait_until(std::chrono::system_clock::time_point timeout_time, int min_outstanding);
-
-  //----------------------------------------------------------------------------
-  //! Increase the outstanding counter by one
-  //----------------------------------------------------------------------------
-  void increment();
-
-  //----------------------------------------------------------------------------
-  //! Decrase the outstanding counter by one
-  //----------------------------------------------------------------------------
-  void decrement();
+  void wait_until(std::chrono::system_clock::time_point timeout_time);
 
   //----------------------------------------------------------------------------
   //! Constructor
@@ -49,8 +40,6 @@ public:
 private:
   //! the number of currently outstanding requests
   int outstanding;
-  //! the number of outstanding requests that will cause wait_until to abort
-  int trigger;
   //! condition variable for wait_until functionality
   std::condition_variable cv;
   //! mutex for condition variable and thread safety
@@ -80,6 +69,8 @@ public:
   //----------------------------------------------------------------------------
   kinetic::KineticStatus& getResult();
 
+  void reset();
+
   //----------------------------------------------------------------------------
   //! Check if the callback has been called (and the operation thus completed)
   //!
@@ -90,7 +81,7 @@ public:
   //----------------------------------------------------------------------------
   //! Constructor
   //----------------------------------------------------------------------------
-  KineticCallback(std::shared_ptr<CallbackSynchronization> s);
+  KineticCallback(CallbackSynchronization& s);
 
   //----------------------------------------------------------------------------
   //! Destructor
@@ -101,7 +92,7 @@ private:
   //! the status / result of the kinetic operation this callback belongs to
   kinetic::KineticStatus status;
   //! count outstanding operations and wake blocked thread when all are ready
-  std::shared_ptr<CallbackSynchronization> sync;
+  CallbackSynchronization& sync;
   //! true if the associated kinetic operation has completed, false otherwise
   bool done;
 };
@@ -112,7 +103,7 @@ public:
 
   void Success(const std::string &key, std::unique_ptr<kinetic::KineticRecord> r);
   void Failure(kinetic::KineticStatus error);
-  explicit GetCallback(std::shared_ptr<CallbackSynchronization>& s);
+  explicit GetCallback(CallbackSynchronization& s);
   ~GetCallback();
 private:
   std::unique_ptr<kinetic::KineticRecord> record;
@@ -124,7 +115,7 @@ public:
 
   void Success(const std::string &v);
   void Failure(kinetic::KineticStatus error);
-  explicit GetVersionCallback(std::shared_ptr<CallbackSynchronization>& s);
+  explicit GetVersionCallback(CallbackSynchronization& s);
   ~GetVersionCallback();
 private:
    std::string version;
@@ -136,7 +127,7 @@ public:
 
   void Success(std::unique_ptr<kinetic::DriveLog> dlog);
   void Failure(kinetic::KineticStatus error);
-  explicit GetLogCallback(std::shared_ptr<CallbackSynchronization>& s);
+  explicit GetLogCallback(CallbackSynchronization& s);
   ~GetLogCallback();
 private:
     std::unique_ptr<kinetic::DriveLog> drive_log;
@@ -146,7 +137,7 @@ class PutCallback : public KineticCallback, public kinetic::PutCallbackInterface
 public:
   void Success();
   void Failure(kinetic::KineticStatus error);
-  explicit PutCallback(std::shared_ptr<CallbackSynchronization>& s);
+  explicit PutCallback(CallbackSynchronization& s);
   ~PutCallback();
 };
 
@@ -154,7 +145,7 @@ class DeleteCallback : public KineticCallback, public kinetic::SimpleCallbackInt
 public:
   void Success();
   void Failure(kinetic::KineticStatus error);
-  explicit DeleteCallback(std::shared_ptr<CallbackSynchronization>& s);
+  explicit DeleteCallback(CallbackSynchronization& s);
   ~DeleteCallback();
 };
 
@@ -163,7 +154,7 @@ public:
   std::unique_ptr< std::vector<std::string> >& getKeys();
   void Success(std::unique_ptr<std::vector<std::string>> k);
   void Failure(kinetic::KineticStatus error);
-  explicit RangeCallback(std::shared_ptr<CallbackSynchronization>& s);
+  explicit RangeCallback(CallbackSynchronization& s);
   ~RangeCallback();
 private:
     std::unique_ptr< std::vector<std::string> > keys;

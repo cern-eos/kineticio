@@ -4,68 +4,11 @@
 #include <zlib.h>
 #include <set>
 
-
-using std::chrono::system_clock;
 using std::unique_ptr;
 using std::shared_ptr;
 using std::string;
 using namespace kinetic;
 using namespace kio;
-
-/* return the frequency of the most common element in the vector, as well
-   as a reference to that element. */
-KineticAsyncOperation& mostFrequent(
-    std::vector<KineticAsyncOperation>& ops, int& count,
-    std::function<bool(const KineticAsyncOperation&, const KineticAsyncOperation&)> equal
-)
-{
-  count = 0;
-  auto element = ops.begin();
-
-  for (auto o = ops.begin(); o != ops.end(); o++) {
-    int frequency = 0;
-    for (auto l = ops.begin(); l != ops.end(); l++)
-      if (equal(*o, *l)) {
-        frequency++;
-      }
-
-    if (frequency > count) {
-      count = frequency;
-      element = o;
-    }
-    if (frequency > ops.size() / 2) {
-      break;
-    }
-  }
-  return *element;
-}
-
-bool resultsEqual(const KineticAsyncOperation& lhs, const KineticAsyncOperation& rhs)
-{
-  return lhs.callback->getResult().statusCode() == rhs.callback->getResult().statusCode();
-}
-
-bool getVersionEqual(const KineticAsyncOperation& lhs, const KineticAsyncOperation& rhs)
-{
-  return
-      std::static_pointer_cast<GetVersionCallback>(lhs.callback)->getVersion()
-      ==
-      std::static_pointer_cast<GetVersionCallback>(rhs.callback)->getVersion();
-}
-
-bool getRecordVersionEqual(const KineticAsyncOperation& lhs, const KineticAsyncOperation& rhs)
-{
-  if (!std::static_pointer_cast<GetCallback>(lhs.callback)->getRecord() ||
-      !std::static_pointer_cast<GetCallback>(rhs.callback)->getRecord()) {
-    return false;
-  }
-
-  return
-      *std::static_pointer_cast<GetCallback>(lhs.callback)->getRecord()->version()
-      ==
-      *std::static_pointer_cast<GetCallback>(rhs.callback)->getRecord()->version();
-}
-
 
 KineticCluster::KineticCluster(
     std::size_t stripe_size, std::size_t num_parities,
@@ -74,31 +17,27 @@ KineticCluster::KineticCluster(
     std::chrono::seconds op_timeout,
     std::shared_ptr<ErasureCoding> ec,
     SocketListener& listener
-) :
-    nData(stripe_size), nParity(num_parities),
-    connections(), operation_timeout(op_timeout),
-    clusterlimits{0, 0, 0}, clustersize{0, 0},
-    sizeStatus(StatusCode::CLIENT_INTERNAL_ERROR, "not initialized"),
-    sizeOutstanding(false),
-    mutex(), erasure(ec)
+) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout), clustersize(),
+    sizeStatus(StatusCode::OK, ""), sizeOutstanding(false), erasure(ec)
 {
   if (nData + nParity > info.size()) {
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
   }
 
+  /* Build connection vector */
   for (auto i = info.begin(); i != info.end(); i++) {
-    std::unique_ptr<KineticAutoConnection> ncon(
+    std::unique_ptr<KineticAutoConnection> autocon(
         new KineticAutoConnection(listener, *i, min_reconnect_interval)
     );
-    connections.push_back(std::move(ncon));
+    connections.push_back(std::move(autocon));
   }
 
   /* Attempt to get cluster limits from _any_ drive in the cluster */
-  for(int off =0; off <connections.size(); off++){
+  for (int off = 0; off < connections.size(); off++) {
     auto ops = initialize(std::make_shared<const string>("any"), 1, off);
-    auto sync = asyncop_fill::log(ops, {Command_GetLog_Type::Command_GetLog_Type_LIMITS});
-    auto status = execute(sync, ops);
-    if(status.ok()){
+    auto sync = asyncops::fillLog(ops, {Command_GetLog_Type::Command_GetLog_Type_LIMITS});
+    auto rmap = execute(ops, *sync);
+    if (rmap[StatusCode::OK]) {
       const auto& l = std::static_pointer_cast<GetLogCallback>(ops.front().callback)->getLog()->limits;
       clusterlimits.max_key_size = l.max_key_size;
       clusterlimits.max_value_size = l.max_value_size * nData;
@@ -106,13 +45,12 @@ KineticCluster::KineticCluster(
       break;
     }
   }
-  if(!clusterlimits.max_key_size || !clusterlimits.max_value_size || !clusterlimits.max_version_size)
-    throw LoggingException(
-        ENXIO, __FUNCTION__, __FILE__, __LINE__,
-        "Failed obtaining cluster limits!"
-    );
-
-  updateSize();
+  if (!clusterlimits.max_key_size || !clusterlimits.max_value_size || !clusterlimits.max_version_size) {
+    throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__, "Failed obtaining cluster limits!");
+  }
+  /* Start a bg update of cluster capacity */
+  ClusterSize s;
+  size(s);
 }
 
 KineticCluster::~KineticCluster()
@@ -120,37 +58,11 @@ KineticCluster::~KineticCluster()
   /* Ensure that no background getlog operation is running, as it will
      access member variables. */
   while (true) {
-    std::lock_guard<std::mutex> lck(mutex);
+    std::lock_guard<std::mutex> lock(mutex);
     if (!sizeOutstanding) {
       break;
     }
   };
-}
-
-KineticStatus KineticCluster::getVersion(
-    const std::shared_ptr<const std::string>& key,
-    std::shared_ptr<const std::string>& version
-)
-{
-  auto ops = initialize(key, nData + nParity);
-  auto sync = asyncop_fill::getVersion(ops, key);
-  auto status = execute(sync, ops);
-  if (!status.ok()) return status;
-
-  int count;
-  auto& op = mostFrequent(ops, count, getVersionEqual);
-  if (count < nData) {
-    return KineticStatus(
-        StatusCode::CLIENT_IO_ERROR,
-        "Unreadable: " + std::to_string((long long int) count) +
-        " equal versions does not reach read quorum of " +
-        std::to_string((long long int) nData)
-    );
-  }
-  version.reset(new string(std::move(
-      std::static_pointer_cast<GetVersionCallback>(op.callback)->getVersion()
-  )));
-  return status;
 }
 
 /* Build a stripe vector from the records returned by a get operation. Only
@@ -195,60 +107,85 @@ KineticStatus KineticCluster::get(
     shared_ptr<const string>& value
 )
 {
-  if (skip_value) {
-    return getVersion(key, version);
+  auto ops = initialize(key, nData + nParity);
+  auto sync = skip_value ? asyncops::fillGetVersion(ops, key) : asyncops::fillGet(ops, key);
+  auto rmap = execute(ops, *sync);
+
+  if (rmap[StatusCode::OK] >= nData) {
+    if (skip_value) {
+      auto target_version = asyncops::mostFrequentVersion(ops);
+
+      if (target_version.frequency < nData) {
+        rmap[StatusCode::OK] = target_version.frequency;
+      } else {
+        version = target_version.version;
+      }
+    }
+    else {
+      auto target_version = asyncops::mostFrequentRecordVersion(ops);
+      auto stripe_values = 0;
+      auto stripe = getOperationToStripe(ops, stripe_values, target_version.version);
+
+      /* stripe_values 0 -> empty value for key. */
+      if (stripe_values == 0) {
+        value = make_shared<const string>();
+        version = target_version.version;
+        return KineticStatus(StatusCode::OK, "");
+      }
+
+      /* too many missing blocks > can't recover. */
+      if (stripe_values < nData) {
+        return KineticStatus(StatusCode::CLIENT_IO_ERROR,
+                             "Key " + *key + " only has " + std::to_string((long long int) stripe_values) +
+                             " valid subchunks. At least " + std::to_string((long long int) nData) +
+                             " subchunks required to recover by erasure coding."
+        );
+      }
+
+      /* missing blocks -> erasure code */
+      if (stripe_values < stripe.size()) {
+        try {
+          erasure->compute(stripe);
+        } catch (const std::exception& e) {
+          return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
+        }
+      }
+
+      /* Create a single value from stripe values, around 0.5 ms per data subchunk. */
+      auto v = make_shared<string>();
+      v->reserve(stripe.front()->size() * nData);
+      for (int i = 0; i < nData; i++) {
+        *v += *stripe[i];
+      }
+
+      /* Resize value to size encoded in version (to support unaligned value sizes). */
+      v->resize(utility::uuidDecodeSize(target_version.version));
+      value = std::move(v);
+      version = std::move(target_version.version);
+    }
+  }
+  for (auto it = rmap.cbegin(); it != rmap.cend(); it++)
+    if (it->second >= nData) {
+      return KineticStatus(it->first, "");
+    }
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Confusion when attempting to get key" + *key);
+}
+
+/* handle races, 2 or more clients attempting to put/remove the same key at the same time */
+bool KineticCluster::mayForce(const shared_ptr<const string>& key, const shared_ptr<const string>& version,
+                              std::map<StatusCode, int, KineticCluster::compareStatusCode> rmap)
+{
+  if (rmap[StatusCode::OK] > (nData + nParity) / 2) {
+    return true;
   }
 
   auto ops = initialize(key, nData + nParity);
-  auto sync = asyncop_fill::get(ops, key);
-  auto status = execute(sync, ops);
-  if (!status.ok()) return status;
+  auto sync = asyncops::fillGetVersion(ops, key);
+  execute(ops, *sync);
+  auto most_frequent = asyncops::mostFrequentVersion(ops);
 
-  /* At least nData get operations succeeded. Validate that a
-   * read quorum of nData operations returned a conforming version. */
-  int count = 0;
-  auto& op = mostFrequent(ops, count, getRecordVersionEqual);
-  if (count < nData) {
-    return KineticStatus(
-        StatusCode::CLIENT_IO_ERROR,
-        "Unreadable: " + std::to_string((long long int) count) +
-        " equal versions does not reach read quorum of " +
-        std::to_string((long long int) nData)
-    );
-  }
-  auto target_version = std::static_pointer_cast<GetCallback>(op.callback)->getRecord()->version();
-  auto stripe = getOperationToStripe(ops, count, target_version);
-
-  /* count 0 -> empty value for key. */
-  if (count == 0) {
-    value = make_shared<const string>();
-    version = target_version;
-    return status;
-  }
-
-  /* missing blocks -> erasure code */
-  if (count < stripe.size()) {
-    try {
-      erasure->compute(stripe);
-    } catch (const std::exception& e) {
-      return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
-    }
-  }
-
-  /* Create a single value from stripe values, around 0.5 ms per data subchunk. */
-  auto v = make_shared<string>();
-  v->reserve(stripe.front()->size() * nData);
-  for (int i = 0; i < nData; i++) {
-    *v += *stripe[i];
-  }
-
-  /* Resize value to size encoded in version (to support unaligned value sizes). */
-  v->resize(utility::uuidDecodeSize(target_version));
-  value = std::move(v);
-  version = std::move(target_version);
-  return status;
+  return *version == *most_frequent.version;
 }
-
 
 KineticStatus KineticCluster::put(
     const shared_ptr<const string>& key,
@@ -257,13 +194,6 @@ KineticStatus KineticCluster::put(
     bool force,
     shared_ptr<const string>& version_out)
 {
-  auto ops = initialize(key, nData + nParity);
-
-  /* Do not use version_in, version_out variables directly in case the client
-     supplies the same pointer for both. */
-  auto version_old = version_in ? version_in : make_shared<const string>();
-  auto version_new = utility::uuidGenerateEncodeSize(value->size());
-
   /* Create a stripe vector by chunking up the value into nData data chunks
      and computing nParity parity chunks. */
   int chunk_size = (value->size() + nData - 1) / (nData);
@@ -289,15 +219,58 @@ KineticStatus KineticCluster::put(
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
   }
 
-  auto sync = asyncop_fill::put(ops, stripe, key, version_new, version_old,
-                                force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION
-  );
-  auto status = execute(sync, ops);
+  /* Do not use version_in, version_out variables directly in case the client
+     supplies the same pointer for both. */
+  auto version_old = version_in ? version_in : make_shared<const string>();
+  auto version_new = utility::uuidGenerateEncodeSize(value->size());
 
-  if (status.ok()) {
-    version_out = version_new;
+  auto ops = initialize(key, nData + nParity);
+  auto sync = asyncops::fillPut(
+      ops, stripe, key, version_new, version_old,
+      force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION
+  );
+  auto rmap = execute(ops, *sync);
+
+  /* Error handling. If we just wrote a subset of the stripe, and one or more subchunks failed with not found or
+   * version missmatch errors, attempt to overwrite them... if we are in a race with another client writing the
+   * same stripe, we might have to abort and let the other client complete his put operation */
+
+   if (rmap[StatusCode::OK] && rmap[StatusCode::OK] < nData + nParity
+      && (rmap[StatusCode::REMOTE_VERSION_MISMATCH] || rmap[StatusCode::REMOTE_NOT_FOUND])) {
+
+    if (mayForce(key, version_new, rmap)) {
+      std::vector<shared_ptr<const string> > fstripe;
+      std::vector<KineticAsyncOperation> fops;
+      for(int i=0; i<ops.size(); i++){
+        const auto& code = ops[i].callback->getResult().statusCode();
+        if( code == StatusCode::REMOTE_VERSION_MISMATCH || code == StatusCode::REMOTE_NOT_FOUND){
+          fops.push_back(initialize(key,1,i).front());
+          fstripe.push_back(stripe[i]);
+        }
+      }
+      auto fsync =  asyncops::fillPut(
+          fops, fstripe, key, version_new, version_old, WriteMode::IGNORE_VERSION
+      );
+      auto fmap = execute(fops, *fsync);
+
+      rmap[StatusCode::OK] += fmap[StatusCode::OK];
+      rmap[StatusCode::REMOTE_VERSION_MISMATCH] = rmap[StatusCode::REMOTE_NOT_FOUND] = 0;
+    }
+    else {
+      rmap[StatusCode::REMOTE_VERSION_MISMATCH] += rmap[StatusCode::OK] + rmap[StatusCode::REMOTE_NOT_FOUND];
+      rmap[StatusCode::OK] = rmap[StatusCode::REMOTE_NOT_FOUND] = 0;
+    }
   }
-  return status;
+
+  for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
+    if (it->second >= nData) {
+      if (it->first == StatusCode::OK) {
+        version_out = version_new;
+      }
+      return KineticStatus(it->first, "");
+    }
+  }
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Confusion when attempting to put key" + *key);
 }
 
 
@@ -307,10 +280,46 @@ KineticStatus KineticCluster::remove(
     bool force)
 {
   auto ops = initialize(key, nData + nParity);
-  auto sync = asyncop_fill::remove(ops, key, version,
+  auto sync = asyncops::fillRemove(ops, key, version,
                                    force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION
   );
-  return execute(sync, ops);
+  auto rmap = execute(ops, *sync);
+
+  /* If we didn't find the key on a drive (e.g. because that drive was replaced)
+   * we can just consider that key to be properly deleted on that drive. */
+  if (rmap[StatusCode::OK] && rmap[StatusCode::REMOTE_NOT_FOUND]) {
+    rmap[StatusCode::OK] += rmap[StatusCode::REMOTE_NOT_FOUND];
+    rmap[StatusCode::REMOTE_NOT_FOUND] = 0;
+  }
+
+  if (rmap[StatusCode::OK] && rmap[StatusCode::OK] < nData + nParity && rmap[StatusCode::REMOTE_VERSION_MISMATCH]) {
+    if (mayForce(key, std::make_shared<const string>(""), rmap)) {
+
+      std::vector<KineticAsyncOperation> fops;
+      for(int i=0; i<ops.size(); i++){
+        const auto& code = ops[i].callback->getResult().statusCode();
+        if( code == StatusCode::REMOTE_VERSION_MISMATCH ){
+          fops.push_back(initialize(key,1,i).front());
+        }
+      }
+      auto fsync =  asyncops::fillRemove(fops, key, version, WriteMode::IGNORE_VERSION);
+      auto fmap = execute(fops, *fsync);
+
+      rmap[StatusCode::OK] += fmap[StatusCode::OK];
+      rmap[StatusCode::REMOTE_VERSION_MISMATCH] = 0;
+    }
+    else {
+      rmap[StatusCode::REMOTE_VERSION_MISMATCH] += rmap[StatusCode::OK];
+      rmap[StatusCode::OK] = 0;
+    }
+  }
+
+  for (auto it = rmap.cbegin(); it != rmap.cend(); it++)
+    if (it->second >= nData) {
+      return KineticStatus(it->first, "");
+    }
+
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Confusion when attempting to remove key" + *key);
 }
 
 KineticStatus KineticCluster::range(
@@ -320,28 +329,34 @@ KineticStatus KineticCluster::range(
     std::unique_ptr<std::vector<std::string> >& keys)
 {
   auto ops = initialize(start_key, connections.size());
-  auto sync = asyncop_fill::range(ops, start_key, end_key, maxRequested);
-  auto status = execute(sync, ops);
-  if (!status.ok()) return status;
+  auto sync = asyncops::fillRange(ops, start_key, end_key, maxRequested);
+  auto rmap = execute(ops, *sync);
 
-  /* Process Results stored in Callbacks. */
+  if (rmap[StatusCode::OK] > connections.size() - nData - nParity) {
+    /* Process Results stored in Callbacks. */
+    /* merge in set to eliminate doubles  */
+    std::set<std::string> set;
+    for (auto o = ops.cbegin(); o != ops.cend(); o++) {
+      auto& opkeys = std::static_pointer_cast<RangeCallback>(o->callback)->getKeys();
+      if(opkeys)
+        set.insert(opkeys->begin(), opkeys->end());
+    }
 
-  /* merge in set to eliminate doubles  */
-  std::set<std::string> set;
-  for (auto o = ops.cbegin(); o != ops.cend(); o++) {
-    set.insert(
-        std::static_pointer_cast<RangeCallback>(o->callback)->getKeys()->begin(),
-        std::static_pointer_cast<RangeCallback>(o->callback)->getKeys()->end()
-    );
+    /* assign to output parameter and cut excess results */
+    keys.reset(new std::vector<std::string>(set.begin(), set.end()));
+    if (keys->size() > maxRequested) {
+      keys->resize(maxRequested);
+    }
   }
 
-  /* assign to output parameter and cut excess results */
-  keys.reset(new std::vector<std::string>(set.begin(), set.end()));
-  if (keys->size() > maxRequested) {
-    keys->resize(maxRequested);
+  for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
+    if (it->second > connections.size() - nData - nParity) {
+      return KineticStatus(it->first, "");
+    }
   }
-
-  return status;
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR,
+                       "Confusion when attempting to get range from key" + *start_key + " to " + *end_key
+  );
 }
 
 
@@ -351,21 +366,24 @@ void KineticCluster::updateSize()
      ever throws anything, as otherwise the whole process terminates. */
   try {
     auto ops = initialize(make_shared<string>("all"), connections.size());
-    auto sync = asyncop_fill::log(ops, {Command_GetLog_Type::Command_GetLog_Type_CAPACITIES});
-    auto status = execute(sync, ops);
+    auto sync = asyncops::fillLog(ops, {Command_GetLog_Type::Command_GetLog_Type_CAPACITIES});
+    auto rmap = execute(ops, *sync);
 
     /* Evaluate Operation Result. */
     std::lock_guard<std::mutex> lock(mutex);
-    sizeStatus = status;
     sizeOutstanding = false;
-    if (!sizeStatus.ok())
+    if (!rmap[StatusCode::OK]) {
+      sizeStatus = KineticStatus(StatusCode::CLIENT_IO_ERROR, "No drive reachable");
       return;
+    }
+    sizeStatus = KineticStatus(StatusCode::OK, "");
 
     /* Process Results stored in Callbacks. */
-    clustersize = {0, 0};
+    clustersize.bytes_total = clustersize.bytes_free = 0;
     for (auto o = ops.begin(); o != ops.end(); o++) {
-      if (!o->callback->getResult().ok())
+      if (!o->callback->getResult().ok()) {
         continue;
+      }
       const auto& c = std::static_pointer_cast<GetLogCallback>(o->callback)->getLog()->capacity;
       clustersize.bytes_total += c.nominal_capacity_in_bytes;
       clustersize.bytes_free += c.nominal_capacity_in_bytes - (c.nominal_capacity_in_bytes * c.portion_full);
@@ -393,9 +411,8 @@ KineticStatus KineticCluster::size(ClusterSize& size)
   return sizeStatus;
 }
 
-
 std::vector<KineticAsyncOperation> KineticCluster::initialize(
-    const shared_ptr<const string>& key,
+    const shared_ptr<const string> key,
     size_t size, off_t offset)
 {
   std::size_t index = std::hash<std::string>()(*key) + offset;
@@ -416,54 +433,67 @@ std::vector<KineticAsyncOperation> KineticCluster::initialize(
   return ops;
 }
 
-
-KineticStatus KineticCluster::execute(
-    std::shared_ptr<CallbackSynchronization>& sync,
-    std::vector<KineticAsyncOperation>& ops)
+std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::execute(
+    std::vector<KineticAsyncOperation>& ops,
+    CallbackSynchronization& sync
+)
 {
-  std::vector<kinetic::HandlerKey> hkeys;
+  auto need_retry = false;
+  auto rounds_left = 2;
+  do {
+    rounds_left--;
+    std::vector<kinetic::HandlerKey> hkeys(ops.size());
 
-  /* Call functions on connections */
-  for (auto o = ops.begin(); o != ops.end(); o++) {
-    try {
-      auto con = o->connection->get();
-      hkeys.push_back(o->function(con));
+    /* Call functions on connections */
+    for (int i = 0; i < ops.size(); i++) {
+      try {
+        if (ops[i].callback->finished()) {
+          continue;
+        }
+        auto con = ops[i].connection->get();
+        hkeys[i] = ops[i].function(con);
 
-      fd_set a;
-      int fd;
-      if (!con->Run(&a, &a, &fd)) {
-        throw std::runtime_error("Connection unusable.");
+        fd_set a;
+        int fd;
+        if (!con->Run(&a, &a, &fd)) {
+          throw std::runtime_error("Connection unusable.");
+        }
+      }
+      catch (const std::exception& e) {
+        auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
+        ops[i].callback->OnResult(status);
+        ops[i].connection->setError(status);
       }
     }
-    catch (const std::exception& e) {
-      o->callback->OnResult(
-          KineticStatus(StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, e.what())
-      );
+
+    /* Wait until sufficient requests returned or we pass operation timeout. */
+    std::chrono::system_clock::time_point timeout_time = std::chrono::system_clock::now() + operation_timeout;
+    sync.wait_until(timeout_time);
+
+    need_retry = false;
+    for (int i = 0; i < ops.size(); i++) {
+      /* timeout any unfinished request*/
+      if (!ops[i].callback->finished()) {
+        try {
+          ops[i].connection->get()->RemoveHandler(hkeys[i]);
+        } catch (...) { }
+        auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
+        ops[i].callback->OnResult(status);
+        ops[i].connection->setError(status);
+      }
+
+      /* Retry operations with CLIENT_IO_ERROR code result. Something went wrong with the connection,
+       * we might just be able to reconnect and make the problem go away. */
+      if (rounds_left && ops[i].callback->getResult().statusCode() == StatusCode::CLIENT_IO_ERROR) {
+        ops[i].callback->reset();
+        need_retry = true;
+      }
     }
-  }
+  } while (need_retry && rounds_left);
 
-  /* Wait until sufficient requests returned or we pass operation timeout. */
-  system_clock::time_point timeout_time = std::chrono::system_clock::now() + operation_timeout;
-  sync->wait_until(timeout_time, 0);
-
-  /* timeout any unfinished request, do not mark the associated connection
-   * as broken, if Run() failed it has already been done, otherwise it is an
-   * honest time out. */
-  for (int i = 0; i < ops.size(); i++) {
-    if (!ops[i].callback->finished()) {
-      ops[i].connection->get()->RemoveHandler(hkeys[i]);
-      ops[i].callback->OnResult(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
-    }
+  std::map<kinetic::StatusCode, int, KineticCluster::compareStatusCode> map;
+  for (auto it = ops.begin(); it != ops.end(); it++) {
+    map[it->callback->getResult().statusCode()]++;
   }
-
-  /* In almost all cases this loop will terminate after a single iteration. */
-  int count = 0;
-  auto& op = mostFrequent(ops, count, resultsEqual);
-  if (ops.size() >= nData && count < nData) {
-    return KineticStatus(
-        StatusCode::CLIENT_IO_ERROR,
-        "Failed to get quorum of conforming return results from drives."
-    );
-  }
-  return op.callback->getResult();
+  return std::move(map);
 }

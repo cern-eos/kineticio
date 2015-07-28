@@ -46,7 +46,7 @@ SCENARIO("Erasure Encoding Test.", "[Erasure]"){
         srand (time(NULL));
         for(int i=0; i<nParity; i++){
           auto indx = rand()%(nData+nParity);
-          printf("Removing Chunk %d: %s\n",indx,stripe[indx] ? stripe[indx]->c_str() : "");
+//          printf("Removing Chunk %d: %s\n",indx,stripe[indx] ? stripe[indx]->c_str() : "");
           stripe[indx] = make_shared<const string>();
         }
         REQUIRE_NOTHROW(e.compute(stripe));
@@ -57,7 +57,7 @@ SCENARIO("Erasure Encoding Test.", "[Erasure]"){
         }
         reconstructed.resize(value.size());
         REQUIRE(value == reconstructed);
-        printf("Reconstructed Story: %s\n",reconstructed.c_str());
+//        printf("Reconstructed Story: %s\n",reconstructed.c_str());
       }
     }
 

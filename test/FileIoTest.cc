@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "KineticIoFactory.hh"
+#include "SimulatorController.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
@@ -8,24 +9,18 @@
 #include <kinetic/kinetic.h>
 
 using namespace kio;
-  std::string base_path("kinetic:Cluster1:");
-  std::string path(base_path+"filename");
-  
+
 SCENARIO("KineticIo Integration Test", "[Io]"){
 
-  kinetic::ConnectionOptions tls_t1 = { "localhost", 8443, true, 1, "asdfasdf" };
-  kinetic::ConnectionOptions tls_t2 = { "localhost", 8444, true, 1, "asdfasdf" };
-
-  kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
-  std::shared_ptr<kinetic::BlockingKineticConnection> con1;
-  std::shared_ptr<kinetic::BlockingKineticConnection> con2;
-  REQUIRE(factory.NewBlockingConnection(tls_t1, con1, 30).ok());
-  REQUIRE(factory.NewBlockingConnection(tls_t2, con2, 30).ok());
-  REQUIRE(con1->InstantErase("NULL").ok());
-  REQUIRE(con2->InstantErase("NULL").ok());
+  auto& c = SimulatorController::getInstance();
+  c.start(0);
+  c.start(1);
+  c.start(2);
+  REQUIRE( c.reset(0) );
+  REQUIRE( c.reset(1) );
+  REQUIRE( c.reset(2) );
 
   auto fileio = Factory::uniqueFileIo();
-
 
   int  buf_size = 64;
   char write_buf[] = "rcPOa12L3nhN5Cgvsa6Jlr3gn58VhazjA6oSpKacLFYqZBEu0khRwbWtEjge3BUA";
@@ -51,7 +46,9 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
   }
 
-  GIVEN ("A kio object for a nonexisting file"){
+  GIVEN ("A kio object that has not been openend."){
+    std::string base_path("kinetic:Cluster1:");
+    std::string path(base_path+"filename");
 
     THEN("All public operations (except Statfs) fail with ENXIO error code"){
       REQUIRE_THROWS(fileio->Read(0,read_buf,buf_size));
@@ -64,6 +61,9 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
 
     THEN("Statfs succeeds"){
       struct statfs sfs;
+      REQUIRE_NOTHROW(fileio->Statfs(path.c_str(), &sfs));
+      // sleep 100 ms to let cluster size update after creation
+      usleep(1000 * 100);
       REQUIRE_NOTHROW(fileio->Statfs(path.c_str(), &sfs));
       REQUIRE(sfs.f_bavail > 0);
     }
@@ -81,7 +81,9 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
   }
 
-  GIVEN("Open succeeds"){
+  GIVEN("Open succeeds on healthy cluster"){
+    std::string base_path("kinetic:Cluster2:");
+    std::string path(base_path+"filename");
     REQUIRE_NOTHROW(fileio->Open(path.c_str(), 0));
 
     WHEN("A buffer is read into memory"){
@@ -97,11 +99,10 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
 
       THEN("We can write it to the filio object."){
           REQUIRE(fileio->Write(0,abuf,size) == size);
-
           REQUIRE(fileio->Read(0,bbuf,size) == size);
           REQUIRE(memcmp(abuf,bbuf,size) == 0);
-
           fileio->Close();
+
           AND_THEN("We can read it in again."){
             REQUIRE_NOTHROW(fileio->Open(path.c_str(), 0));
             REQUIRE(fileio->Read(0,bbuf,size) == size);

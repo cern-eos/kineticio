@@ -11,9 +11,40 @@
 #include <sstream>
 #include <iomanip>
 #include <uuid/uuid.h>
-
+#include <kinetic/kinetic.h>
 
 namespace kio {
+
+
+static std::string toString(kinetic::StatusCode c)
+{
+  using kinetic::StatusCode;
+  switch(c){
+    case StatusCode::OK:
+      return "OK";
+    case StatusCode::CLIENT_IO_ERROR:
+      return "CLIENT_IO_ERROR";
+    case StatusCode::CLIENT_SHUTDOWN:
+      return "CLIENT_SHUTDOWN";
+    case StatusCode::CLIENT_INTERNAL_ERROR:
+      return "CLIENT_INTERNAL_ERROR";
+    case StatusCode::CLIENT_RESPONSE_HMAC_VERIFICATION_ERROR:
+      return "CLIENT_RESPONSE_HMAC_VERIFICATION_ERROR";
+    case StatusCode::REMOTE_HMAC_ERROR:
+      return "REMOTE_HMAC_ERROR";
+    case StatusCode::REMOTE_NOT_AUTHORIZED:
+      return "REMOTE_NOT_AUTHORIZED";
+    case StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH:
+      return "REMOTE_CLUSTER_VERSION_MISMATCH";
+    case StatusCode::REMOTE_NOT_FOUND:
+      return "REMOTE_NOT_FOUND";
+    case StatusCode::REMOTE_VERSION_MISMATCH:
+      return "REMOTE_VERSION_MISMATCH";
+    default:
+      return "OTHER_ERROR (code == " + std::to_string((long long int) static_cast<int>(c)) + ")";
+  }
+}
+
 namespace utility {
 
   //--------------------------------------------------------------------------

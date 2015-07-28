@@ -2,6 +2,9 @@
 #include "catch.hpp"
 #include <thread>
 #include <exception>
+#include "SimulatorController.h"
+#include <bits/signum.h>
+#include <signal.h>
 
 /* Tests assume that location and security json file(s) exists and they contain information for
  * serial numbers SN1 and SN2, where SN1 is correct and SN2 is incorrect.
@@ -24,11 +27,15 @@ int main( int argc, char* const argv[] )
   std::string cluster(getenv("KINETIC_CLUSTER_DEFINITION") ? getenv("KINETIC_CLUSTER_DEFINITION") : "" );
   setenv("KINETIC_CLUSTER_DEFINITION", KINETIC_CLUSTER_DEFINITION, 1);
 
+  /* Ignore sigpipe, so we don't die if a simulator is shut down. */
+  signal(SIGPIPE, SIG_IGN);
+
   int result = Catch::Session().run( argc, argv );
 
   // Reset environment variables back to the initial values.
   setenv("KINETIC_DRIVE_LOCATION", location.c_str(), 1);
   setenv("KINETIC_DRIVE_SECURITY", security.c_str(), 1);
   setenv("KINETIC_CLUSTER_DEFINITION", security.c_str(), 1);
+
   return result;
 }

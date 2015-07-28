@@ -3,32 +3,22 @@
 #include "catch.hpp"
 #include "ClusterChunk.hh"
 #include "KineticCluster.hh"
+#include "SimulatorController.h"
 
 using namespace kio;
 
 SCENARIO("Chunk integration test.", "[Chunk]"){
-
-  kinetic::ConnectionOptions options;
-  options.host = "localhost";
-  options.port = 8443;
-  options.use_ssl = true;
-  options.user_id = 1;
-  options.hmac_key = "asdfasdf";
-
-  kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
-  std::shared_ptr<kinetic::BlockingKineticConnection> con;
-
-  REQUIRE(factory.NewBlockingConnection(options, con, 30).ok());
-  REQUIRE(con->InstantErase("NULL").ok());
+  auto& c = SimulatorController::getInstance();
+  c.start(0);
+  REQUIRE( c.reset(0) );
 
   GIVEN ("An empty chunk."){
     int nData = 1;
     int nParity = 0;
     
-    SocketListener listener; 
-
+    SocketListener listener;
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info;
-    info.push_back(std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>(options,options));
+    info.push_back(std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>(c.get(0),c.get(0)));
     auto cluster = std::make_shared<KineticCluster>(nData, nParity, info,
             std::chrono::seconds(20),
             std::chrono::seconds(10),

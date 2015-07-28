@@ -1,5 +1,6 @@
 #include "ClusterChunk.hh"
 #include "LoggingException.hh"
+#include "Utility.hh"
 
 using std::unique_ptr;
 using std::shared_ptr;
@@ -66,7 +67,7 @@ void ClusterChunk::getRemoteValue()
   if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
     throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
                            "Attempting to read key '" + *key + "' from cluster returned error "
-                               "message '" + status.message() + "'");
+                               "message "+toString(status.statusCode())+" "+status.message());
 
   /* We read in the current value from the drive. Remember the time. */
   timestamp = system_clock::now();
@@ -155,7 +156,7 @@ void ClusterChunk::flush()
   if (!status.ok())
     throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
                            "Attempting to write key '" + *key + "' to the cluster returned error "
-                               "message '" + status.message() + "'");
+                               "message " +toString(status.statusCode())+" "+status.message());
 
   /* Success... we can forget about in-memory changes and set timestamp
      to current time. */

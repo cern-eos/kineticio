@@ -110,7 +110,7 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
     return cache.front().chunk;
   }
 
-  /* If size >= capacity, remove last item from cache & lookup tables. */
+  /* If size >= capacity, results last item from cache & lookup tables. */
   while (cache.size() >= item_capacity) {
     auto& item = cache.back();
     if (item.chunk->dirty()) {

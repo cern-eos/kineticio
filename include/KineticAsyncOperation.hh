@@ -11,8 +11,10 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <utility>
 #include "KineticCallbacks.hh"
 #include "KineticAutoConnection.hh"
+
 
 namespace kio {
 
@@ -26,21 +28,34 @@ struct KineticAsyncOperation {
 };
 
 
-//! These are helper functions to fill in the function and callback fields in
-//! a vector of KineticAsyncOperations
-namespace asyncop_fill {
 
-std::shared_ptr<CallbackSynchronization> getVersion(
+//! These are helper functions.
+//! Fill functions fill in the function and callback fields in a vector of KineticAsyncOperations
+//! Check functions check the callbacks for results.
+namespace asyncops {
+
+struct VersionCount{
+  std::shared_ptr<const std::string> version;
+  int frequency;
+};
+
+VersionCount mostFrequentRecordVersion(std::vector<KineticAsyncOperation>& ops);
+VersionCount mostFrequentVersion(std::vector<KineticAsyncOperation>& ops);
+
+
+
+std::unique_ptr<CallbackSynchronization> fillGetVersion(
     std::vector<KineticAsyncOperation>& ops,
     const std::shared_ptr<const std::string>& key
 );
 
-std::shared_ptr<CallbackSynchronization> get(
+std::unique_ptr<CallbackSynchronization> fillGet(
     std::vector<KineticAsyncOperation>& ops,
     const std::shared_ptr<const std::string>& key
 );
 
-std::shared_ptr<CallbackSynchronization> put(
+
+std::unique_ptr<CallbackSynchronization> fillPut(
     std::vector<KineticAsyncOperation>& ops,
     std::vector<std::shared_ptr<const std::string> >& stripe,
     const std::shared_ptr<const std::string>& key,
@@ -49,21 +64,21 @@ std::shared_ptr<CallbackSynchronization> put(
     kinetic::WriteMode wmode
 );
 
-std::shared_ptr<CallbackSynchronization> remove(
+std::unique_ptr<CallbackSynchronization> fillRemove(
     std::vector<KineticAsyncOperation>& ops,
     const std::shared_ptr<const std::string>& key,
     const std::shared_ptr<const std::string>& version,
     kinetic::WriteMode wmode
 );
 
-std::shared_ptr<CallbackSynchronization> range(
+std::unique_ptr<CallbackSynchronization> fillRange(
     std::vector<KineticAsyncOperation>& ops,
     const std::shared_ptr<const std::string>& start_key,
     const std::shared_ptr<const std::string>& end_key,
     int maxRequested
 );
 
-std::shared_ptr<CallbackSynchronization> log(
+std::unique_ptr<CallbackSynchronization> fillLog(
     std::vector<KineticAsyncOperation>& ops,
     const std::vector<kinetic::Command_GetLog_Type> types
 );

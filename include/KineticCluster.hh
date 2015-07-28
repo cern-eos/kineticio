@@ -12,6 +12,7 @@
 #include "KineticCallbacks.hh"
 #include "SocketListener.hh"
 #include "ErasureCoding.hh"
+#include <utility>
 #include <chrono>
 #include <mutex>
 
@@ -92,10 +93,32 @@ private:
   //! @return vector of KineticAsyncOperations of size size with
   //!         assigned connections
   //--------------------------------------------------------------------------
+
   std::vector<KineticAsyncOperation> initialize(
-      const std::shared_ptr<const std::string>& key,
+      std::shared_ptr<const std::string> key,
       std::size_t size, off_t offset=0
   );
+
+  //! gcc 4.4 needs some help to compare enum class instances, so they can be
+  //! used in a std::map
+  struct compareStatusCode{
+    bool operator()(const kinetic::StatusCode& lhs, const kinetic::StatusCode& rhs) const
+    {
+
+
+
+      int l = static_cast<int>(lhs);
+      if(lhs != kinetic::StatusCode::OK && lhs != kinetic::StatusCode::REMOTE_NOT_FOUND && lhs != kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
+        l+=100;
+      int r = static_cast<int>(rhs);
+      if(rhs != kinetic::StatusCode::OK && rhs != kinetic::StatusCode::REMOTE_NOT_FOUND && rhs != kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
+        r+=100;
+
+      bool rtn = l < r;
+      return rtn;
+     // return static_cast<int>(lhs) < static_cast<int>(rhs);
+    }
+  };
 
   //--------------------------------------------------------------------------
   //! Execute the supplied operation, making sure the connection state is valid
@@ -103,11 +126,17 @@ private:
   //! dispatcher.
   //!
   //! @param operations the operations that need to be executed
-  //! @return status of operation
+  //! @return status of operations
   //--------------------------------------------------------------------------
-  kinetic::KineticStatus execute(
-      std::shared_ptr<CallbackSynchronization>& sync,
-      std::vector<KineticAsyncOperation>& operations
+  std::map<kinetic::StatusCode, int, compareStatusCode> execute(
+      std::vector<KineticAsyncOperation>& operations,
+      CallbackSynchronization& sync
+  );
+
+  bool mayForce(
+      const std::shared_ptr<const std::string>& key,
+      const std::shared_ptr<const std::string>& version,
+      std::map<kinetic::StatusCode, int, compareStatusCode> rmap
   );
 
   //--------------------------------------------------------------------------
@@ -118,19 +147,6 @@ private:
   //! @return status of operation
   //--------------------------------------------------------------------------
   void updateSize();
-
-  //--------------------------------------------------------------------------
-  //! Get the version of the supplied key. This function will be called by
-  //! get() if skip_value is set to true.
-  //!
-  //! @param key the key
-  //! @param version stores the version upon success, not modified on error
-  //! @return status of operation
-  //--------------------------------------------------------------------------
-  kinetic::KineticStatus getVersion(
-      const std::shared_ptr<const std::string>& key,
-      std::shared_ptr<const std::string>& version
-  );
 
 private:
   //! number of data chunks in a stripe

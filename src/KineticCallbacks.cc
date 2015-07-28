@@ -4,69 +4,68 @@ using namespace kio;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-CallbackSynchronization::CallbackSynchronization() : outstanding(0), trigger(0), cv(), mutex() { }
+CallbackSynchronization::CallbackSynchronization() : outstanding(0), cv(), mutex() { }
 
 CallbackSynchronization::~CallbackSynchronization() { }
 
-void CallbackSynchronization::wait_until(std::chrono::system_clock::time_point timeout_time, int min_outstanding)
+void CallbackSynchronization::wait_until(std::chrono::system_clock::time_point timeout_time)
 {
-  if (min_outstanding < 0) throw std::invalid_argument("negative outstanding");
   std::unique_lock<std::mutex> lck(mutex);
-  trigger = min_outstanding;
-  while (outstanding > trigger && std::chrono::system_clock::now() < timeout_time)
+  while (outstanding && std::chrono::system_clock::now() < timeout_time)
     cv.wait_until(lck, timeout_time);
 }
 
-void CallbackSynchronization::increment()
-{
-  std::lock_guard<std::mutex> lck(mutex);
-  outstanding++;
-}
-
-void CallbackSynchronization::decrement()
-{
-  std::unique_lock<std::mutex> lck(mutex);
-  outstanding--;
-  if (outstanding <= trigger) {
-    lck.unlock();
-    cv.notify_one();
-  }
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-KineticCallback::KineticCallback(std::shared_ptr<CallbackSynchronization> s) :
+KineticCallback::KineticCallback(CallbackSynchronization& s) :
     status(kinetic::KineticStatus(kinetic::StatusCode::CLIENT_INTERNAL_ERROR, "no result")),
-    sync(std::move(s)),
+    sync(s),
     done(false)
 {
-  sync->increment();
+  sync.outstanding++;
 }
 
 KineticCallback::~KineticCallback() { }
 
 void KineticCallback::OnResult(kinetic::KineticStatus result)
 {
+  std::unique_lock<std::mutex> lck(sync.mutex);
+  if(done)
+    return;
+
   status = result;
   done = true;
-  sync->decrement();
+  sync.outstanding--;
+  if (!sync.outstanding)
+    sync.cv.notify_one();
 }
 
 kinetic::KineticStatus &KineticCallback::getResult()
 {
+  std::lock_guard<std::mutex> lck(sync.mutex);
   return status;
 }
 
 bool KineticCallback::finished()
 {
+  std::lock_guard<std::mutex> lck(sync.mutex);
   return done;
+}
+
+void KineticCallback::reset()
+{
+  std::lock_guard<std::mutex> lck(sync.mutex);
+  done=false;
+  status = kinetic::KineticStatus(kinetic::StatusCode::CLIENT_INTERNAL_ERROR, "no result");
+  sync.outstanding++;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 using namespace kinetic;
 
-GetCallback::GetCallback(std::shared_ptr<CallbackSynchronization> &s) : KineticCallback(s) { }
+GetCallback::GetCallback(CallbackSynchronization &s) : KineticCallback(s) { }
 
 GetCallback::~GetCallback() { }
 
@@ -88,7 +87,7 @@ const std::unique_ptr<KineticRecord> &GetCallback::getRecord()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-GetVersionCallback::GetVersionCallback(std::shared_ptr<CallbackSynchronization> &s) : KineticCallback(s) { }
+GetVersionCallback::GetVersionCallback(CallbackSynchronization &s) : KineticCallback(s) { }
 
 GetVersionCallback::~GetVersionCallback() { }
 
@@ -110,7 +109,7 @@ const std::string &GetVersionCallback::getVersion()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-GetLogCallback::GetLogCallback(shared_ptr<CallbackSynchronization> &s) : KineticCallback(s) { }
+GetLogCallback::GetLogCallback(CallbackSynchronization &s) : KineticCallback(s) { }
 
 GetLogCallback::~GetLogCallback() { }
 
@@ -132,7 +131,7 @@ unique_ptr<DriveLog> &GetLogCallback::getLog()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-PutCallback::PutCallback(shared_ptr<CallbackSynchronization> &s) : KineticCallback(s) { }
+PutCallback::PutCallback(CallbackSynchronization &s) : KineticCallback(s) { }
 
 PutCallback::~PutCallback() { }
 
@@ -148,7 +147,7 @@ void PutCallback::Failure(KineticStatus error)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-DeleteCallback::DeleteCallback(shared_ptr<CallbackSynchronization> &s) : KineticCallback(s) { }
+DeleteCallback::DeleteCallback(CallbackSynchronization &s) : KineticCallback(s) { }
 
 DeleteCallback::~DeleteCallback() { }
 
@@ -164,7 +163,7 @@ void DeleteCallback::Failure(KineticStatus error)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-RangeCallback::RangeCallback(shared_ptr<CallbackSynchronization> &s) : KineticCallback(s) { }
+RangeCallback::RangeCallback(CallbackSynchronization &s) : KineticCallback(s) { }
 
 RangeCallback::~RangeCallback() { }
 

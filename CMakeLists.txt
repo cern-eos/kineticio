@@ -87,6 +87,7 @@ if(DEBUG)
         test/ErasureCodingTest.cc
         test/UtilityTest.cc
         test/SequencePatternRecognitionTest.cc
+        test/SimulatorController.cc
         src/ClusterChunkCache.cc
         src/ClusterChunk.cc
         src/ClusterMap.cc
