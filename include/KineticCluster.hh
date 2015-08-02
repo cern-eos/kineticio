@@ -140,8 +140,7 @@ private:
   );
 
   //--------------------------------------------------------------------------
-  //! Update the clustersize variable. This function is
-  //! thread-safe and can be called in the background.
+  //! Update the clustersize variable.
   //!
   //! @param types the log types to request from the backend.
   //! @return status of operation
@@ -170,8 +169,8 @@ private:
   //! status of last attempt to update the drive log
   kinetic::KineticStatus sizeStatus;
 
-  //! true if there is an outstanding background thread
-  bool sizeOutstanding;
+  //! updating cluster size in the background
+  BackgroundOperationHandler bg;
 
   //! concurrency control
   std::mutex mutex;

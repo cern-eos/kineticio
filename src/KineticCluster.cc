@@ -18,7 +18,7 @@ KineticCluster::KineticCluster(
     std::shared_ptr<ErasureCoding> ec,
     SocketListener& listener
 ) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout), clustersize(),
-    sizeStatus(StatusCode::OK, ""), sizeOutstanding(false), erasure(ec)
+    sizeStatus(StatusCode::OK, ""), bg(1), erasure(ec)
 {
   if (nData + nParity > info.size()) {
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
@@ -55,14 +55,6 @@ KineticCluster::KineticCluster(
 
 KineticCluster::~KineticCluster()
 {
-  /* Ensure that no background getlog operation is running, as it will
-     access member variables. */
-  while (true) {
-    std::lock_guard<std::mutex> lock(mutex);
-    if (!sizeOutstanding) {
-      break;
-    }
-  };
 }
 
 /* Build a stripe vector from the records returned by a get operation. Only
@@ -362,33 +354,28 @@ KineticStatus KineticCluster::range(
 
 void KineticCluster::updateSize()
 {
-  /* This function is executed in a background thread. Make sure it never
-     ever throws anything, as otherwise the whole process terminates. */
-  try {
-    auto ops = initialize(make_shared<string>("all"), connections.size());
-    auto sync = asyncops::fillLog(ops, {Command_GetLog_Type::Command_GetLog_Type_CAPACITIES});
-    auto rmap = execute(ops, *sync);
+  auto ops = initialize(make_shared<string>("all"), connections.size());
+  auto sync = asyncops::fillLog(ops, {Command_GetLog_Type::Command_GetLog_Type_CAPACITIES});
+  auto rmap = execute(ops, *sync);
 
-    /* Evaluate Operation Result. */
-    std::lock_guard<std::mutex> lock(mutex);
-    sizeOutstanding = false;
-    if (!rmap[StatusCode::OK]) {
-      sizeStatus = KineticStatus(StatusCode::CLIENT_IO_ERROR, "No drive reachable");
-      return;
-    }
-    sizeStatus = KineticStatus(StatusCode::OK, "");
+  /* Evaluate Operation Result. */
+  std::lock_guard<std::mutex> lock(mutex);
+  if (!rmap[StatusCode::OK]) {
+    sizeStatus = KineticStatus(StatusCode::CLIENT_IO_ERROR, "No drive reachable");
+    return;
+  }
+  sizeStatus = KineticStatus(StatusCode::OK, "");
 
-    /* Process Results stored in Callbacks. */
-    clustersize.bytes_total = clustersize.bytes_free = 0;
-    for (auto o = ops.begin(); o != ops.end(); o++) {
-      if (!o->callback->getResult().ok()) {
-        continue;
-      }
-      const auto& c = std::static_pointer_cast<GetLogCallback>(o->callback)->getLog()->capacity;
-      clustersize.bytes_total += c.nominal_capacity_in_bytes;
-      clustersize.bytes_free += c.nominal_capacity_in_bytes - (c.nominal_capacity_in_bytes * c.portion_full);
+  /* Process Results stored in Callbacks. */
+  clustersize.bytes_total = clustersize.bytes_free = 0;
+  for (auto o = ops.begin(); o != ops.end(); o++) {
+    if (!o->callback->getResult().ok()) {
+      continue;
     }
-  } catch (...) { }
+    const auto& c = std::static_pointer_cast<GetLogCallback>(o->callback)->getLog()->capacity;
+    clustersize.bytes_total += c.nominal_capacity_in_bytes;
+    clustersize.bytes_free += c.nominal_capacity_in_bytes - (c.nominal_capacity_in_bytes * c.portion_full);
+  }
 }
 
 const ClusterLimits& KineticCluster::limits() const
@@ -398,16 +385,13 @@ const ClusterLimits& KineticCluster::limits() const
 
 KineticStatus KineticCluster::size(ClusterSize& size)
 {
-  std::lock_guard<std::mutex> lock(mutex);
-  if (!sizeOutstanding) {
-    sizeOutstanding = true;
-    std::thread(&KineticCluster::updateSize, this).detach();
-  }
+  auto function = std::bind(&KineticCluster::updateSize, this);
+  bg.try_run(function);
 
+  std::lock_guard<std::mutex> lock(mutex);
   if (sizeStatus.ok()) {
     size = clustersize;
   }
-
   return sizeStatus;
 }
 

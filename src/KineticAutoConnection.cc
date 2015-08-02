@@ -11,7 +11,7 @@ KineticAutoConnection::KineticAutoConnection(
     std::chrono::seconds r) :
     connection(), fd(0), options(o), timestamp(), ratelimit(r),
     status(kinetic::StatusCode::CLIENT_INTERNAL_ERROR, "No Connection attempt yet."),
-    mutex(), background_running(false), sockwatch(sw), mt()
+    mutex(), bg(1), sockwatch(sw), mt()
 {
   std::random_device rd;
   mt.seed(rd());
@@ -19,8 +19,6 @@ KineticAutoConnection::KineticAutoConnection(
 
 KineticAutoConnection::~KineticAutoConnection()
 {
-  if(background.joinable())
-    background.join();
   if (fd) {
     sockwatch.unsubscribe(fd);
   }
@@ -28,7 +26,7 @@ KineticAutoConnection::~KineticAutoConnection()
 
 void KineticAutoConnection::setError(kinetic::KineticStatus s)
 {
-  std::lock_guard<std::mutex> lck(mutex);
+  std::lock_guard<std::mutex> lock(mutex);
   status = s;
   if (fd) {
     sockwatch.unsubscribe(fd);
@@ -49,13 +47,8 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
   using std::chrono::duration_cast;
   using std::chrono::seconds;
   if (duration_cast<seconds>(system_clock::now() - timestamp) > ratelimit) {
-    if(!background_running){
-      if(background.joinable())
-        background.join();
-      background = std::thread(&KineticAutoConnection::connect, this);
-      background_running = true;
-      timestamp = std::chrono::system_clock::now();
-    }
+    auto function = std::bind(&KineticAutoConnection::connect, this);
+    bg.try_run(function);
   }
   throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__,
                            "Invalid connection: " + status.message());
@@ -77,48 +70,43 @@ public:
 
 void KineticAutoConnection::connect()
 {
-  try {
-    /* Choose connection to prioritize at random. */
-    auto r = mt() % 2;
-    auto& primary = r ? options.first : options.second;
-    auto& secondary = r ? options.second : options.first;
+  /* Choose connection to prioritize at random. */
+  auto r = mt() % 2;
+  auto& primary = r ? options.first : options.second;
+  auto& secondary = r ? options.second : options.first;
 
-    auto tmpfd = 0;
-    std::shared_ptr<ThreadsafeNonblockingKineticConnection> tmpcon;
-    KineticConnectionFactory factory = NewKineticConnectionFactory();
+  auto tmpfd = 0;
+  std::shared_ptr<ThreadsafeNonblockingKineticConnection> tmpcon;
+  KineticConnectionFactory factory = NewKineticConnectionFactory();
 
-    if (factory.NewThreadsafeNonblockingConnection(primary, tmpcon).ok() ||
-        factory.NewThreadsafeNonblockingConnection(secondary, tmpcon).ok()) {
-      auto cb = std::make_shared<ConnectCallback>();
-      fd_set a;
-      tmpcon->NoOp(cb);
-      tmpcon->Run(&a, &a, &tmpfd);
-    }
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      timestamp = std::chrono::system_clock::now();
-      if (tmpfd) {
-        tmpfd--;
-        try{
-          sockwatch.subscribe(tmpfd, this);
-        }catch(const std::exception& e){
-          status=KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
-          throw e;
-        }
-        fd = tmpfd;
-        status = KineticStatus(StatusCode::OK, "");
-        connection = std::move(tmpcon);
+  if (factory.NewThreadsafeNonblockingConnection(primary, tmpcon).ok() ||
+      factory.NewThreadsafeNonblockingConnection(secondary, tmpcon).ok()) {
+    auto cb = std::make_shared<ConnectCallback>();
+    fd_set a;
+    tmpcon->NoOp(cb);
+    tmpcon->Run(&a, &a, &tmpfd);
+  }
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    timestamp = std::chrono::system_clock::now();
+    if (tmpfd) {
+      tmpfd--;
+      try{
+        sockwatch.subscribe(tmpfd, this);
+      }catch(const std::exception& e){
+        status=KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
+        throw e;
       }
-      else {
-        std::stringstream ss;
-        ss << "Failed building connection to " << options.first.host << ":"
-        << options.first.port << " and " << options.second.host << ":"
-        << options.second.port;
-        status = KineticStatus(StatusCode::CLIENT_IO_ERROR, ss.str());
-      }
+      fd = tmpfd;
+      status = KineticStatus(StatusCode::OK, "");
+      connection = std::move(tmpcon);
     }
-  }catch(...){}
-
-  std::lock_guard<std::mutex> lock(mutex);
-  background_running = false;
+    else {
+      std::stringstream ss;
+      ss << "Failed building connection to " << options.first.host << ":"
+      << options.first.port << " and " << options.second.host << ":"
+      << options.second.port;
+      status = KineticStatus(StatusCode::CLIENT_IO_ERROR, ss.str());
+    }
+  }
 }

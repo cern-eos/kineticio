@@ -1,0 +1,43 @@
+#include "BackgroundOperationHandler.hh"
+#include <thread>
+#include <chrono>
+
+using namespace kio;
+
+BackgroundOperationHandler::BackgroundOperationHandler(int max_concurrent) :
+    thread_capacity(max_concurrent), numthreads(0)
+{ }
+
+BackgroundOperationHandler::~BackgroundOperationHandler()
+{
+  // Ensure all background threads have terminated before
+  // destructing the object.
+  while (numthreads.load()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+}
+
+void BackgroundOperationHandler::execute(std::function<void()> function)
+{
+  try {
+    function();
+  }
+  catch (...) { }
+  numthreads--;
+}
+
+bool BackgroundOperationHandler::try_run(std::function<void()> function)
+{
+  if (numthreads.load() >= thread_capacity)
+    return false;
+
+  numthreads++;
+  std::thread(&BackgroundOperationHandler::execute, this, std::move(function)).detach();
+  return true;
+}
+
+void BackgroundOperationHandler::run(std::function<void()> function)
+{
+  if (!try_run(function))
+    function();
+}

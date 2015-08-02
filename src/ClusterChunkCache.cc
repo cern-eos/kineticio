@@ -7,14 +7,12 @@ using namespace kio;
 
 
 ClusterChunkCache::ClusterChunkCache(size_t capacity, size_t threads) :
-    item_capacity(capacity), thread_capacity(threads), numthreads(0)
+    capacity(capacity), bg(threads)
 {
 }
 
 ClusterChunkCache::~ClusterChunkCache()
 {
-  while (numthreads.load()) {
-  }
 }
 
 void ClusterChunkCache::drop(kio::FileIo* owner)
@@ -61,7 +59,6 @@ void ClusterChunkCache::flush(kio::FileIo* owner)
 
     if (lookup.count(owner)) {
       auto& chunkmap = lookup[owner];
-
       for (auto it = chunkmap.begin(); it != chunkmap.end(); it++) {
         chunks.push_back(it->second->chunk);
       }
@@ -111,7 +108,7 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
   }
 
   /* If size >= capacity, results last item from cache & lookup tables. */
-  while (cache.size() >= item_capacity) {
+  while (cache.size() >= capacity) {
     auto& item = cache.back();
     if (item.chunk->dirty()) {
       try {
@@ -138,50 +135,36 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
   return chunk;
 }
 
-void ClusterChunkCache::threadsafe_readahead(std::shared_ptr<kio::ClusterChunk> chunk)
+void ClusterChunkCache::do_flush(kio::FileIo *owner, std::shared_ptr<kio::ClusterChunk> chunk)
 {
-  numthreads++;
-  try {
-    char buf[1];
-    chunk->read(buf, 0, 1);
-  }
-  catch (...) { }
-  numthreads--;
-}
-
-void ClusterChunkCache::threadsafe_flush(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk)
-{
-  numthreads++;
-  try {
-    if (chunk->dirty()) {
-      try {
-        chunk->flush();
-      }
-      catch (const std::exception& e) {
-        std::lock_guard<std::mutex> lock(exception_mutex);
-        exceptions[owner] = e;
-      }
+  if (chunk->dirty()) {
+    try {
+      chunk->flush();
+    }
+    catch (const std::exception &e) {
+      std::lock_guard<std::mutex> lock(exception_mutex);
+      exceptions[owner] = e;
     }
   }
-  catch (...) { }
-  numthreads--;
 }
 
 void ClusterChunkCache::flush(kio::FileIo* owner, std::shared_ptr<ClusterChunk> chunk)
 {
-  if (numthreads.load() < thread_capacity) {
-    std::thread(&ClusterChunkCache::threadsafe_flush, this, owner, chunk).detach();
-  } else {
-    threadsafe_flush(owner, chunk);
-  }
+  auto fun = std::bind(&ClusterChunkCache::do_flush, this, owner, chunk);
+  bg.run(fun);
+}
+
+void do_readahead(std::shared_ptr<kio::ClusterChunk> chunk)
+{
+  char buf[1];
+  chunk->read(buf, 0, 1);
 }
 
 void ClusterChunkCache::readahead(kio::FileIo* owner, int chunknumber)
 {
-  if (numthreads.load() < thread_capacity) {
-    auto chunk = get(owner, chunknumber, ClusterChunk::Mode::STANDARD, RequestMode::READAHEAD);
-    std::thread(&ClusterChunkCache::threadsafe_readahead, this, chunk).detach();
-  }
+  auto chunk = get(owner, chunknumber, ClusterChunk::Mode::STANDARD, RequestMode::READAHEAD);
+  auto fun = std::bind(do_readahead, chunk);
+  bg.try_run(fun);
 }
 
 

@@ -8,6 +8,7 @@
 
 /*----------------------------------------------------------------------------*/
 #include "SequencePatternRecognition.hh"
+#include "BackgroundOperationHandler.hh"
 #include "ClusterChunk.hh"
 #include <unordered_map>
 #include <condition_variable>
@@ -15,15 +16,7 @@
 #include <mutex>
 #include <memory>
 #include <set>
-/* <cstdatomic> is part of gcc 4.4.x experimental C++0x support... <atomic> is
- * what actually made it into the standard.*/
-#if __GNUC__ == 4 && (__GNUC_MINOR__ == 4)
-    #include <cstdatomic>
-#else
 
-#include <atomic>
-
-#endif
 /*----------------------------------------------------------------------------*/
 
 namespace kio {
@@ -131,29 +124,19 @@ private:
   void readahead(kio::FileIo* owner, int chunknumber);
 
   //--------------------------------------------------------------------------
-  //! Readahead functionality that can be safely called in a detached
-  //! std::thread
-  //!
-  //! @param owner a pointer to the kio::FileIo object the chunk belongs to
-  //! @param chunk the chunk to read from the backend
-  //--------------------------------------------------------------------------
-  void threadsafe_readahead(std::shared_ptr<kio::ClusterChunk> chunk);
-
-  //--------------------------------------------------------------------------
-  //! Flush functionality that can be safely called in a detached std::thread
+  //! Flush functionality
   //!
   //! @param owner a pointer to the kio::FileIo object the chunk belongs to
   //! @param chunk the chunk to flush to the backend
   //--------------------------------------------------------------------------
-  void threadsafe_flush(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk);
+  void do_flush(kio::FileIo *owner, std::shared_ptr<kio::ClusterChunk> chunk);
 
 private:
   //! maximum number of items allowed in the cache
-  const size_t item_capacity;
-  //! maximum number of threads used for I/O
-  const size_t thread_capacity;
-  //! the current number of threads used for I/O
-  std::atomic<int> numthreads;
+  const size_t capacity;
+
+  //! handle background readahead and flush requests
+  BackgroundOperationHandler bg;
 
   //! The cache item structure
   struct CacheItem

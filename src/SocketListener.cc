@@ -24,6 +24,7 @@ void epoll_listen(int epoll_fd, bool *shutdown)
       fd_set a;
       int fd;
 
+      if(con)
       try {
         if (!con->get()->Run(&a, &a, &fd))
           throw std::runtime_error("Connection Failed");

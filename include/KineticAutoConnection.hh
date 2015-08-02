@@ -13,6 +13,7 @@
 #include <mutex>
 #include <random>
 #include "SocketListener.hh"
+#include "BackgroundOperationHandler.hh"
 
 namespace kio{
 
@@ -58,7 +59,7 @@ public:
   ~KineticAutoConnection();
 
 private:
-  //! the underlying connection
+  //! the underlying connectionstd::once_flag
   std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> connection;
   //! the fd of an open connection
   int fd;
@@ -72,10 +73,8 @@ private:
   kinetic::KineticStatus status;
   //! thread safety
   std::mutex mutex;
-  //! async reconnect attempts
-  std::thread background;
-  //! background thread hasn't completed
-  bool background_running;
+  //! handle reconnects in the background
+  BackgroundOperationHandler bg;
   //! use calling thread for initial connect
   std::once_flag intial_connect;
   //! register connections with epoll listener
