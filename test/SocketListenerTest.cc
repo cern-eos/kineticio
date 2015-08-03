@@ -1,10 +1,7 @@
 #include "catch.hpp"
 #include "KineticAutoConnection.hh"
-#include "SocketListener.hh"
 #include "SimulatorController.h"
-#include <unistd.h>
 #include <condition_variable>
-#include <chrono>
 
 using std::shared_ptr;
 using std::string;

@@ -1,13 +1,7 @@
 #include "catch.hpp"
 #include "Utility.hh"
-#include <functional>
 #include <thread>
-#include <chrono>
-#include <vector>
-#include <memory>
-#include <string>
 #include <zlib.h>
-#include <fcntl.h>
 
 
 using namespace kio; 
