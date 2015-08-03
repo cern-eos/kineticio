@@ -44,19 +44,15 @@ SCENARIO("Cluster integration test.", "[Cluster]")
     }
 
     THEN("Cluster size is reported as long as a single drive is alive.") {
-
-      ClusterSize s;
-      REQUIRE(cluster->size(s).ok());
-      // sleep 500 ms to let cluster size update in bg
-      usleep(1000 * 500);
-
       for (int i = 0; i < nData + nParity + 1; i++) {
+        cluster->size();
+        // sleep so that previous cluster->size background thread may finish
+        usleep(1000 * 1000);
+        ClusterSize s = cluster->size();
         if (i == nData + nParity) {
-          auto code = cluster->size(s).statusCode();
-          REQUIRE(code == StatusCode::CLIENT_IO_ERROR);
+          REQUIRE(s.bytes_total == 0);
         }
         else {
-          REQUIRE(cluster->size(s).ok());
           REQUIRE(s.bytes_total > 0);
           c.stop(i);
         }

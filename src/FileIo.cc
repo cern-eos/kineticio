@@ -216,8 +216,8 @@ void FileIo::Statfs(const char *p, struct statfs *sfs)
     obj_path = p;
   }
 
-  ClusterSize s;
-  if (!cluster->size(s).ok())
+  ClusterSize s = cluster->size();
+  if (!s.bytes_total)
     throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
                            "Could not obtain cluster size values.");
 

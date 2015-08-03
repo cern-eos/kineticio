@@ -62,10 +62,9 @@ public:
   //! Check the maximum size of the Cluster. Function will not block but
   //! might return outdated values.
   //!
-  //! @param size on success, stores size and capacity of the cluster in bytes
-  //! @return status of operation
+  //! @return clsuter size
   //----------------------------------------------------------------------------
-  virtual kinetic::KineticStatus size(ClusterSize& size) = 0;
+  virtual ClusterSize size() = 0;
 
   //----------------------------------------------------------------------------
   //! Get the value and version associated with the supplied key.

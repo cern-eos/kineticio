@@ -17,8 +17,8 @@ KineticCluster::KineticCluster(
     std::chrono::seconds op_timeout,
     std::shared_ptr<ErasureCoding> ec,
     SocketListener& listener
-) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout), clustersize(),
-    sizeStatus(StatusCode::OK, ""), bg(1), erasure(ec)
+) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout),
+    clustersize_background(1), erasure(ec)
 {
   if (nData + nParity > info.size()) {
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
@@ -49,8 +49,7 @@ KineticCluster::KineticCluster(
     throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__, "Failed obtaining cluster limits!");
   }
   /* Start a bg update of cluster capacity */
-  ClusterSize s;
-  size(s);
+  size();
 }
 
 KineticCluster::~KineticCluster()
@@ -356,22 +355,14 @@ void KineticCluster::updateSize()
 {
   auto ops = initialize(make_shared<string>("all"), connections.size());
   auto sync = asyncops::fillLog(ops, {Command_GetLog_Type::Command_GetLog_Type_CAPACITIES});
-  auto rmap = execute(ops, *sync);
+  execute(ops, *sync);
 
   /* Evaluate Operation Result. */
-  std::lock_guard<std::mutex> lock(mutex);
-  if (!rmap[StatusCode::OK]) {
-    sizeStatus = KineticStatus(StatusCode::CLIENT_IO_ERROR, "No drive reachable");
-    return;
-  }
-  sizeStatus = KineticStatus(StatusCode::OK, "");
-
-  /* Process Results stored in Callbacks. */
+  std::lock_guard<std::mutex> lock(clustersize_mutex);
   clustersize.bytes_total = clustersize.bytes_free = 0;
   for (auto o = ops.begin(); o != ops.end(); o++) {
-    if (!o->callback->getResult().ok()) {
+    if (!o->callback->getResult().ok())
       continue;
-    }
     const auto& c = std::static_pointer_cast<GetLogCallback>(o->callback)->getLog()->capacity;
     clustersize.bytes_total += c.nominal_capacity_in_bytes;
     clustersize.bytes_free += c.nominal_capacity_in_bytes - (c.nominal_capacity_in_bytes * c.portion_full);
@@ -383,16 +374,13 @@ const ClusterLimits& KineticCluster::limits() const
   return clusterlimits;
 }
 
-KineticStatus KineticCluster::size(ClusterSize& size)
+ClusterSize KineticCluster::size()
 {
   auto function = std::bind(&KineticCluster::updateSize, this);
-  bg.try_run(function);
+  clustersize_background.try_run(function);
 
-  std::lock_guard<std::mutex> lock(mutex);
-  if (sizeStatus.ok()) {
-    size = clustersize;
-  }
-  return sizeStatus;
+  std::lock_guard<std::mutex> lock(clustersize_mutex);
+  return clustersize;
 }
 
 std::vector<KineticAsyncOperation> KineticCluster::initialize(

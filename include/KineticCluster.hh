@@ -27,9 +27,7 @@ public:
   //! See documentation in superclass.
   const ClusterLimits& limits() const;
   //! See documentation in superclass.
-  kinetic::KineticStatus size(
-      ClusterSize& size
-  );
+  ClusterSize size();
   //! See documentation in superclass.
   kinetic::KineticStatus get(
       const std::shared_ptr<const std::string>& key,
@@ -93,30 +91,32 @@ private:
   //! @return vector of KineticAsyncOperations of size size with
   //!         assigned connections
   //--------------------------------------------------------------------------
-
   std::vector<KineticAsyncOperation> initialize(
       std::shared_ptr<const std::string> key,
       std::size_t size, off_t offset=0
   );
 
-  //! gcc 4.4 needs some help to compare enum class instances, so they can be
-  //! used in a std::map
+  //--------------------------------------------------------------------------
+  //! Compare kinetic::StatusCode, always evaluating regular results smaller
+  //! than error codes. Needed in any case, as gcc 4.4 cannot automatically
+  //! compare enum class instances.
+  //--------------------------------------------------------------------------
   struct compareStatusCode{
     bool operator()(const kinetic::StatusCode& lhs, const kinetic::StatusCode& rhs) const
     {
-
-
-
       int l = static_cast<int>(lhs);
-      if(lhs != kinetic::StatusCode::OK && lhs != kinetic::StatusCode::REMOTE_NOT_FOUND && lhs != kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
+      if( lhs != kinetic::StatusCode::OK &&
+          lhs != kinetic::StatusCode::REMOTE_NOT_FOUND &&
+          lhs != kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
         l+=100;
+
       int r = static_cast<int>(rhs);
-      if(rhs != kinetic::StatusCode::OK && rhs != kinetic::StatusCode::REMOTE_NOT_FOUND && rhs != kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
+      if( rhs != kinetic::StatusCode::OK &&
+          rhs != kinetic::StatusCode::REMOTE_NOT_FOUND &&
+          rhs != kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
         r+=100;
 
-      bool rtn = l < r;
-      return rtn;
-     // return static_cast<int>(lhs) < static_cast<int>(rhs);
+      return l < r;
     }
   };
 
@@ -126,6 +126,7 @@ private:
   //! dispatcher.
   //!
   //! @param operations the operations that need to be executed
+  //! @param sync provide wait_until functionality for asynchronous operations
   //! @return status of operations
   //--------------------------------------------------------------------------
   std::map<kinetic::StatusCode, int, compareStatusCode> execute(
@@ -133,6 +134,19 @@ private:
       CallbackSynchronization& sync
   );
 
+  //--------------------------------------------------------------------------
+  //! Concurrency resolution: In case of partial stripe writes / removes due
+  //! to concurrent write accesses, decide which client wins the race based
+  //! on achieved write pattern and using remote versions as a tie braker.
+  //!
+  //! @param key the key of the stripe
+  //! @param version the version the stripe subchunks should have, empty
+  //!   signifies deleted.
+  //! @param rmap the results of the partial put / delete operation causing
+  //!   a call to mayForce.
+  //! @return true if client may force-overwrite subchunks that have a
+  //!   different version, false otherwise
+  //--------------------------------------------------------------------------
   bool mayForce(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
@@ -141,9 +155,6 @@ private:
 
   //--------------------------------------------------------------------------
   //! Update the clustersize variable.
-  //!
-  //! @param types the log types to request from the backend.
-  //! @return status of operation
   //--------------------------------------------------------------------------
   void updateSize();
 
@@ -166,14 +177,11 @@ private:
   //! size information of the cluster (total / free bytes)
   ClusterSize clustersize;
 
-  //! status of last attempt to update the drive log
-  kinetic::KineticStatus sizeStatus;
-
   //! updating cluster size in the background
-  BackgroundOperationHandler bg;
+  BackgroundOperationHandler clustersize_background;
 
   //! concurrency control
-  std::mutex mutex;
+  std::mutex clustersize_mutex;
 
   //! erasure coding
   std::shared_ptr<ErasureCoding> erasure;

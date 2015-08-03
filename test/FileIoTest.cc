@@ -56,10 +56,9 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
 
     THEN("Statfs succeeds"){
+      // sleep to let cluster size update after creation
+      usleep(1000 * 1000);
       struct statfs sfs;
-      REQUIRE_NOTHROW(fileio->Statfs(path.c_str(), &sfs));
-      // sleep 100 ms to let cluster size update after creation
-      usleep(1000 * 100);
       REQUIRE_NOTHROW(fileio->Statfs(path.c_str(), &sfs));
       REQUIRE(sfs.f_bavail > 0);
     }
@@ -177,7 +176,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
         for(int odd=0; odd<=1; odd++){
           size_t size = 1024*1024*chunk+odd;
           REQUIRE_NOTHROW(fileio->Truncate(size));
-          THEN("statfs succeeds and returns the truncated size"){
+          THEN("stat succeeds and returns the truncated size"){
               struct stat stbuf;
               REQUIRE_NOTHROW(fileio->Stat(&stbuf));
               REQUIRE(stbuf.st_size == size);
