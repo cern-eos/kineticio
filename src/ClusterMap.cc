@@ -88,15 +88,6 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string &id)
 
   KineticClusterInfo &ki = clustermap.at(id);
   if (!ki.cluster) {
-
-    auto ectype = std::to_string((long long int) ki.numData) + "-" +
-                  std::to_string((long long int) ki.numParity);
-    if (!ecCache.exists(ectype)) {
-      ecCache.put(ectype,
-                  std::make_shared<ErasureCoding>(ki.numData, ki.numParity)
-      );
-    }
-
     std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> cops;
     for (auto wwn = ki.drives.begin(); wwn != ki.drives.end(); wwn++) {
       if (!drivemap.count(*wwn))
@@ -105,11 +96,21 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string &id)
       cops.push_back(drivemap.at(*wwn));
     }
 
+    auto ectype = std::to_string((long long int) ki.numData) + "-" +
+                  std::to_string((long long int) ki.numParity);
+    std::shared_ptr<ErasureCoding> ec;
+    try{
+      ec = ecCache.get(ectype);
+    }
+    catch(const std::out_of_range& e){
+      ec = std::make_shared<ErasureCoding>(ki.numData, ki.numParity);
+      ecCache.add(ectype, ec);
+    }
+
     ki.cluster = std::make_shared<KineticCluster>(
         ki.numData, ki.numParity,
         cops, ki.min_reconnect_interval, ki.operation_timeout,
-        ecCache.get(ectype),
-        *listener
+        ec, *listener
     );
   }
   return ki.cluster;

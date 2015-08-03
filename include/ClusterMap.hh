@@ -147,7 +147,7 @@ private:
   //! ErasureEncoding instances of the same type (nData,nParity) can be shared
   //! among multiple cluster instances, no need to duplicate decoding tables
   //! in memory.
-  cache::lru_cache<std::string, std::shared_ptr<ErasureCoding>> ecCache;
+  LRUCache<std::string, std::shared_ptr<ErasureCoding>> ecCache;
 
   //! epoll listener loop shared among all connections
   std::unique_ptr<SocketListener> listener;
