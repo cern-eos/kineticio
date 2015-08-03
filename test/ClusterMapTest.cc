@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "ClusterMap.hh"
-#include <exception>
 
 using namespace kio;
 

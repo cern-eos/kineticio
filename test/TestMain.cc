@@ -1,9 +1,7 @@
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 #include <thread>
-#include <exception>
 #include "SimulatorController.h"
-#include <bits/signum.h>
 #include <signal.h>
 
 /* Tests assume that location and security json file(s) exists and they contain information for

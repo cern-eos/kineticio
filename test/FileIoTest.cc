@@ -3,10 +3,6 @@
 #include "SimulatorController.h"
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
-#include <memory>
-#include <random>
-#include <kinetic/kinetic.h>
 
 using namespace kio;
 

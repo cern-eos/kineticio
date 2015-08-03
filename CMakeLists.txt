@@ -67,6 +67,7 @@ add_library(kineticio SHARED
     src/SocketListener.cc
     src/ErasureCoding.cc
     src/SequencePatternRecognition.cc
+    src/BackgroundOperationHandler.cc
 )
 target_link_libraries(kineticio
     ${JSONC_LIBRARIES}
@@ -101,6 +102,7 @@ if(DEBUG)
         src/SocketListener.cc
         src/ErasureCoding.cc
         src/SequencePatternRecognition.cc
+        src/BackgroundOperationHandler.cc
     )
     target_link_libraries(kinetic-test
        ${JSONC_LIBRARIES}
