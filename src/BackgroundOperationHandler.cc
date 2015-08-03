@@ -1,6 +1,6 @@
 #include "BackgroundOperationHandler.hh"
 #include <thread>
-#include <chrono>
+#include <unistd.h>
 
 using namespace kio;
 
@@ -10,10 +10,10 @@ BackgroundOperationHandler::BackgroundOperationHandler(int max_concurrent) :
 
 BackgroundOperationHandler::~BackgroundOperationHandler()
 {
-  // Ensure all background threads have terminated before
-  // destructing the object.
+  // Ensure all background threads have terminated before destructing the object.
+  // gcc 4.4.7 doesn't bring this_thread::sleep_for, so we just use usleep to wait.
   while (numthreads.load()) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    usleep(1000);
   }
 }
 
