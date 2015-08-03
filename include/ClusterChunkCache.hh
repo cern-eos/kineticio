@@ -16,7 +16,6 @@
 #include <mutex>
 #include <memory>
 #include <set>
-
 /*----------------------------------------------------------------------------*/
 
 namespace kio {
@@ -148,11 +147,11 @@ private:
     //! the actual chunk
     std::shared_ptr<kio::ClusterChunk> chunk;
   };
+  typedef std::list<CacheItem>::iterator cache_iterator;
+  typedef std::unordered_map<int, cache_iterator> chunk_map;
 
   //! A linked list of CacheItems stored in LRU order
   std::list<CacheItem> cache;
-  typedef std::list<CacheItem>::iterator cache_iterator;
-  typedef std::unordered_map<int, cache_iterator> chunk_map;
 
   //! the primary lookup table contains a chunk lookup table for every owner
   std::unordered_map<const FileIo*, chunk_map> lookup;
