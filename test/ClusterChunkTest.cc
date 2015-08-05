@@ -11,38 +11,37 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
   c.start(0);
   REQUIRE( c.reset(0) );
 
-  GIVEN ("An empty chunk."){
-    int nData = 1;
-    int nParity = 0;
-    
-    SocketListener listener;
-    std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info;
-    info.push_back(std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>(c.get(0),c.get(0)));
-    auto cluster = std::make_shared<KineticCluster>(nData, nParity, info,
-            std::chrono::seconds(20),
-            std::chrono::seconds(10),
-            std::make_shared<ErasureCoding>(nData,nParity),
-            listener
-    );
+  SocketListener listener;
+  std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info;
+  info.push_back(std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>(c.get(0),c.get(0)));
+  int nData = 1;
+  int nParity = 0;
+  auto cluster = std::make_shared<KineticCluster>(nData, nParity, info,
+                                                  std::chrono::seconds(20),
+                                                  std::chrono::seconds(10),
+                                                  std::make_shared<ErasureCoding>(nData,nParity),
+                                                  listener
+  );
 
+  GIVEN ("An empty chunk with create flag set."){
     ClusterChunk c(cluster, std::make_shared<std::string>("key"), ClusterChunk::Mode::CREATE);
 
     THEN("Illegal writes to the chunk fail."){
       char buf[10];
       /* nullpointer */
-      REQUIRE_THROWS(c.write(NULL, 0, 0));
+      REQUIRE_THROWS_AS(c.write(NULL, 0, 0), std::invalid_argument);
       /* writing past chunk size limit. */
-      REQUIRE_THROWS(c.write(buf, cluster->limits().max_value_size+1, 1));
+      REQUIRE_THROWS_AS(c.write(buf, cluster->limits().max_value_size+1, 1), std::invalid_argument);
     }
 
     THEN("The chunk is dirty."){
-      REQUIRE(c.dirty() == true);
+      REQUIRE(c.dirty());
     }
 
     WHEN("The empty chunk is flushed."){
       REQUIRE_NOTHROW(c.flush());
       THEN("The chunk is not dirty."){
-        REQUIRE(c.dirty() == false);
+        REQUIRE_FALSE(c.dirty());
       }
     }
 
@@ -50,14 +49,14 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
       char in[] = "0123456789";
       REQUIRE_NOTHROW(c.write(in, 0, sizeof(in)));
 
+      THEN("It is dirty"){
+        REQUIRE(c.dirty());
+      }
+
       THEN("It can be read again from memory."){
         char out[sizeof(in)];
         REQUIRE_NOTHROW(c.read(out,0,sizeof(out)));
         REQUIRE(memcmp(in,out,sizeof(in)) == 0);
-      }
-
-      THEN("It is dirty"){
-        REQUIRE(c.dirty() == true);
       }
 
       AND_WHEN("It is truncated to size 0."){
@@ -86,7 +85,7 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
         }
 
         THEN("It is no longer dirty."){
-          REQUIRE(c.dirty() == false);
+          REQUIRE_FALSE(c.dirty());
         }
 
         AND_WHEN("The on-drive value is manipulated by someone else."){

@@ -3,6 +3,8 @@
 #include "SimulatorController.h"
 #include <unistd.h>
 #include <fcntl.h>
+#include <LoggingException.hh>
+#include <FileIo.hh>
 
 using namespace kio;
 
@@ -28,17 +30,28 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
   GIVEN("An illegally constructed path"){
     std::string path("path");
 
-    THEN("Calling Open returns ENODEV"){
-      REQUIRE_THROWS(fileio->Open(path.c_str(), 0));
-    }
+    THEN("Open, Statfs and FileAttr creation throw with ENODEV"){
+      REQUIRE_THROWS_AS(fileio->Open(path.c_str(), 0), LoggingException);
+      try{
+        fileio->Open(path.c_str(), 0);
+      }catch(const LoggingException& le){
+        REQUIRE(le.errnum() == ENODEV);
+      }
 
-    THEN("Calling Statfs returns ENODEV"){
       struct statfs sfs;
-      REQUIRE_THROWS(fileio->Statfs(path.c_str(), &sfs));
-    }
+      REQUIRE_THROWS_AS(fileio->Statfs(path.c_str(), &sfs), LoggingException);
+      try{
+        fileio->Statfs(path.c_str(), &sfs);
+      }catch(const LoggingException& le){
+        REQUIRE(le.errnum() == ENODEV);
+      }
 
-    THEN("Factory function for Attribute class throws"){
-      REQUIRE_THROWS( Factory::uniqueFileAttr(path.c_str()) );
+      REQUIRE_THROWS_AS(Factory::uniqueFileAttr(path.c_str()), LoggingException);
+      try{
+        Factory::uniqueFileAttr(path.c_str());
+      }catch(const LoggingException& le){
+        REQUIRE(le.errnum() == ENODEV);
+      }
     }
   }
 
@@ -46,26 +59,28 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     std::string base_path("kinetic:Cluster1:");
     std::string path(base_path+"filename");
 
-    THEN("All public operations (except Statfs) fail with ENXIO error code"){
-      REQUIRE_THROWS(fileio->Read(0,read_buf,buf_size));
-      REQUIRE_THROWS(fileio->Write(0,write_buf,buf_size));
-      REQUIRE_THROWS(fileio->Truncate(0));
-      REQUIRE_THROWS(fileio->Remove());
-      REQUIRE_THROWS(fileio->Sync());
-      REQUIRE_THROWS(fileio->Close());
+    THEN("All public operations (except Statfs) throw LoggingExceptions"){
+      REQUIRE_THROWS_AS(fileio->Read(0,read_buf,buf_size), LoggingException);
+      REQUIRE_THROWS_AS(fileio->Write(0,write_buf,buf_size), LoggingException);
+      REQUIRE_THROWS_AS(fileio->Truncate(0), LoggingException);
+      REQUIRE_THROWS_AS(fileio->Remove(), LoggingException);
+      REQUIRE_THROWS_AS(fileio->Sync(), LoggingException);
+      REQUIRE_THROWS_AS(fileio->Close(), LoggingException);
     }
 
     THEN("Statfs succeeds"){
-      // sleep to let cluster size update after creation
-      usleep(1000 * 1000);
       struct statfs sfs;
+      try{
+        fileio->Statfs(path.c_str(), &sfs);
+      }catch(...){}
+      usleep(1000 * 1000);
       REQUIRE_NOTHROW(fileio->Statfs(path.c_str(), &sfs));
       REQUIRE(sfs.f_bavail > 0);
     }
 
     THEN("Factory function for Attribute class returns 0"){
       auto a = Factory::uniqueFileAttr(path.c_str());
-      REQUIRE(!a);
+      REQUIRE_FALSE(a);
      }
 
     THEN("ftsRead returns \"\"."){

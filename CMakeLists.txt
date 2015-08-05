@@ -53,7 +53,7 @@ include_directories(
     ${Z_INCLUDE_DIRS}
     ${ISAL_INCLUDE_DIRS}
 )
-add_library(kineticio SHARED
+set(kineticio_SRC
     src/ClusterChunkCache.cc
     src/ClusterChunk.cc
     src/ClusterMap.cc
@@ -69,16 +69,38 @@ add_library(kineticio SHARED
     src/SequencePatternRecognition.cc
     src/BackgroundOperationHandler.cc
 )
-target_link_libraries(kineticio
+set(kineticio_LIB
     ${JSONC_LIBRARIES}
     ${UUID_LIBRARIES}
     ${Z_LIBRARIES}
     ${ISAL_LIBRARIES}
     ${KINETIC-C++_LIBRARIES}
 )
+add_library(kineticio SHARED
+    ${kineticio_SRC}
+)
+target_link_libraries(kineticio
+    ${kineticio_LIB}
+)
+install(TARGETS kineticio LIBRARY DESTINATION lib64)
+install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
 
 if(DEBUG)
+    include(ExternalProject)
+    ExternalProject_add(catch
+      PREFIX catch
+      GIT_REPOSITORY https://github.com/philsquared/Catch
+      GIT_TAG v1.2.1-develop.11
+      UPDATE_COMMAND ""
+      CONFIGURE_COMMAND ""
+      BUILD_IN_SOURCE 1
+      BUILD_COMMAND ""
+      INSTALL_COMMAND cp single_include/catch.hpp  ${kineticio_SOURCE_DIR}/test/
+    )
+    SET_DIRECTORY_PROPERTIES(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${kineticio_SOURCE_DIR}/test/catch.hpp")
+
     add_executable(kinetic-test
+        ${kineticio_SRC}
         test/TestMain.cc
         test/ClusterChunkTest.cc
         test/FileIoTest.cc
@@ -89,29 +111,11 @@ if(DEBUG)
         test/UtilityTest.cc
         test/SequencePatternRecognitionTest.cc
         test/SimulatorController.cc
-        src/ClusterChunkCache.cc
-        src/ClusterChunk.cc
-        src/ClusterMap.cc
-        src/FileIo.cc
-        src/FileAttr.cc
-        src/Factory.cc
-        src/KineticAutoConnection.cc
-        src/KineticAsyncOperation.cc
-        src/KineticCallbacks.cc
-        src/KineticCluster.cc
-        src/SocketListener.cc
-        src/ErasureCoding.cc
-        src/SequencePatternRecognition.cc
-        src/BackgroundOperationHandler.cc
+        test/LRUCacheTest.cc
     )
     target_link_libraries(kinetic-test
-       ${JSONC_LIBRARIES}
-       ${UUID_LIBRARIES}
-       ${Z_LIBRARIES}
-       ${ISAL_LIBRARIES}
-       ${KINETIC-C++_LIBRARIES}
+       ${kineticio_LIB}
        ${CMAKE_THREAD_LIBS_INIT}
     )
 endif(DEBUG)
-install(TARGETS kineticio LIBRARY DESTINATION lib64)
-install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
+

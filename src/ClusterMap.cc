@@ -83,16 +83,16 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string &id)
     listener.reset(new SocketListener());
 
   if (!clustermap.count(id))
-    throw LoggingException(ENODEV, __FUNCTION__, __FILE__, __LINE__, "Nonexisting "
-                                                                         "cluster id '" + id + "' requested.");
+    throw LoggingException(ENODEV, __FUNCTION__, __FILE__, __LINE__,
+                           "Nonexisting cluster id '" + id + "' requested.");
 
   KineticClusterInfo &ki = clustermap.at(id);
   if (!ki.cluster) {
     std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> cops;
     for (auto wwn = ki.drives.begin(); wwn != ki.drives.end(); wwn++) {
       if (!drivemap.count(*wwn))
-        throw LoggingException(ENODEV, __FUNCTION__, __FILE__, __LINE__, "Nonexisting "
-                                                                             "drive wwn '" + *wwn + "' requested.");
+        throw LoggingException(ENODEV, __FUNCTION__, __FILE__, __LINE__,
+                               "Nonexisting drive wwn '" + *wwn + "' requested.");
       cops.push_back(drivemap.at(*wwn));
     }
 

@@ -105,9 +105,10 @@ std::string ErasureCoding::getErrorPattern(
 ) const
 {
   if (stripe.size() != nData + nParity)
-    throw std::logic_error("ErasureEncoding: Illegal stripe size: Expected "
+    throw std::invalid_argument("ErasureCoding: Illegal stripe size: Expected "
                            + std::to_string((long long int) nData + nParity) + ", observed "
-                           + std::to_string((long long int) stripe.size()) + ".");
+                           + std::to_string((long long int) stripe.size()) + "."
+    );
 
   std::string pattern(nData + nParity, '0');
   int blockSize = 0;
@@ -123,18 +124,19 @@ std::string ErasureCoding::getErrorPattern(
       if (!blockSize)
         blockSize = stripe[i]->size();
       if (blockSize != stripe[i]->size())
-        throw std::logic_error("ErasureEncoding: Non-static block sizes, observed"
-                                   " one block with a size of "
-                               + std::to_string((long long int) blockSize) +
-                               " bytes and one with a size of "
-                               + std::to_string((long long int) stripe[i]->size()) +
-                               " bytes.");
+        throw std::invalid_argument(
+            "ErasureCoding: Non-static block sizes, observed one block with a size of "
+            + std::to_string((long long int) blockSize) + " bytes and another with a size of "
+            + std::to_string((long long int) stripe[i]->size()) + " bytes."
+        );
     }
   }
   if (nErrs > nParity)
-    throw std::logic_error("ErasureEncoding: More errors than parity blocks. "
-                           + std::to_string((long long int) nErrs) + " errors, "
-                           + std::to_string((long long int) nParity) + " parities.");
+    throw std::invalid_argument(
+        "ErasureCoding: More errors than parity blocks. "
+        + std::to_string((long long int) nErrs) + " errors, "
+        + std::to_string((long long int) nParity) + " parities."
+    );
 
   return pattern;
 }

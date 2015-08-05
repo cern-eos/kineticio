@@ -74,7 +74,7 @@ public:
   //! @param owner a pointer to the kio::FileIo object the chunk belongs to
   //! @param chunk the chunk to flush
   //--------------------------------------------------------------------------
-  void flush(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk);
+  void async_flush(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk);
 
   //--------------------------------------------------------------------------
   //! Cache is shared among all FileIo objects.

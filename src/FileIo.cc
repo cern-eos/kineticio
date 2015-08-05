@@ -90,7 +90,7 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
 
       /* Flush chunk in background if writing to chunk capacity.*/
       if (chunk_offset + chunk_length == chunk_capacity)
-        cache.flush(this, chunk);
+        cache.async_flush(this, chunk);
     }
     else if (mode == rw::READ) {
       chunk->read(buffer + off_done, chunk_offset, chunk_length);

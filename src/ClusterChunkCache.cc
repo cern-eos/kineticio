@@ -148,7 +148,7 @@ void ClusterChunkCache::do_flush(kio::FileIo *owner, std::shared_ptr<kio::Cluste
   }
 }
 
-void ClusterChunkCache::flush(kio::FileIo* owner, std::shared_ptr<ClusterChunk> chunk)
+void ClusterChunkCache::async_flush(kio::FileIo* owner, std::shared_ptr<ClusterChunk> chunk)
 {
   auto fun = std::bind(&ClusterChunkCache::do_flush, this, owner, chunk);
   bg.run(fun);

@@ -14,7 +14,7 @@ SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
         THEN("An existing id to a running device returns a cluster."){
             REQUIRE_NOTHROW(kcm.getCluster("Cluster1"));
         }
-        THEN("A nonexisting drive id returns ENODEV."){
+        THEN("A nonexisting cluster id returns ENODEV."){
             REQUIRE_THROWS(kcm.getCluster("nonExistingID"));
         }
     }

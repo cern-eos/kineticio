@@ -46,8 +46,7 @@ public:
   //! @return the value
   //----------------------------------------------------------------------------
   const Value& get(const Key& k){
-    if (lookup.at(k) != cache.begin())
-      cache.splice(cache.begin(), cache, lookup[k]);
+    cache.splice(cache.begin(), cache, lookup.at(k));
     return cache.front().second;
   }
 
