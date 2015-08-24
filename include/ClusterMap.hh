@@ -128,6 +128,8 @@ private:
     std::size_t numData;
     //! the number of parity blocks in a stripe
     std::size_t numParity;
+    //! the size of a single data / parity block in bytes
+    std::size_t blockSize;
     //! minimum interval between reconnection attempts to a drive (rate limit)
     std::chrono::seconds min_reconnect_interval;
     //! interval after which an operation will timeout without response

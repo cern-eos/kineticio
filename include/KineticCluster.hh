@@ -62,13 +62,14 @@ public:
   //!
   //! @param num_data the number of data chunks generated for a single value
   //! @param num_parities the number of parities to be computed for a stripe
+  //! @param block_size the size of a single data / parity block in bytes
   //! @param targets host / port / key of target kinetic drives
   //! @param min_reconnect_interval minimum time between reconnection attempts
   //! @param operation_timeout the maximum interval an operation is allowed
   //! @param erasure pointer to an ErasureCoding object
   //--------------------------------------------------------------------------
   explicit KineticCluster(
-    std::size_t num_data, std::size_t num_parities,
+    std::size_t num_data, std::size_t num_parities, std::size_t block_size,
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > targets,
     std::chrono::seconds min_reconnect_interval,
     std::chrono::seconds operation_timeout,
