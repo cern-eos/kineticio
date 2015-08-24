@@ -16,7 +16,7 @@
     "cluster_comment":"Array of cluster definitions, located at $KINETIC_CLUSTER_DEFINITION",
     "cluster":[
         {"clusterID":"Cluster1",
-         "numData":1,"numParity":1,
+         "numData":1,"numParity":1,"blockSize":999,
          "minReconnectInterval":20,"timeout":10,
          "drives":[
              {"wwn":"WWN1"},
@@ -24,12 +24,12 @@
          ]
         },
         {"clusterID":"Cluster2",
-         "numData":1,"numParity":1,
+         "numData":1,"numParity":1,"blockSize":1048576,
          "minReconnectInterval":20,"timeout":10,
          "drives":[{"wwn":"WWN1"},{"wwn":"WWN2"}]
         },
         {"clusterID":"Cluster3",
-         "numData":1,"numParity":0,
+         "numData":1,"numParity":0,"blockSize":524288,
          "minReconnectInterval":20,"timeout":10,
          "drives":[{"wwn":"WWN1"}]
         }

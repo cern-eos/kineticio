@@ -32,7 +32,7 @@ std::list<int> SequencePatternRecognition::predict(PredictionType type)
 {
   std::list<int> prediction;
   if (sequence.empty())
-    return std::move(prediction);
+    return prediction;
 
   /* If only a single value has been requested so far, be aggressive and
      assume sequentiality. */
@@ -72,5 +72,5 @@ std::list<int> SequencePatternRecognition::predict(PredictionType type)
   if (past_prediction.size() > sequence_capacity)
     past_prediction.resize(sequence_capacity);
 
-  return std::move(prediction);
+  return prediction;
 }

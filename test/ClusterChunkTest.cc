@@ -16,7 +16,8 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
   info.push_back(std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>(c.get(0),c.get(0)));
   int nData = 1;
   int nParity = 0;
-  auto cluster = std::make_shared<KineticCluster>(nData, nParity, info,
+  int blocksize = 1024*1024;
+  auto cluster = std::make_shared<KineticCluster>(nData, nParity, blocksize, info,
                                                   std::chrono::seconds(20),
                                                   std::chrono::seconds(10),
                                                   std::make_shared<ErasureCoding>(nData,nParity),

@@ -108,7 +108,7 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string &id)
     }
 
     ki.cluster = std::make_shared<KineticCluster>(
-        ki.numData, ki.numParity,
+        ki.numData, ki.numParity, ki.blockSize,
         cops, ki.min_reconnect_interval, ki.operation_timeout,
         ec, *listener
     );
@@ -193,6 +193,10 @@ int ClusterMap::parseClusterInformation(struct json_object *cluster)
   if (!json_object_object_get_ex(cluster, "numParity", &tmp))
     return -EINVAL;
   cinfo.numParity = json_object_get_int(tmp);
+
+  if (!json_object_object_get_ex(cluster, "blockSize", &tmp))
+    return -EINVAL;
+  cinfo.blockSize = json_object_get_int(tmp);
 
   if (!json_object_object_get_ex(cluster, "minReconnectInterval", &tmp))
     return -EINVAL;

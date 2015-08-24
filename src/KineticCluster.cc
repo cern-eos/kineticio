@@ -3,6 +3,7 @@
 #include "Utility.hh"
 #include <zlib.h>
 #include <set>
+#include <drive_log.h>
 
 using std::unique_ptr;
 using std::shared_ptr;
@@ -11,7 +12,7 @@ using namespace kinetic;
 using namespace kio;
 
 KineticCluster::KineticCluster(
-    std::size_t stripe_size, std::size_t num_parities,
+    std::size_t stripe_size, std::size_t num_parities, std::size_t block_size,
     std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> > info,
     std::chrono::seconds min_reconnect_interval,
     std::chrono::seconds op_timeout,
@@ -39,8 +40,14 @@ KineticCluster::KineticCluster(
     auto rmap = execute(ops, *sync);
     if (rmap[StatusCode::OK]) {
       const auto& l = std::static_pointer_cast<GetLogCallback>(ops.front().callback)->getLog()->limits;
+      if(l.max_value_size < block_size)
+        throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__,
+                               "configured block size of " + std::to_string((long long int)block_size) +
+                               "is smaller than maximum drive block size of " +
+                               std::to_string((long long int)l.max_value_size)
+        );
       clusterlimits.max_key_size = l.max_key_size;
-      clusterlimits.max_value_size = l.max_value_size * nData;
+      clusterlimits.max_value_size = block_size * nData;
       clusterlimits.max_version_size = l.max_version_size;
       break;
     }
@@ -88,7 +95,7 @@ std::vector<shared_ptr<const string> > getOperationToStripe(
       }
     }
   }
-  return std::move(stripe);
+  return stripe;
 }
 
 KineticStatus KineticCluster::get(
@@ -105,12 +112,9 @@ KineticStatus KineticCluster::get(
   if (rmap[StatusCode::OK] >= nData) {
     if (skip_value) {
       auto target_version = asyncops::mostFrequentVersion(ops);
-
-      if (target_version.frequency < nData) {
-        rmap[StatusCode::OK] = target_version.frequency;
-      } else {
+      if (target_version.frequency >= nData)
         version = target_version.version;
-      }
+      rmap[StatusCode::OK] = target_version.frequency;
     }
     else {
       auto target_version = asyncops::mostFrequentRecordVersion(ops);
@@ -122,15 +126,6 @@ KineticStatus KineticCluster::get(
         value = make_shared<const string>();
         version = target_version.version;
         return KineticStatus(StatusCode::OK, "");
-      }
-
-      /* too many missing blocks > can't recover. */
-      if (stripe_values < nData) {
-        return KineticStatus(StatusCode::CLIENT_IO_ERROR,
-                             "Key " + *key + " only has " + std::to_string((long long int) stripe_values) +
-                             " valid subchunks. At least " + std::to_string((long long int) nData) +
-                             " subchunks required to recover by erasure coding."
-        );
       }
 
       /* missing blocks -> erasure code */
@@ -467,5 +462,5 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
   for (auto it = ops.begin(); it != ops.end(); it++) {
     map[it->callback->getResult().statusCode()]++;
   }
-  return std::move(map);
+  return map;
 }

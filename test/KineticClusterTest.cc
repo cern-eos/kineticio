@@ -18,6 +18,9 @@ SCENARIO("Cluster integration test.", "[Cluster]")
   c.start(2);
 
   SocketListener listener;
+
+
+
   GIVEN ("A valid drive cluster") {
     REQUIRE(c.reset(0));
     REQUIRE(c.reset(1));
@@ -30,8 +33,9 @@ SCENARIO("Cluster integration test.", "[Cluster]")
 
     std::size_t nData = 2;
     std::size_t nParity = 1;
+    std::size_t blocksize = 1024*1024;
 
-    auto cluster = make_shared<KineticCluster>(nData, nParity, info,
+    auto cluster = make_shared<KineticCluster>(nData, nParity, blocksize, info,
                                                std::chrono::seconds(20),
                                                std::chrono::seconds(2),
                                                std::make_shared<ErasureCoding>(nData, nParity),

@@ -21,7 +21,7 @@ unique_ptr<CallbackSynchronization> asyncops::fillGetVersion(
         std::cref(key),
         cb);
   }
-  return std::move(sync);
+  return sync;
 }
 
 unique_ptr<CallbackSynchronization> asyncops::fillGet(
@@ -41,7 +41,7 @@ unique_ptr<CallbackSynchronization> asyncops::fillGet(
         std::cref(key),
         cb);
   }
-  return std::move(sync);
+  return sync;
 }
 
 
@@ -89,7 +89,7 @@ unique_ptr<CallbackSynchronization> asyncops::fillPut(
         cb,
         PersistMode::WRITE_BACK);
   }
-  return std::move(sync);
+  return sync;
 }
 
 
@@ -118,7 +118,7 @@ unique_ptr<CallbackSynchronization> asyncops::fillRemove(
         cb,
         PersistMode::WRITE_BACK);
   }
-  return std::move(sync);
+  return sync;
 }
 
 unique_ptr<CallbackSynchronization> asyncops::fillRange(
@@ -146,7 +146,7 @@ unique_ptr<CallbackSynchronization> asyncops::fillRange(
         maxRequested,
         cb);
   }
-  return std::move(sync);
+  return sync;
 }
 
 
@@ -167,7 +167,7 @@ unique_ptr<CallbackSynchronization> asyncops::fillLog(
         types,
         cb);
   }
-  return std::move(sync);
+  return sync;
 }
 
 
@@ -230,7 +230,7 @@ asyncops::VersionCount asyncops::mostFrequentRecordVersion(std::vector<KineticAs
   asyncops::VersionCount v{std::shared_ptr<const std::string>(), 0};
   auto& op = mostFrequent(ops, v.frequency, getRecordVersionEqual);
   v.version = std::static_pointer_cast<GetCallback>(op.callback)->getRecord()->version();
-  return std::move(v);
+  return v;
 }
 
 asyncops::VersionCount asyncops::mostFrequentVersion(std::vector<KineticAsyncOperation>& ops)
@@ -240,6 +240,6 @@ asyncops::VersionCount asyncops::mostFrequentVersion(std::vector<KineticAsyncOpe
   v.version = std::make_shared<const std::string>(
       std::static_pointer_cast<GetVersionCallback>(op.callback)->getVersion()
   );
-  return std::move(v);
+  return v;
 
 }
