@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "FileIo.hh"
 #include "ClusterMap.hh"
 #include "LoggingException.hh"
@@ -53,8 +54,12 @@ void FileIo::Open(const std::string &p, int flags,
 
   /* Delay response in case of cache pressure in order to throttle requests in high
    * pressure scenarios. For now, we simply delay for a percentage of the timeout time. */
-  std::chrono::milliseconds delay(std::lround(timeout*cache.pressure()));
-  std::this_thread::sleep_for(delay);
+  int delay;
+  do{
+    delay = (timeout ? timeout : 60) * cache.pressure();
+    if(delay) sleep(delay);
+    if(timeout) timeout -= delay;
+  }while(delay);
 }
 
 void FileIo::Close(uint16_t timeout)

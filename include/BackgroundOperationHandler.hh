@@ -61,7 +61,7 @@ private:
   //!
   //! @param function function to execute
   //--------------------------------------------------------------------------
-  void execute(std::function<void()> function) noexcept;
+  void execute(std::function<void()> function);
 
 private:
   //! maximum number of background threads spawned concurrently

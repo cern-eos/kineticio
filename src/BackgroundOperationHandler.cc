@@ -17,7 +17,7 @@ BackgroundOperationHandler::~BackgroundOperationHandler()
   }
 }
 
-void BackgroundOperationHandler::execute(std::function<void()> function) noexcept
+void BackgroundOperationHandler::execute(std::function<void()> function)
 {
   try {
     function();
