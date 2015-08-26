@@ -11,6 +11,7 @@
 #include <string>
 #include <unordered_map>
 #include <mutex>
+#include "LRUCache.hh"
 
 namespace kio {
 
@@ -34,9 +35,7 @@ public:
   //! @param nData number of data blocks in stripes to be encoded by this object
   //! @param nParity number of parity blocks in stripes
   //--------------------------------------------------------------------------
-  explicit ErasureCoding(std::size_t nData, std::size_t nParity);
-
-  ~ErasureCoding();
+  explicit ErasureCoding(std::size_t nData, std::size_t nParity, std::size_t nCodingTables);
 
 private:
   //--------------------------------------------------------------------------
@@ -86,7 +85,7 @@ private:
   //! the encoding matrix, required to compute any decode matrix
   std::vector<unsigned char> encode_matrix;
   //! a cache of previously used coding tables
-  std::unordered_map<std::string, CodingTable> cache;
+  kio::LRUCache<std::string, CodingTable> cache;
   //! concurrency control
   std::mutex mutex;
 };

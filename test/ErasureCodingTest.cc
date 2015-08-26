@@ -25,7 +25,7 @@ SCENARIO("Erasure Encoding Test.", "[Erasure]"){
   GIVEN ("An Erasure Code"){
     int nData = 32;
     int nParity = 4;
-    ErasureCoding e(nData, nParity);
+    ErasureCoding e(nData, nParity, 5);
 
     size_t chunk_size = (value.size() + nData-1) / (nData);
     std::vector< shared_ptr<const string> > stripe;

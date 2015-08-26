@@ -178,6 +178,11 @@ bool ClusterChunk::dirty() const
   return false;
 }
 
+size_t ClusterChunk::capacity() const
+{
+  return cluster->limits().max_value_size;
+}
+
 size_t ClusterChunk::size()
 {
   std::lock_guard<std::mutex> lock(mutex);

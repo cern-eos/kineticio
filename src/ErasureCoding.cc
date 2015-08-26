@@ -87,17 +87,13 @@ static int gf_gen_decode_matrix(
   return 0;
 }
 
-ErasureCoding::ErasureCoding(std::size_t data, std::size_t parity) :
+ErasureCoding::ErasureCoding(std::size_t data, std::size_t parity, std::size_t codingTables) :
     nData(data), nParity(parity),
-    encode_matrix((nData + nParity) * nData)
+    encode_matrix((nData + nParity) * nData), cache(codingTables)
 {
   // k = data
   // m = data + parity
   gf_gen_cauchy1_matrix(encode_matrix.data(), nData + nParity, nData);
-}
-
-ErasureCoding::~ErasureCoding()
-{
 }
 
 std::string ErasureCoding::getErrorPattern(
@@ -141,53 +137,53 @@ std::string ErasureCoding::getErrorPattern(
   return pattern;
 }
 
-ErasureCoding::CodingTable &ErasureCoding::getCodingTable(
+ErasureCoding::CodingTable& ErasureCoding::getCodingTable(
     const std::string &pattern
 )
 {
   std::lock_guard<std::mutex> lock(mutex);
   /* Check if decode matrix is already cached. */
-  if (cache.count(pattern)) {
-    return cache.at(pattern);
-  }
+  try {
+    return cache.get(pattern);
+  }catch(std::out_of_range e){
 
-  /* Expand pattern */
-  int nerrs = 0, nsrcerrs = 0;
-  unsigned char err_indx_list[nParity];
-  for (int i = 0; i < pattern.size(); i++) {
-    if (pattern[i]) {
-      err_indx_list[nerrs++] = i;
-      if (i < nData) nsrcerrs++;
+    /* Expand pattern */
+    int nerrs = 0, nsrcerrs = 0;
+    unsigned char err_indx_list[nParity];
+    for (int i = 0; i < pattern.size(); i++) {
+      if (pattern[i]) {
+        err_indx_list[nerrs++] = i;
+        if (i < nData) nsrcerrs++;
+      }
     }
+
+    /* Allocate Decode Object. */
+    CodingTable dd;
+    dd.nErrors = nerrs;
+    dd.blockIndices.resize(nData);
+    dd.table.resize(nData * nParity * 32);
+
+    /* Compute decode matrix. */
+    std::vector<unsigned char> decode_matrix((nData + nParity) * nData);
+
+    if (gf_gen_decode_matrix(
+        encode_matrix.data(),
+        decode_matrix.data(),
+        dd.blockIndices.data(),
+        err_indx_list,
+        (unsigned char *) pattern.c_str(),
+        nerrs,
+        nsrcerrs,
+        static_cast<int>(nData),
+        static_cast<int>(nParity + nData))
+        )
+      throw std::runtime_error("ErasureCoding: Failed computing decode matrix");
+
+    /* Compute Tables. */
+    ec_init_tables(nData, nerrs, decode_matrix.data(), dd.table.data());
+    cache.add(pattern, dd);
   }
-
-  /* Allocate Decode Object. */
-  CodingTable dd; //={nData*nParity*32, nData, nerrs};
-
-  dd.nErrors = nerrs;
-  dd.blockIndices.resize(nData);
-  dd.table.resize(nData * nParity * 32);
-
-  /* Compute decode matrix. */
-  std::vector<unsigned char> decode_matrix((nData + nParity) * nData);
-
-  if (gf_gen_decode_matrix(
-      encode_matrix.data(),
-      decode_matrix.data(),
-      dd.blockIndices.data(),
-      err_indx_list,
-      (unsigned char *) pattern.c_str(),
-      nerrs,
-      nsrcerrs,
-      static_cast<int>(nData),
-      static_cast<int>(nParity + nData))
-      )
-    throw std::runtime_error("ErasureCoding: Failed computing decode matrix");
-
-  /* Compute Tables. */
-  ec_init_tables(nData, nerrs, decode_matrix.data(), dd.table.data());
-  cache.insert(std::pair<string, CodingTable>(pattern, dd));
-  return cache.at(pattern);
+  return cache.get(pattern);
 }
 
 void ErasureCoding::compute(std::vector<std::shared_ptr<const std::string> > &stripe)

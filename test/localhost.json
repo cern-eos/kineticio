@@ -13,25 +13,34 @@
         {"wwn":"WWN3","userId":1,"key":"asdfasdf"}
     ],
 
+  "configuration_comment":"Library wide configuration options",
+  "configuration":{
+    "cacheTargetSizeMB":1024,
+    "cacheCapacityMB":2048,
+    "maxBackgroundIoThreads":20,
+    "erasureCodings":5,
+    "erasureDecodingTables":5
+  },
+
     "cluster_comment":"Array of cluster definitions, located at $KINETIC_CLUSTER_DEFINITION",
     "cluster":[
-        {"clusterID":"Cluster1",
-         "numData":1,"numParity":1,"blockSize":999,
-         "minReconnectInterval":20,"timeout":10,
-         "drives":[
-             {"wwn":"WWN1"},
-             {"wwn":"WWN3"}
-         ]
-        },
-        {"clusterID":"Cluster2",
-         "numData":1,"numParity":1,"blockSize":1048576,
-         "minReconnectInterval":20,"timeout":10,
-         "drives":[{"wwn":"WWN1"},{"wwn":"WWN2"}]
-        },
-        {"clusterID":"Cluster3",
-         "numData":1,"numParity":0,"blockSize":524288,
-         "minReconnectInterval":20,"timeout":10,
-         "drives":[{"wwn":"WWN1"}]
-        }
+      {"clusterID":"Cluster1",
+       "numData":1,"numParity":1,"chunkSizeKB":1,
+       "minReconnectInterval":20,"timeout":10,
+       "drives":[
+           {"wwn":"WWN1"},
+           {"wwn":"WWN3"}
+       ]
+      },
+      {"clusterID":"Cluster2",
+       "numData":1,"numParity":1,"chunkSizeKB":1024,
+       "minReconnectInterval":20,"timeout":10,
+       "drives":[{"wwn":"WWN1"},{"wwn":"WWN2"}]
+      },
+      {"clusterID":"Cluster3",
+       "numData":1,"numParity":0,"chunkSizeKB":512,
+       "minReconnectInterval":20,"timeout":10,
+       "drives":[{"wwn":"WWN1"}]
+      }
     ]
 }

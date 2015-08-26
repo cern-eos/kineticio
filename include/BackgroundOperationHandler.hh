@@ -57,11 +57,11 @@ public:
 
 private:
   //--------------------------------------------------------------------------
-  //! Threadsafe wrapper executing supKINETICIO_BACKGROUNDOPERATIONHANDLER_HHplied function and counting thread use
+  //! Threadsafe wrapper executing supplied function and counting thread use
   //!
   //! @param function function to execute
   //--------------------------------------------------------------------------
-  void execute(std::function<void()> function);
+  void execute(std::function<void()> function) noexcept;
 
 private:
   //! maximum number of background threads spawned concurrently

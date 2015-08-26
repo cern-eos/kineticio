@@ -20,8 +20,7 @@ static std::string readfile(const char *path)
 }
 
 /* Printing errors initializing static global object to stderr.*/
-ClusterMap::ClusterMap() :
-    ecCache(10)
+ClusterMap::ClusterMap()
 {
   /* get file names */
   const char *location = getenv("KINETIC_DRIVE_LOCATION");
@@ -69,10 +68,21 @@ ClusterMap::ClusterMap() :
     fprintf(stderr, "Error while parsing cluster json file '%s\n", cluster);
     return;
   }
+
+  ecCache.reset(new LRUCache<std::string, std::shared_ptr<ErasureCoding>>(
+      configuration.num_erasure_codings
+  ));
+
+  dataCache.reset(new ClusterChunkCache(
+      configuration.stripecache_target,
+      configuration.stripecache_capacity,
+      configuration.background_io_threads
+  ));
 }
 
-ClusterMap::~ClusterMap()
+ClusterChunkCache& ClusterMap::getCache()
 {
+  return *dataCache;
 }
 
 std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string &id)
@@ -100,11 +110,11 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string &id)
                   std::to_string((long long int) ki.numParity);
     std::shared_ptr<ErasureCoding> ec;
     try{
-      ec = ecCache.get(ectype);
+      ec = ecCache->get(ectype);
     }
     catch(const std::out_of_range& e){
-      ec = std::make_shared<ErasureCoding>(ki.numData, ki.numParity);
-      ecCache.add(ectype, ec);
+      ec = std::make_shared<ErasureCoding>(ki.numData, ki.numParity, configuration.num_erasure_coding_tables);
+      ecCache->add(ectype, ec);
     }
 
     ki.cluster = std::make_shared<KineticCluster>(
@@ -114,11 +124,6 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string &id)
     );
   }
   return ki.cluster;
-}
-
-size_t ClusterMap::getSize()
-{
-  return clustermap.size();
 }
 
 int ClusterMap::parseDriveLocation(struct json_object *drive)
@@ -194,9 +199,10 @@ int ClusterMap::parseClusterInformation(struct json_object *cluster)
     return -EINVAL;
   cinfo.numParity = json_object_get_int(tmp);
 
-  if (!json_object_object_get_ex(cluster, "blockSize", &tmp))
+  if (!json_object_object_get_ex(cluster, "chunkSizeKB", &tmp))
     return -EINVAL;
   cinfo.blockSize = json_object_get_int(tmp);
+  cinfo.blockSize *= 1024;
 
   if (!json_object_object_get_ex(cluster, "minReconnectInterval", &tmp))
     return -EINVAL;
@@ -223,6 +229,33 @@ int ClusterMap::parseClusterInformation(struct json_object *cluster)
   return 0;
 }
 
+int ClusterMap::parseConfiguration(struct json_object* config)
+{
+  struct json_object *tmp = NULL;
+  if (!json_object_object_get_ex(config, "cacheTargetSizeMB", &tmp))
+    return -EINVAL;
+  configuration.stripecache_target = json_object_get_int(tmp);
+  configuration.stripecache_target *= 1024*1024;
+
+  if (!json_object_object_get_ex(config, "cacheCapacityMB", &tmp))
+    return -EINVAL;
+  configuration.stripecache_capacity = json_object_get_int(tmp);
+  configuration.stripecache_capacity *= 1024*1024;
+
+  if (!json_object_object_get_ex(config, "maxBackgroundIoThreads", &tmp))
+    return -EINVAL;
+  configuration.background_io_threads = json_object_get_int(tmp);
+
+  if (!json_object_object_get_ex(config, "erasureCodings", &tmp))
+    return -EINVAL;
+  configuration.num_erasure_codings = json_object_get_int(tmp);
+
+  if (!json_object_object_get_ex(config, "erasureDecodingTables", &tmp))
+    return -EINVAL;
+  configuration.num_erasure_coding_tables = json_object_get_int(tmp);
+  return 0;
+}
+
 
 int ClusterMap::parseJson(const std::string &filedata, filetype type)
 {
@@ -243,6 +276,10 @@ int ClusterMap::parseJson(const std::string &filedata, filetype type)
       break;
     case filetype::cluster:
       typestring = "cluster";
+      if (!json_object_object_get_ex(root, "configuration", &list) || parseConfiguration(list)) {
+        json_object_put(root);
+        return -EINVAL;
+      }
       break;
   }
 
