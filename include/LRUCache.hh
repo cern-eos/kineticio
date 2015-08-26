@@ -30,11 +30,8 @@ public:
     cache.push_front(cache_item(k, v));
     lookup[k] = cache.begin();
 
-    if (cache.size() > capacity) {
-      if (lookup[cache.back().first] == --cache.end())
-        lookup.erase(cache.back().first);
-      cache.pop_back();
-    }
+    if (cache.size() > capacity)
+      shrink();
   }
 
   //----------------------------------------------------------------------------
@@ -45,9 +42,29 @@ public:
   //! @param k the key
   //! @return the value
   //----------------------------------------------------------------------------
-  const Value& get(const Key& k){
+  Value& get(const Key& k){
     cache.splice(cache.begin(), cache, lookup.at(k));
     return cache.front().second;
+  }
+
+  //----------------------------------------------------------------------------
+  //! Set the supplied capacity.
+  //!
+  //! @param cap maximum number of elements in the cache
+  //----------------------------------------------------------------------------
+  void setCapacity(size_t cap){
+    capacity = cap;
+    while(cache.size() > capacity)
+      shrink();
+  }
+
+  //----------------------------------------------------------------------------
+  //! Get the cache capacity.
+  //!
+  //! @return maximum number of elements in the cache
+  //----------------------------------------------------------------------------
+  size_t getCapacity(){
+    return capacity;
   }
 
   //----------------------------------------------------------------------------
@@ -57,10 +74,18 @@ public:
   //----------------------------------------------------------------------------
   explicit LRUCache(std::size_t capacity) : capacity(capacity) { }
 
+private:
   //----------------------------------------------------------------------------
-  //! Destructor.
+  //! Shrink the cache by one element, removing the last element in the LRU
+  //! list.
   //----------------------------------------------------------------------------
-  ~LRUCache() { }
+  void shrink(){
+    /* The last element in the cache might not be in the lookup table
+     * any more if the same key has been added multiple times. */
+    if (lookup[cache.back().first] == --cache.end())
+      lookup.erase(cache.back().first);
+    cache.pop_back();
+  }
 
 private:
   typedef std::pair<Key, Value> cache_item;

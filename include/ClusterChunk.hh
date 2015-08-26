@@ -76,6 +76,14 @@ public:
   std::size_t size();
 
   //--------------------------------------------------------------------------
+  //! Return the maximum value size.
+  //!
+  //! @return size in bytes of underlying value
+  //--------------------------------------------------------------------------
+  std::size_t capacity() const;
+
+
+  //--------------------------------------------------------------------------
   //! Test for your flushing needs. Chunk is considered dirty if it is either
   //! freshly created or it has been written since its last flush.
   //!

@@ -38,7 +38,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
     auto cluster = make_shared<KineticCluster>(nData, nParity, blocksize, info,
                                                std::chrono::seconds(20),
                                                std::chrono::seconds(2),
-                                               std::make_shared<ErasureCoding>(nData, nParity),
+                                               std::make_shared<ErasureCoding>(nData, nParity, 5),
                                                listener
     );
 

@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "FileIo.hh"
 #include "ClusterMap.hh"
 #include "LoggingException.hh"
@@ -15,7 +16,7 @@ using namespace kio;
 
 
 FileIo::FileIo() :
-    cluster(), cache(ClusterChunkCache::getInstance()), lastChunkNumber(*this)
+    cluster(), cache(ClusterMap::getInstance().getCache()), lastChunkNumber(*this)
 {
 }
 
@@ -50,6 +51,15 @@ void FileIo::Open(const std::string &p, int flags,
     throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
                            "Attempting to write metadata key '" + obj_path + "' to cluster "
                            "returned unexpected error: " +toString(s.statusCode())+" "+s.message());
+
+  /* Delay response in case of cache pressure in order to throttle requests in high
+   * pressure scenarios. For now, we simply delay for a percentage of the timeout time. */
+  int delay;
+  do{
+    delay = (timeout ? timeout : 60) * cache.pressure();
+    if(delay) sleep(delay);
+    if(timeout) timeout -= delay;
+  }while(delay);
 }
 
 void FileIo::Close(uint16_t timeout)

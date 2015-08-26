@@ -1,5 +1,5 @@
 # kineticio
-Providing a file interface (byterange read / write access) to kinetic hardware. While this library can be compiled on its own, its primary use case is as an EOS plugin. The exposed interface and behavior thus closely mirror eos::fst::FileIO. 
+Providing a file interface (byterange read / write access) to kinetic hardware. While this library can be compiled on its own, its primary use case is as an EOS plugin. The exposed interface and behavior thus closely mirror eos::fst::FileIO. Due to supporting standard ScientificLinux 6 as a target platform, the use of c++11 in the source code is limited to the subset available in the gcc 4.4.7 compiler.
 
 ### Dependencies
 + [CMake](http://www.cmake.org) build process manager
@@ -16,7 +16,7 @@ Providing a file interface (byterange read / write access) to kinetic hardware. 
 + Run `make` && `make install`
 
 ### Configuration
-The **KINETIC_DRIVE_LOCATION**, **KINETIC_DRIVE_SECURITY** and **KINETIC_CLUSTER_DEFINITION** environment variables have to be set and point to json file(s) listing drive location, login details and the cluster configuration respectively. This can, but does not have to, be one and the same file. See [localhost.json](test/localhost.json) as an example. 
+The **KINETIC_DRIVE_LOCATION**, **KINETIC_DRIVE_SECURITY** and **KINETIC_CLUSTER_DEFINITION** environment variables have to be set and point to json file(s) listing drive location, login details and the cluster configuration respectively. This can, but does not have to, be one and the same file. The json file at **KINETIC_CLUSTER_DEFINITION** may further include library-wide configuration options. See [localhost.json](test/localhost.json) as an example. 
 
 ### EOS support
 When this library is installed, kinetic support will automatically be enabled when compiling the kinetic branch of the [EOS repository](http://eos.cern.ch/cgi-bin/cgit.cgi/eos/).

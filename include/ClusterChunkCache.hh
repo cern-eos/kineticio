@@ -77,39 +77,34 @@ public:
   void async_flush(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk);
 
   //--------------------------------------------------------------------------
-  //! Cache is shared among all FileIo objects.
+  //! Return a value between [0...1] showing the current cache pressure. This
+  //! can be used to throttle workload to guard against cache thrashing.
+  //!
+  //! @return value between 0 and 1 signifying cache pressure.
   //--------------------------------------------------------------------------
-  static ClusterChunkCache& getInstance(){
-    static ClusterChunkCache cc(200, 20);
-    return cc;
-  }
+  double pressure();
 
-
-private:
   //--------------------------------------------------------------------------
   //! Constructor.
   //!
-  //! @param item_capacity maximum number of items in cache
+  //! @param preferred_size size in bytes the cache should ideally not exceed
+  //! @param capacity absolute maximum size of the cache in bytes
   //! @param thread_capacity maximum number of threads to spawn for background
   //!        IO
   //--------------------------------------------------------------------------
-  explicit ClusterChunkCache(size_t item_capacity, size_t thread_capacity);
+  explicit ClusterChunkCache(size_t preferred_size, size_t capacity, size_t thread_capacity);
 
   //--------------------------------------------------------------------------
-  //! Destructor.
-  //--------------------------------------------------------------------------
-  ~ClusterChunkCache();
-
-  //--------------------------------------------------------------------------
-  //! Copy constructing makes no sense
+  //! No copy constructor.
   //--------------------------------------------------------------------------
   ClusterChunkCache(ClusterChunkCache&) = delete;
 
   //--------------------------------------------------------------------------
-  //! Assignment make no sense
+  //! No copy assignment.
   //--------------------------------------------------------------------------
   void operator=(ClusterChunkCache&) = delete;
 
+private:
   //--------------------------------------------------------------------------
   //! Attempt to read the requested chunk number for the owner in a background
   //! thread. If this is not possible due to the number of active background
@@ -131,8 +126,14 @@ private:
   void do_flush(kio::FileIo *owner, std::shared_ptr<kio::ClusterChunk> chunk);
 
 private:
-  //! maximum number of items allowed in the cache
-  const size_t capacity;
+  //! preferred size of the cache (soft cap)
+  const std::size_t target_size;
+
+  //! maximum size of the cache (hard cap)
+  const std::size_t capacity;
+
+  //! current size of the cache
+  std::size_t current_size;
 
   //! handle background readahead and flush requests
   BackgroundOperationHandler bg;

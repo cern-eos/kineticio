@@ -57,7 +57,7 @@ public:
 
 private:
   //--------------------------------------------------------------------------
-  //! Threadsafe wrapper executing supKINETICIO_BACKGROUNDOPERATIONHANDLER_HHplied function and counting thread use
+  //! Threadsafe wrapper executing supplied function and counting thread use
   //!
   //! @param function function to execute
   //--------------------------------------------------------------------------

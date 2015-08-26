@@ -1,10 +1,10 @@
 //------------------------------------------------------------------------------
 //! @file ClusterMap.hh
 //! @author Paul Hermann Lensing
-//! @brief Supplying a fst wide cluster map. Threadsafe.
+//! @brief Providing access to cluster instances and the data io cache.
 //------------------------------------------------------------------------------
 #ifndef KINETICDRIVEMAP_HH
-#define  KINETICDRIVEMAP_HH
+#define KINETICDRIVEMAP_HH
 
 /*----------------------------------------------------------------------------*/
 #include <condition_variable>
@@ -17,31 +17,31 @@
 #include "ErasureCoding.hh"
 #include "LRUCache.hh"
 #include "SocketListener.hh"
+#include "ClusterChunkCache.hh"
 /*----------------------------------------------------------------------------*/
 
 namespace kio {
 
 //------------------------------------------------------------------------------
-//! Supplying a fst wide cluster map. Threadsafe.
+//! Providing access to cluster instances and the data io cache. Threadsafe.
 //------------------------------------------------------------------------------
 class ClusterMap
 {
-
 public:
   //--------------------------------------------------------------------------
   //! Obtain an input-output class for the supplied identifier.
   //!
   //! @param id the unique identifier for the cluster
-  //! @param cluster contains the cluster on success
+  //! @return a valid cluster object
   //--------------------------------------------------------------------------
   std::shared_ptr<ClusterInterface> getCluster(const std::string& id);
 
   //--------------------------------------------------------------------------
-  //! Obtain the number of entries in the map.
+  //! Obtain a reference to the io data cache.
   //!
-  //! @return the number of entries in the map
+  //! @return a reference to the data cache
   //--------------------------------------------------------------------------
-  size_t getSize();
+  ClusterChunkCache& getCache();
 
   //--------------------------------------------------------------------------
   //! ClusterMap is shared among all FileIo objects.
@@ -50,20 +50,6 @@ public:
     static ClusterMap clustermap;
     return clustermap;
   }
-
-private:
-  //--------------------------------------------------------------------------
-  //! Constructor.
-  //! Requires a json file listing kinetic drives to be stored at the location
-  //! indicated by the KINETIC_DRIVE_LOCATION and KINETIC_DRIVE_SECURITY
-  //! environment variables
-  //--------------------------------------------------------------------------
-  explicit ClusterMap();
-
-  //--------------------------------------------------------------------------
-  //! Destructor
-  //--------------------------------------------------------------------------
-  ~ClusterMap();
 
   //--------------------------------------------------------------------------
   //! Copy constructing makes no sense
@@ -74,6 +60,15 @@ private:
   //! Assignment make no sense
   //--------------------------------------------------------------------------
   void operator=(ClusterMap&) = delete;
+
+private:
+  //--------------------------------------------------------------------------
+  //! Constructor.
+  //! Requires a json file listing kinetic drives to be stored at the location
+  //! indicated by the KINETIC_DRIVE_LOCATION and KINETIC_DRIVE_SECURITY
+  //! environment variables
+  //--------------------------------------------------------------------------
+  explicit ClusterMap();
 
   //--------------------------------------------------------------------------
   //! Private enum to differentiate between json configuration files.
@@ -118,7 +113,34 @@ private:
   //--------------------------------------------------------------------------
   int parseClusterInformation(struct json_object* cluster);
 
+  //--------------------------------------------------------------------------
+  //! Adds security attributes to drive description
+  //!
+  //! @param drive json root of library configuration
+  //! @return 0 if successful, EINVAL if configuration is invalid
+  //--------------------------------------------------------------------------
+  int parseConfiguration(struct json_object* configuration);
+
 private:
+  //--------------------------------------------------------------------------
+  //! Configuration of library wide parameters.
+  //--------------------------------------------------------------------------
+  struct Configuration{
+    //! the preferred size in bytes of the data cache
+    size_t stripecache_target;
+    //! the absolut maximum size of the data cache in bytes
+    size_t stripecache_capacity;
+    //! the number of threads used for bg io in the data cache
+    int background_io_threads;
+    //! the number of erasure coding instances that may be cached
+    int num_erasure_codings;
+    //! the number of coding tables each erasure coding instance may cache
+    int num_erasure_coding_tables;
+  };
+
+  //! storing the library wide configuration parameters
+  Configuration configuration;
+
   //--------------------------------------------------------------------------
   //! Store a cluster object and all information required to create it
   //--------------------------------------------------------------------------
@@ -144,12 +166,15 @@ private:
   std::unordered_map<std::string, KineticClusterInfo> clustermap;
 
   //! the drive map id <-> connection info
-  std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> > drivemap;
+  std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> drivemap;
 
-  //! ErasureEncoding instances of the same type (nData,nParity) can be shared
+  //! ErasureCcoding instances of the same type (nData,nParity) can be shared
   //! among multiple cluster instances, no need to duplicate decoding tables
   //! in memory.
-  LRUCache<std::string, std::shared_ptr<ErasureCoding>> ecCache;
+  std::unique_ptr<LRUCache<std::string, std::shared_ptr<ErasureCoding>>> ecCache;
+
+  //! the data cache shared among cluster instances
+  std::unique_ptr<ClusterChunkCache> dataCache;
 
   //! epoll listener loop shared among all connections
   std::unique_ptr<SocketListener> listener;
