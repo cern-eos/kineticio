@@ -136,6 +136,9 @@ public:
   //--------------------------------------------------------------------------
   explicit FileIo ();
 
+  FileIo (const FileIo&) = delete;
+  FileIo& operator = (const FileIo&) = delete;
+
   //--------------------------------------------------------------------------
   //! Destructor
   //--------------------------------------------------------------------------
@@ -143,14 +146,13 @@ public:
 
 private:
   enum rw {READ, WRITE};
-  int64_t ReadWrite (long long off, char* buffer,
-		int length, rw mode, uint16_t timeout = 0);
+  int64_t ReadWrite (long long off, char* buffer, int length, rw mode, uint16_t timeout = 0);
 
 private:
   class LastChunkNumber {
 
   public:
-    //--------------------------------------------------------------------------
+     //--------------------------------------------------------------------------
      //! Checks if the chunk number stored in last_chunk_number is still valid,
      //! if not it will query the drive to obtain the up-to-date last chunk and
      //! store it (so it can get requested with get() by the user).
@@ -210,10 +212,6 @@ private:
 
   //! the base name for data chunks of this object
   std::string chunk_basename;
-
-private:
-    FileIo (const FileIo&) = delete;
-    FileIo& operator = (const FileIo&) = delete;
 };
 
 }

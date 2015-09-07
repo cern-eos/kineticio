@@ -4,6 +4,7 @@
 #include <zlib.h>
 #include <set>
 #include <drive_log.h>
+#include "Logging.hh"
 
 using std::unique_ptr;
 using std::shared_ptr;
@@ -40,12 +41,10 @@ KineticCluster::KineticCluster(
     auto rmap = execute(ops, *sync);
     if (rmap[StatusCode::OK]) {
       const auto& l = std::static_pointer_cast<GetLogCallback>(ops.front().callback)->getLog()->limits;
-      if(l.max_value_size < block_size)
-        throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__,
-                               "configured block size of " + std::to_string((long long int)block_size) +
-                               "is smaller than maximum drive block size of " +
-                               std::to_string((long long int)l.max_value_size)
-        );
+      if(l.max_value_size < block_size) {
+        throw kio_exception(ENXIO, "configured block size of ", block_size,
+                                   "is smaller than maximum drive block size of ", l.max_value_size);
+      }
       clusterlimits.max_key_size = l.max_key_size;
       clusterlimits.max_value_size = block_size * nData;
       clusterlimits.max_version_size = l.max_version_size;
@@ -53,7 +52,7 @@ KineticCluster::KineticCluster(
     }
   }
   if (!clusterlimits.max_key_size || !clusterlimits.max_value_size || !clusterlimits.max_version_size) {
-    throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__, "Failed obtaining cluster limits!");
+    throw kio_exception(ENXIO, "Failed obtaining cluster limits!");
   }
   /* Start a bg update of cluster capacity */
   size();

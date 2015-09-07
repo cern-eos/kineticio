@@ -112,6 +112,7 @@ if(DEBUG)
         test/SequencePatternRecognitionTest.cc
         test/SimulatorController.cc
         test/LRUCacheTest.cc
+        test/LoggingTest.cc
     )
     target_link_libraries(kinetic-test
        ${kineticio_LIB}
