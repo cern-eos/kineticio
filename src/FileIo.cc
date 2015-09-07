@@ -29,6 +29,7 @@ FileIo::~FileIo()
 void FileIo::Open(const std::string &p, int flags,
                   mode_t mode, const std::string &opaque, uint16_t timeout)
 {
+  /* TODO: throttle on number of open files? */
   cluster = ClusterMap::getInstance().getCluster(utility::extractClusterID(p));
 
   /* Setting path variables. There is no need to encode kinetic:clusterID in
@@ -51,15 +52,6 @@ void FileIo::Open(const std::string &p, int flags,
     throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
                            "Attempting to write metadata key '" + obj_path + "' to cluster "
                            "returned unexpected error: " +toString(s.statusCode())+" "+s.message());
-
-  /* Delay response in case of cache pressure in order to throttle requests in high
-   * pressure scenarios. For now, we simply delay for a percentage of the timeout time. */
-  int delay;
-  do{
-    delay = (timeout ? timeout : 60) * cache.pressure();
-    if(delay) sleep(delay);
-    if(timeout) timeout -= delay;
-  }while(delay);
 }
 
 void FileIo::Close(uint16_t timeout)
@@ -71,12 +63,22 @@ void FileIo::Close(uint16_t timeout)
   chunk_basename.clear();
 }
 
+
 int64_t FileIo::ReadWrite(long long off, char *buffer,
                           int length, FileIo::rw mode, uint16_t timeout)
 {
   if (!cluster)
     throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__,
                            "No cluster set for FileIO object.");
+
+  /* Delay response in case of cache pressure in order to throttle requests in high
+   * pressure scenarios. For now, we simply delay for a percentage of the timeout time. */
+  int delay;
+  do{
+    delay = (timeout ? timeout : 60) * cache.pressure();
+    if(delay) sleep(delay);
+    if(timeout) timeout -= delay;
+  }while(delay);
 
   const size_t chunk_capacity = cluster->limits().max_value_size;
   size_t length_todo = length;
