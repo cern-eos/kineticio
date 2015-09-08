@@ -1,5 +1,4 @@
 #include "KineticCluster.hh"
-#include "LoggingException.hh"
 #include "Utility.hh"
 #include <zlib.h>
 #include <set>

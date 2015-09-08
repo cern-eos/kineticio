@@ -1,6 +1,6 @@
 #include "SocketListener.hh"
 #include "KineticAutoConnection.hh"
-#include "LoggingException.hh"
+#include "Logging.hh"
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
 #include <unistd.h>
@@ -42,11 +42,9 @@ SocketListener::SocketListener() :
    * sockets. */
   epoll_fd = epoll_create1(0);
 
-  if (epoll_fd < 0) {
-    throw LoggingException(errno, __FUNCTION__, __FILE__, __LINE__,
-                           "epoll_create failed."
-    );
-  }
+  if (epoll_fd < 0)
+    throw kio_exception(errno, "epoll_create failed");
+
   listener = std::thread(epoll_listen, epoll_fd, &shutdown);
 }
 
@@ -73,9 +71,7 @@ void SocketListener::subscribe(int fd, kio::KineticAutoConnection *connection)
   /* Add the descriptor into the monitoring list. We can do it even if another
     thread is waiting in epoll_wait - the descriptor will be properly added */
   if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) != 0)
-    throw LoggingException(errno, __FUNCTION__, __FILE__, __LINE__,
-                           "epoll_ctl add failed."
-    );
+    throw kio_exception(errno, "epoll_ctl add failed");
 }
 
 void SocketListener::unsubscribe(int fd)
