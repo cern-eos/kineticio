@@ -185,14 +185,13 @@ KineticStatus KineticCluster::put(
   int chunk_size = (value->size() + nData - 1) / (nData);
   std::vector<shared_ptr<const string> > stripe;
   for (int i = 0; i < nData + nParity; i++) {
+    auto subchunk = std::make_shared<string>();
     if (i < nData) {
-      auto subchunk = make_shared<string>(value->substr(i * chunk_size, chunk_size));
+      if(i*chunk_size < value->size())
+        subchunk->assign(value->substr(i * chunk_size, chunk_size));
       subchunk->resize(chunk_size); // ensure that all chunks are the same size
-      stripe.push_back(std::move(subchunk));
     }
-    else {
-      stripe.push_back(make_shared<string>());
-    }
+    stripe.push_back(std::move(subchunk));
   }
   try {
     /*Do not try to erasure code data if we are putting an empty key. The
