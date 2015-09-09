@@ -89,16 +89,14 @@ install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
 if(DEBUG)
     include(ExternalProject)
     ExternalProject_add(catch
-      PREFIX catch
-      GIT_REPOSITORY https://github.com/philsquared/Catch
-      GIT_TAG v1.2.1-develop.11
-      UPDATE_COMMAND ""
-      CONFIGURE_COMMAND ""
-      BUILD_IN_SOURCE 1
-      BUILD_COMMAND ""
-      INSTALL_COMMAND cp single_include/catch.hpp  ${kineticio_SOURCE_DIR}/test/
+       PREFIX catch
+       DOWNLOAD_COMMAND wget -q https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp -O catch.hpp
+       CONFIGURE_COMMAND ""
+       BUILD_IN_SOURCE 1
+       BUILD_COMMAND ""
+       INSTALL_COMMAND ""
     )
-    SET_DIRECTORY_PROPERTIES(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${kineticio_SOURCE_DIR}/test/catch.hpp")
+    include_directories(${kineticio_BINARY_DIR}/catch/src)
 
     add_executable(kinetic-test
         ${kineticio_SRC}
@@ -119,5 +117,6 @@ if(DEBUG)
        ${kineticio_LIB}
        ${CMAKE_THREAD_LIBS_INIT}
     )
+    add_dependencies(kinetic-test catch)
 endif(DEBUG)
 

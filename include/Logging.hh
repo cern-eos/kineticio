@@ -54,7 +54,6 @@ namespace kio {
       logFunction(func,file,line,level,s.c_str());
     }
 
-
     //--------------------------------------------------------------------------
     //! Provide access to the static Logger instance.
     //! @return reference to the static Logger instance.
@@ -80,7 +79,7 @@ namespace kio {
   };
 }
 
-//! generate a LoggingException, errors are always thrown and can be logged by receiver
+//! generate a LoggingException, errors are always thrown and can be logged by receiver (thus no kio_error log macro)
 #define kio_exception(err, message...) LoggingException(err, __FUNCTION__, __FILE__, __LINE__, utility::Convert::toString(message));
 
 //! debug macro
