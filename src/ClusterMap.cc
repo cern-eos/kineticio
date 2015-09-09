@@ -104,8 +104,7 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string &id)
       cops.push_back(drivemap.at(*wwn));
     }
 
-    auto ectype = std::to_string((long long int) ki.numData) + "-" +
-                  std::to_string((long long int) ki.numParity);
+    auto ectype = utility::Convert::toString(ki.numData, "-", ki.numParity);
     std::shared_ptr<ErasureCoding> ec;
     try{
       ec = ecCache->get(ectype);

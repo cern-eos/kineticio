@@ -68,6 +68,7 @@ set(kineticio_SRC
     src/ErasureCoding.cc
     src/SequencePatternRecognition.cc
     src/BackgroundOperationHandler.cc
+    src/Utility.cc
 )
 set(kineticio_LIB
     ${JSONC_LIBRARIES}

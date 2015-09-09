@@ -338,8 +338,9 @@ KineticStatus KineticCluster::range(
       return KineticStatus(it->first, "");
     }
   }
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR,
-                       "Confusion when attempting to get range from key" + *start_key + " to " + *end_key
+  return KineticStatus(
+      StatusCode::CLIENT_IO_ERROR,
+      "Confusion when attempting to get range from key" + *start_key + " to " + *end_key
   );
 }
 
@@ -354,8 +355,10 @@ void KineticCluster::updateSize()
   std::lock_guard<std::mutex> lock(clustersize_mutex);
   clustersize.bytes_total = clustersize.bytes_free = 0;
   for (auto o = ops.begin(); o != ops.end(); o++) {
-    if (!o->callback->getResult().ok())
+    if (!o->callback->getResult().ok()) {
+      kio_notice("Could not obtain capacity information for a drive: ", o->callback->getResult());
       continue;
+    }
     const auto& c = std::static_pointer_cast<GetLogCallback>(o->callback)->getLog()->capacity;
     clustersize.bytes_total += c.nominal_capacity_in_bytes;
     clustersize.bytes_free += c.nominal_capacity_in_bytes - (c.nominal_capacity_in_bytes * c.portion_full);
@@ -428,6 +431,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
         ops[i].callback->OnResult(status);
         ops[i].connection->setError(status);
+        kio_warning("Failed executing operation ", i, "of stripe. ", status);
       }
     }
 
@@ -442,6 +446,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         try {
           ops[i].connection->get()->RemoveHandler(hkeys[i]);
         } catch (...) { }
+        kio_warning("Network timeout for operation ", i, " of stripe.");
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
         ops[i].callback->OnResult(status);
         ops[i].connection->setError(status);

@@ -50,8 +50,7 @@ void FileIo::Open(const std::string &p, int flags,
   if (s.ok())
     lastChunkNumber.set(0);
   else if (s.statusCode() != StatusCode::REMOTE_VERSION_MISMATCH)
-    throw kio_exception(EIO, "Attempting to write metadata key '",  obj_path, "' to cluster "
-        "returned unexpected error: ", toString(s.statusCode()), s.message());
+    throw kio_exception(EIO, "Attempting to write metadata key '",  obj_path, "' to cluster returned unexpected error ", s);
 }
 
 void FileIo::Close(uint16_t timeout)
@@ -153,15 +152,13 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
         utility::constructChunkKey(chunk_basename, std::numeric_limits<int>::max()),
         max_keys_requested, keys);
     if (!status.ok())
-      throw kio_exception(EIO, "KeyRange request unexpectedly failed for object ",  obj_path,  ": ",
-                          toString(status.statusCode()), status.message());
+      throw kio_exception(EIO, "KeyRange request unexpectedly failed for object ",  obj_path,  ": ", status);
 
     for (auto iter = keys->begin(); iter != keys->end(); ++iter) {
       status = cluster->remove(make_shared<string>(*iter),
                                make_shared<string>(""), true);
       if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-        throw kio_exception(EIO, "Deleting chunk ", *iter, " failed: ",
-                            toString(status.statusCode()), status.message());
+        throw kio_exception(EIO, "Deleting chunk ", *iter, " failed: ", status);
 
 
     }
@@ -177,8 +174,7 @@ void FileIo::Remove(uint16_t timeout)
   KineticStatus status = cluster->remove(make_shared<string>(obj_path),
                                          make_shared<string>(), true);
   if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-    throw kio_exception(EIO, "Could not delete metdata key ", obj_path, ": ",
-                        toString(status.statusCode()), status.message());
+    throw kio_exception(EIO, "Could not delete metdata key ", obj_path, ": ", status);
 }
 
 void FileIo::Sync(uint16_t timeout)
@@ -328,8 +324,8 @@ void FileIo::LastChunkNumber::verify()
                                                  keys);
 
     if (!status.ok())
-      throw kio_exception(EIO, "KeyRange request unexpectedly failed for chunks with base name: ", parent.chunk_basename,
-                          ": ", toString(status.statusCode()), status.message());
+      throw kio_exception(EIO, "KeyRange request unexpectedly failed for chunks with base name: ",
+                          parent.chunk_basename, ": ", status);
   } while (keys->size() == max_keys_requested);
 
   /* Success: get chunk number from last key.*/

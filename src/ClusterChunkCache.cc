@@ -120,6 +120,7 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
 
   /* If cache size approaches capacity, we have to try flushing dirty chunks manually. */
   if (capacity < current_size+owner->cluster->limits().max_value_size) {
+    kio_notice("Cache capacity reached.");
     auto& item = cache.back();
     if (item.chunk->dirty()) {
       try {

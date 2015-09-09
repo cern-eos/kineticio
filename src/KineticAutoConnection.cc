@@ -101,11 +101,9 @@ void KineticAutoConnection::connect()
       connection = std::move(tmpcon);
     }
     else {
-      std::stringstream ss;
-      ss << "Failed building connection to " << options.first.host << ":"
-      << options.first.port << " and " << options.second.host << ":"
-      << options.second.port;
-      status = KineticStatus(StatusCode::CLIENT_IO_ERROR, ss.str());
+      status = KineticStatus(StatusCode::CLIENT_IO_ERROR, utility::Convert::toString(
+          "Failed building connection to ", options.first.host, ":", options.first.port, " and ", options.second.host, ":", options.second.port
+      ));
     }
   }
 }

@@ -5,7 +5,6 @@
 using namespace kio;
 
 bool tshouldLog(const char *name, int level){
-  printf("Yes we should log %s at level %d\n",name,level);
   return true;
 }
 
@@ -18,8 +17,7 @@ SCENARIO("LoggingTest", "[log]"){
 
   GIVEN ("non registered log function") {
     THEN("Not logging a thing.") {
-      printf("This won't log a thing:\n");
-      kio_notice("a notice log");
+      kio_notice("This should not be printed.");
     }
   }
 
@@ -28,13 +26,14 @@ SCENARIO("LoggingTest", "[log]"){
     kio::logfunc_t lf = tlog;
     kio::shouldlogfunc_t slf = tshouldLog;
     kio::Factory::registerLogFunction(lf, slf);
-    THEN("We can log"){
-      printf("This will log: ");
-      kio_notice("a notice log");
-    }
 
     THEN("We can log arbitrary length arbitrary type chains"){
-      kio_notice("Let's go ",1," and a doubel", 1.1, "and a string ", std::string("123"));
+
+      int i = 1;
+      double d = 0.99;
+      std::string s = "'happy'";
+      kinetic::KineticStatus status (kinetic::StatusCode::OK, "Test message.");
+      kio_notice("Integer: ", i," Double: ", d, " String: ", s, " KineticStatus: ", status);
     }
   }
 };

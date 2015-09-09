@@ -7,6 +7,7 @@
 #define KINETICIO_LOGGING_HH
 #include "LoggingException.hh"
 #include "KineticIoFactory.hh"
+#include "Utility.hh"
 #include <mutex>
 #include <sstream>
 #include <syslog.h>
@@ -49,28 +50,10 @@ namespace kio {
       std::lock_guard<std::mutex> lock(mutex);
       if(!logFunction || !shouldLog || !shouldLog(func,level))
         return;
-      std::stringstream message;
-      argsToStream(message, std::forward<Args>(args)...);
-      logFunction(func,file,line,level,message.str().c_str());
+      auto s = utility::Convert::toString(std::forward<Args>(args)...);
+      logFunction(func,file,line,level,s.c_str());
     }
 
-    //--------------------------------------------------------------------------
-    //! Generate a LoggingException accepting variadic arguments
-    //!
-    //! @param func the name of the func attempting to log
-    //! @param file the name of the file containing the call to the log function
-    //! @param line the line in the file containing the call to the log function
-    //! @param errnum the error number that best represents the exception
-    //! @param args an arbitray number of variable type arguments used to
-    //!   generate the exception message
-    //! @return the LoggingException constructed from the input paramters
-    //--------------------------------------------------------------------------
-    template<typename...Args>
-    LoggingException exception(const char* func, const char* file, int line, int errnum, Args&&...args){
-      std::stringstream message;
-      argsToStream(message, std::forward<Args>(args)...);
-      return LoggingException(errnum, func, file, line, message.str());
-    }
 
     //--------------------------------------------------------------------------
     //! Provide access to the static Logger instance.
@@ -81,33 +64,11 @@ namespace kio {
       return l;
     }
 
-   private:
+  private:
     //--------------------------------------------------------------------------
     //! Constructor. Private, access to Logger instance through get() method.
     //--------------------------------------------------------------------------
     explicit Logger(){};
-
-    //--------------------------------------------------------------------------
-    //! Closure of recursive parsing function
-    //! @param stream string stream to store Last parameter
-    //! @param last the last argument to log
-    //--------------------------------------------------------------------------
-    template<typename Last>
-    void argsToStream(std::stringstream& stream, Last&& last) {
-      stream << last;
-    }
-
-    //--------------------------------------------------------------------------
-    //! Recursive function to parse arbitrary number of variable type arguments
-    //! @param stream string stream to store input parameters
-    //! @param first the first of the arguments supplied to the log function
-    //! @param rest the rest of the arguments should be stored in the log message
-    //--------------------------------------------------------------------------
-    template<typename First, typename...Rest >
-    void argsToStream(std::stringstream& stream, First&& first, Rest&&...rest) {
-      stream << first;
-      argsToStream(stream, std::forward<Rest>(rest)...);
-    }
 
   private:
     //! log function to use
@@ -120,14 +81,14 @@ namespace kio {
 }
 
 //! generate a LoggingException, errors are always thrown and can be logged by receiver
-#define kio_exception(err, message...) kio::Logger::get().exception(__FUNCTION__, __FILE__, __LINE__, err, ## message)
+#define kio_exception(err, message...) LoggingException(err, __FUNCTION__, __FILE__, __LINE__, utility::Convert::toString(message));
 
 //! debug macro
-#define kio_debug(message...)   kio::Logger::get().log(__FUNCTION__, __FILE__, __LINE__, LOG_DEBUG, ## message)
+#define kio_debug(message...)   kio::Logger::get().log(__FUNCTION__, __FILE__, __LINE__, LOG_DEBUG, message)
 //! notice macro
-#define kio_notice(message...)  kio::Logger::get().log(__FUNCTION__, __FILE__, __LINE__, LOG_NOTICE, ## message)
+#define kio_notice(message...)  kio::Logger::get().log(__FUNCTION__, __FILE__, __LINE__, LOG_NOTICE, message)
 //! warning macro
-#define kio_warning(message...) kio::Logger::get().log(__FUNCTION__, __FILE__, __LINE__, LOG_WARNING, ## message)
+#define kio_warning(message...) kio::Logger::get().log(__FUNCTION__, __FILE__, __LINE__, LOG_WARNING, message)
 
 
 #endif //KINETICIO_LOGGING_HH

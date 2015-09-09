@@ -32,9 +32,9 @@ ClusterChunk::~ClusterChunk()
 bool ClusterChunk::validateVersion()
 {
   /* See if check is unnecessary based on expiration. */
-  if (std::chrono::duration_cast<std::chrono::milliseconds>(
-      system_clock::now() - timestamp)
-      < expiration_time)
+  using std::chrono::duration_cast;
+  using std::chrono::milliseconds;
+  if (duration_cast<milliseconds>(system_clock::now() - timestamp) < expiration_time)
     return true;
 
   /*If we are reading for the first time from a chunk opened in STANDARD mode,
@@ -65,8 +65,7 @@ void ClusterChunk::getRemoteValue()
   auto status = cluster->get(key, false, version, remote_value);
 
   if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-    throw kio_exception(EIO, "Attempting to read key '",  *key,  "' from cluster returned error message ",
-                        toString(status.statusCode()), status.message());
+    throw kio_exception(EIO, "Attempting to read key '",  *key,  "' from cluster returned error ", status);
 
   /* We read in the current value from the drive. Remember the time. */
   timestamp = system_clock::now();
@@ -153,8 +152,7 @@ void ClusterChunk::flush()
   }
 
   if (!status.ok())
-    throw kio_exception(EIO, "Attempting to write key '",  *key, "' from cluster returned error message ",
-                        toString(status.statusCode()), status.message());
+    throw kio_exception(EIO, "Attempting to write key '",  *key, "' from cluster returned error ", status);
 
   /* Success... we can forget about in-memory changes and set timestamp
      to current time. */
