@@ -107,14 +107,12 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
     return cache.front().chunk;
   }
 
-  /* try to remove non-dirty items from tail of cache & lookup tables if size > target_size.
-   * only traverse last 5% of elements. */
-  auto n = cache.size() / 20 + 1;
-  for(auto it = cache.rbegin(); current_size > target_size && n && it != cache.rend(); it++, n--){
-    if (!it->chunk->dirty()) {
+  /* try to remove non-dirty items from tail of cache & lookup tables if size > target_size. */
+  for(auto it = --cache.end(); current_size > target_size && it != cache.begin(); it--){
+    if(!it->chunk->dirty()){
       current_size -= it->chunk->capacity();
       lookup[it->owner].erase(it->id);
-      cache.erase(it.base());
+      it = cache.erase(it);
     }
   }
 
