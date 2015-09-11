@@ -1,9 +1,9 @@
 #include <stdlib.h>
 #include <fstream>
 #include <sstream>
+#include "Logging.hh"
 #include "ClusterMap.hh"
 #include "KineticCluster.hh"
-#include "LoggingException.hh"
 
 using namespace kio;
 
@@ -93,21 +93,18 @@ std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string &id)
     listener.reset(new SocketListener());
 
   if (!clustermap.count(id))
-    throw LoggingException(ENODEV, __FUNCTION__, __FILE__, __LINE__,
-                           "Nonexisting cluster id '" + id + "' requested.");
+    throw kio_exception(ENODEV, "Nonexisting cluster id requested: ", id);
 
   KineticClusterInfo &ki = clustermap.at(id);
   if (!ki.cluster) {
     std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> cops;
     for (auto wwn = ki.drives.begin(); wwn != ki.drives.end(); wwn++) {
       if (!drivemap.count(*wwn))
-        throw LoggingException(ENODEV, __FUNCTION__, __FILE__, __LINE__,
-                               "Nonexisting drive wwn '" + *wwn + "' requested.");
+        throw kio_exception(ENODEV, "Nonexisting drive wwn requested: ", *wwn);
       cops.push_back(drivemap.at(*wwn));
     }
 
-    auto ectype = std::to_string((long long int) ki.numData) + "-" +
-                  std::to_string((long long int) ki.numParity);
+    auto ectype = utility::Convert::toString(ki.numData, "-", ki.numParity);
     std::shared_ptr<ErasureCoding> ec;
     try{
       ec = ecCache->get(ectype);

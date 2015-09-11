@@ -1,6 +1,7 @@
 #include "KineticAutoConnection.hh"
 #include "LoggingException.hh"
 #include <sstream>
+#include <Logging.hh>
 
 using namespace kinetic;
 using namespace kio;
@@ -50,9 +51,7 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
     auto function = std::bind(&KineticAutoConnection::connect, this);
     bg.try_run(function);
   }
-  throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__,
-                           "Invalid connection: " + status.message());
-
+  throw kio_exception(ENXIO, status.message());
 }
 
 
@@ -102,11 +101,9 @@ void KineticAutoConnection::connect()
       connection = std::move(tmpcon);
     }
     else {
-      std::stringstream ss;
-      ss << "Failed building connection to " << options.first.host << ":"
-      << options.first.port << " and " << options.second.host << ":"
-      << options.second.port;
-      status = KineticStatus(StatusCode::CLIENT_IO_ERROR, ss.str());
+      status = KineticStatus(StatusCode::CLIENT_IO_ERROR, utility::Convert::toString(
+          "Failed building connection to ", options.first.host, ":", options.first.port, " and ", options.second.host, ":", options.second.port
+      ));
     }
   }
 }

@@ -1,8 +1,6 @@
-#build directory
 build/
-
-#netbeans 
+discarded_code/
+doc/
+test/catch.hpp
 nbproject/
-
-#clion
 .idea/

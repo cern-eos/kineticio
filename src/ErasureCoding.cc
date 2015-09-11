@@ -1,4 +1,5 @@
 #include "ErasureCoding.hh"
+#include "Utility.hh"
 #include <isa-l.h>
 #include <sstream>
 #include <string.h>
@@ -100,11 +101,12 @@ std::string ErasureCoding::getErrorPattern(
     const std::vector<std::shared_ptr<const std::string> > &stripe
 ) const
 {
+  using utility::Convert;
+
   if (stripe.size() != nData + nParity)
-    throw std::invalid_argument("ErasureCoding: Illegal stripe size: Expected "
-                           + std::to_string((long long int) nData + nParity) + ", observed "
-                           + std::to_string((long long int) stripe.size()) + "."
-    );
+    throw std::invalid_argument( Convert::toString(
+        "ErasureCoding: Illegal stripe size. Expected ", nData + nParity, ", observed ", stripe.size()
+    ));
 
   std::string pattern(nData + nParity, '0');
   int blockSize = 0;
@@ -120,19 +122,16 @@ std::string ErasureCoding::getErrorPattern(
       if (!blockSize)
         blockSize = stripe[i]->size();
       if (blockSize != stripe[i]->size())
-        throw std::invalid_argument(
-            "ErasureCoding: Non-static block sizes, observed one block with a size of "
-            + std::to_string((long long int) blockSize) + " bytes and another with a size of "
-            + std::to_string((long long int) stripe[i]->size()) + " bytes."
-        );
+        throw std::invalid_argument( Convert::toString(
+            "ErasureCoding: Non-static block sizes, observed one block with a size of ", blockSize, " bytes "
+            "and another with a size of ", stripe[i]->size(), " bytes."
+        ));
     }
   }
   if (nErrs > nParity)
-    throw std::invalid_argument(
-        "ErasureCoding: More errors than parity blocks. "
-        + std::to_string((long long int) nErrs) + " errors, "
-        + std::to_string((long long int) nParity) + " parities."
-    );
+    throw std::invalid_argument( Convert::toString(
+        "ErasureCoding: More errors than parity blocks. ", nErrs, " errors, ", nParity, " parities."
+    ));
 
   return pattern;
 }

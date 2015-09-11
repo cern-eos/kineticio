@@ -1,8 +1,8 @@
 #include "ClusterChunkCache.hh"
 #include "FileIo.hh"
 #include "Utility.hh"
+#include "Logging.hh"
 #include <thread>
-#include <LoggingException.hh>
 
 using namespace kio;
 
@@ -118,15 +118,14 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
 
   /* If cache size approaches capacity, we have to try flushing dirty chunks manually. */
   if (capacity < current_size+owner->cluster->limits().max_value_size) {
+    kio_notice("Cache capacity reached.");
     auto& item = cache.back();
     if (item.chunk->dirty()) {
       try {
         item.chunk->flush();
       }
       catch (const std::exception& e) {
-          throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
-                  "Failed freeing cache space:" + std::string(e.what())
-          );
+          throw kio_exception(EIO, "Failed freeing cache space: ",e.what());
 
        // alternatively, splice into front and retry next cache element....
        // cache.splice(cache.begin(), cache, --cache.end());

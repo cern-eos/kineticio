@@ -9,43 +9,9 @@
 /*----------------------------------------------------------------------------*/
 #include <string>
 #include <sstream>
-#include <iomanip>
-#include <uuid/uuid.h>
 #include <kinetic/kinetic.h>
 
-namespace kio {
-
-
-static std::string toString(kinetic::StatusCode c)
-{
-  using kinetic::StatusCode;
-  switch(c){
-    case StatusCode::OK:
-      return "OK";
-    case StatusCode::CLIENT_IO_ERROR:
-      return "CLIENT_IO_ERROR";
-    case StatusCode::CLIENT_SHUTDOWN:
-      return "CLIENT_SHUTDOWN";
-    case StatusCode::CLIENT_INTERNAL_ERROR:
-      return "CLIENT_INTERNAL_ERROR";
-    case StatusCode::CLIENT_RESPONSE_HMAC_VERIFICATION_ERROR:
-      return "CLIENT_RESPONSE_HMAC_VERIFICATION_ERROR";
-    case StatusCode::REMOTE_HMAC_ERROR:
-      return "REMOTE_HMAC_ERROR";
-    case StatusCode::REMOTE_NOT_AUTHORIZED:
-      return "REMOTE_NOT_AUTHORIZED";
-    case StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH:
-      return "REMOTE_CLUSTER_VERSION_MISMATCH";
-    case StatusCode::REMOTE_NOT_FOUND:
-      return "REMOTE_NOT_FOUND";
-    case StatusCode::REMOTE_VERSION_MISMATCH:
-      return "REMOTE_VERSION_MISMATCH";
-    default:
-      return "OTHER_ERROR (code == " + std::to_string((long long int) static_cast<int>(c)) + ")";
-  }
-}
-
-namespace utility {
+namespace kio { namespace utility {
 
   //--------------------------------------------------------------------------
   //! Create the kinetic key from the supplied path and chunk number.
@@ -54,15 +20,7 @@ namespace utility {
   //! @param chunk_number the chunk number
   //! @return the cluster key for the requested chunk
   //--------------------------------------------------------------------------
-  static std::shared_ptr<const std::string> constructChunkKey(
-      const std::string& base,
-      int chunk_number
-  )
-  {
-    std::ostringstream ss;
-    ss << base << "_" << std::setw(10) << std::setfill('0') << chunk_number;
-    return std::make_shared<const std::string>(ss.str());
-  }
+  std::shared_ptr<const std::string> constructChunkKey(const std::string& base, int chunk_number);
 
   //--------------------------------------------------------------------------
   //! Extract the cluster id from the supplied eos path.
@@ -70,14 +28,7 @@ namespace utility {
   //! @param path eos kinetic path of the form kinetic:ID:path
   //! @return the extracted cluster id
   //--------------------------------------------------------------------------
-  static std::string extractClusterID(
-      const std::string& path
-  )
-  {
-    size_t id_start = path.find_first_of(':') + 1;
-    size_t id_end   = path.find_first_of(':', id_start);
-    return path.substr(id_start, id_end-id_start);
-  }
+  std::string extractClusterID(const std::string& path);
 
   //--------------------------------------------------------------------------
   //! Constructs a uuid string containing the supplied size attribute.
@@ -85,21 +36,7 @@ namespace utility {
   //! @param size size attribute to encode in the returned uuid
   //! @return a uuid string
   //--------------------------------------------------------------------------
-  static std::shared_ptr<const std::string> uuidGenerateEncodeSize(
-      std::size_t size
-  )
-  {
-    uuid_t uuid;
-    uuid_generate(uuid);
-
-    std::ostringstream ss;
-    ss << std::setw(10) << std::setfill('0') << size;
-
-    return std::make_shared<std::string>(
-        ss.str() +
-        std::string(reinterpret_cast<const char *>(uuid), sizeof(uuid_t))
-    );
-  }
+  std::shared_ptr<const std::string> uuidGenerateEncodeSize(std::size_t size);
 
   //--------------------------------------------------------------------------
   //! Decode the size attribute encoded in the supplied uuid string, which
@@ -108,18 +45,71 @@ namespace utility {
   //! @param uuid the uuid string
   //! @return the size attribute encoded in the uuid string
   //--------------------------------------------------------------------------
-  static std::size_t uuidDecodeSize(
-      const std::shared_ptr<const std::string>& uuid
-  )
-  {
-    if(!uuid || uuid->size() != 10 + sizeof(uuid_t))
-      throw std::invalid_argument("invalid version supplied."); 
-    std::string size(uuid->substr(0,10));
-    return atoi(size.c_str());
-  }
+  std::size_t uuidDecodeSize(const std::shared_ptr<const std::string>& uuid);
 
-}
-}
 
-#endif	/* __PATHUTIL_HH__ */
+  //--------------------------------------------------------------------------
+  //! Overloading operator<< for kinetic::StatusCode
+  //!
+  //! @param os the stream where a string representation of the status code
+  //!   should be appended.
+  //! @param c the input status code
+  //--------------------------------------------------------------------------
+  std::ostream& operator<<(std::ostream& os, const kinetic::StatusCode& c);
+
+  //--------------------------------------------------------------------------
+  //! Overloading operator<< for kinetic::KineticStatus. This will append
+  //! both the contained status code and status message to the provided
+  //! string stream.
+  //!
+  //! @param os the output stream
+  //! @param s the input status code
+  //--------------------------------------------------------------------------
+  std::ostream& operator<<(std::ostream& os, const kinetic::KineticStatus& s);
+
+  //--------------------------------------------------------------------------
+  //! Anything-to-string conversion, the only reason to put this in its own
+  //! class is to keep the stringstream parsing methods out of the public
+  //! namespace.
+  //--------------------------------------------------------------------------
+  class Convert{
+  public:
+      //--------------------------------------------------------------------------
+      //! Convert an arbitrary number of arguments of variable type to a single
+      //! std::string.
+      //!
+      //! @param args the input arguments to convert to string.
+      //--------------------------------------------------------------------------
+      template<typename...Args>
+      static std::string toString(Args&&...args){
+        std::stringstream s;
+        argsToStream(s, std::forward<Args>(args)...);
+        return s.str();
+      }
+  private:
+      //--------------------------------------------------------------------------
+      //! Closure of recursive parsing function
+      //! @param stream string stream to store Last parameter
+      //! @param last the last argument to log
+      //--------------------------------------------------------------------------
+      template<typename Last>
+      static void argsToStream(std::stringstream& stream, Last&& last) {
+        stream << last;
+      }
+
+      //--------------------------------------------------------------------------
+      //! Recursive function to parse arbitrary number of variable type arguments
+      //! @param stream string stream to store input parameters
+      //! @param first the first of the arguments supplied to the log function
+      //! @param rest the rest of the arguments should be stored in the log message
+      //--------------------------------------------------------------------------
+      template<typename First, typename...Rest >
+      static void argsToStream(std::stringstream& stream, First&& first, Rest&&...rest) {
+        stream << first;
+        argsToStream(stream, std::forward<Rest>(rest)...);
+      }
+  };
+}}
+
+#endif	/* __KINETICIO_UTILITY_HH__ */
 

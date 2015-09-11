@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <Logging.hh>
 #include "FileIo.hh"
 #include "ClusterMap.hh"
 #include "LoggingException.hh"
@@ -40,19 +41,20 @@ void FileIo::Open(const std::string &p, int flags,
   /* Put the metadata key... if it already exists the operation will fail with
    * a version missmatch error, which is fine... */
   shared_ptr<const string> version_out;
-  KineticStatus s = cluster->put(
+  auto s = cluster->put(
       make_shared<string>(obj_path),
       make_shared<const string>(),
       make_shared<const string>(),
       false,
       version_out);
+
   if (s.ok())
     lastChunkNumber.set(0);
   else if (s.statusCode() != StatusCode::REMOTE_VERSION_MISMATCH)
-    throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
-                           "Attempting to write metadata key '" + obj_path + "' to cluster "
-                           "returned unexpected error: " +toString(s.statusCode())+" "+s.message());
+    throw kio_exception(EIO, "Attempting to write metadata key '", obj_path,
+                        "' to cluster returned unexpected error ", s);
 }
+
 
 void FileIo::Close(uint16_t timeout)
 {
@@ -68,8 +70,7 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
                           int length, FileIo::rw mode, uint16_t timeout)
 {
   if (!cluster)
-    throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__,
-                           "No cluster set for FileIO object.");
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
 
   /* Delay response in case of cache pressure in order to throttle requests in high
    * pressure scenarios. For now, we simply delay for a percentage of the timeout time. */
@@ -139,8 +140,7 @@ int64_t FileIo::Write(long long offset, const char *buffer,
 void FileIo::Truncate(long long offset, uint16_t timeout)
 {
   if (!cluster)
-    throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__,
-                           "No cluster set for FileIO object.");
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
 
   const size_t chunk_capacity = cluster->limits().max_value_size;
   int chunk_number = offset / chunk_capacity;
@@ -165,16 +165,13 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
         utility::constructChunkKey(chunk_basename, std::numeric_limits<int>::max()),
         max_keys_requested, keys);
     if (!status.ok())
-      throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
-                             "KeyRange request unexpectedly failed for object " + obj_path + ": "
-                             +toString(status.statusCode())+" "+status.message());
+      throw kio_exception(EIO, "KeyRange request unexpectedly failed for object ",  obj_path,  ": ", status);
 
     for (auto iter = keys->begin(); iter != keys->end(); ++iter) {
       status = cluster->remove(make_shared<string>(*iter),
                                make_shared<string>(""), true);
       if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-        throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
-                               "Deleting chunk " + *iter + " failed: " +toString(status.statusCode())+" "+status.message());
+        throw kio_exception(EIO, "Deleting chunk ", *iter, " failed: ", status);
     }
   } while (keys->size() == max_keys_requested);
 
@@ -188,15 +185,13 @@ void FileIo::Remove(uint16_t timeout)
   KineticStatus status = cluster->remove(make_shared<string>(obj_path),
                                          make_shared<string>(), true);
   if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-    throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
-                           "Could not delete metdata key " + obj_path + ": " +toString(status.statusCode())+" "+status.message());
+    throw kio_exception(EIO, "Could not delete metdata key ", obj_path, ": ", status);
 }
 
 void FileIo::Sync(uint16_t timeout)
 {
   if (!cluster)
-    throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__,
-                           "No cluster set for FileIO object.");
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
 
   cache.flush(this);
 }
@@ -204,8 +199,7 @@ void FileIo::Sync(uint16_t timeout)
 void FileIo::Stat(struct stat *buf, uint16_t timeout)
 {
   if (!cluster)
-    throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__,
-                           "No cluster set for FileIO object.");
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
 
   lastChunkNumber.verify();
   std::shared_ptr<ClusterChunk> last_chunk = cache.get(this, lastChunkNumber.get(), ClusterChunk::Mode::STANDARD);
@@ -220,8 +214,7 @@ void FileIo::Stat(struct stat *buf, uint16_t timeout)
 void FileIo::Statfs(const char *p, struct statfs *sfs)
 {
   if (obj_path.length() && obj_path.compare(p))
-    throw LoggingException(EINVAL, __FUNCTION__, __FILE__, __LINE__,
-                           "Object concurrently used for both Statfs and FileIO");
+    throw kio_exception(EINVAL, "Object concurrently used for both Statfs and FileIO: ", obj_path);
 
   if (!cluster) {
     cluster = ClusterMap::getInstance().getCluster(utility::extractClusterID(p));
@@ -230,8 +223,7 @@ void FileIo::Statfs(const char *p, struct statfs *sfs)
 
   ClusterSize s = cluster->size();
   if (!s.bytes_total)
-    throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
-                           "Could not obtain cluster size values.");
+    throw kio_exception(EIO, "Could not obtain cluster size values: ", obj_path);
 
   /* Minimal allocated block size. Set to 4K because that's the
    * maximum accepted value by Linux. */
@@ -343,9 +335,8 @@ void FileIo::LastChunkNumber::verify()
                                                  keys);
 
     if (!status.ok())
-      throw LoggingException(EIO, __FUNCTION__, __FILE__, __LINE__,
-                             "KeyRange request unexpectedly failed for chunks with base name: "
-                             + parent.chunk_basename + ": " +toString(status.statusCode())+" "+status.message());
+      throw kio_exception(EIO, "KeyRange request unexpectedly failed for chunks with base name: ",
+                          parent.chunk_basename, ": ", status);
   } while (keys->size() == max_keys_requested);
 
   /* Success: get chunk number from last key.*/
@@ -371,7 +362,6 @@ void FileIo::LastChunkNumber::verify()
       make_shared<const string>(parent.obj_path),
       true, version, value);
   if (!status.ok())
-    throw LoggingException(ENOENT, __FUNCTION__, __FILE__, __LINE__,
-                           "File " + parent.obj_path + " does not exist.");
+    throw kio_exception(ENOENT, "File does not exist: ", parent.obj_path);
 }
 

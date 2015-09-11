@@ -1,9 +1,9 @@
 #include "KineticCluster.hh"
-#include "LoggingException.hh"
 #include "Utility.hh"
 #include <zlib.h>
 #include <set>
 #include <drive_log.h>
+#include "Logging.hh"
 
 using std::unique_ptr;
 using std::shared_ptr;
@@ -40,12 +40,10 @@ KineticCluster::KineticCluster(
     auto rmap = execute(ops, *sync);
     if (rmap[StatusCode::OK]) {
       const auto& l = std::static_pointer_cast<GetLogCallback>(ops.front().callback)->getLog()->limits;
-      if(l.max_value_size < block_size)
-        throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__,
-                               "configured block size of " + std::to_string((long long int)block_size) +
-                               "is smaller than maximum drive block size of " +
-                               std::to_string((long long int)l.max_value_size)
-        );
+      if(l.max_value_size < block_size) {
+        throw kio_exception(ENXIO, "configured block size of ", block_size,
+                                   "is smaller than maximum drive block size of ", l.max_value_size);
+      }
       clusterlimits.max_key_size = l.max_key_size;
       clusterlimits.max_value_size = block_size * nData;
       clusterlimits.max_version_size = l.max_version_size;
@@ -53,7 +51,7 @@ KineticCluster::KineticCluster(
     }
   }
   if (!clusterlimits.max_key_size || !clusterlimits.max_value_size || !clusterlimits.max_version_size) {
-    throw LoggingException(ENXIO, __FUNCTION__, __FILE__, __LINE__, "Failed obtaining cluster limits!");
+    throw kio_exception(ENXIO, "Failed obtaining cluster limits!");
   }
   /* Start a bg update of cluster capacity */
   size();
@@ -339,8 +337,9 @@ KineticStatus KineticCluster::range(
       return KineticStatus(it->first, "");
     }
   }
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR,
-                       "Confusion when attempting to get range from key" + *start_key + " to " + *end_key
+  return KineticStatus(
+      StatusCode::CLIENT_IO_ERROR,
+      "Confusion when attempting to get range from key" + *start_key + " to " + *end_key
   );
 }
 
@@ -355,8 +354,10 @@ void KineticCluster::updateSize()
   std::lock_guard<std::mutex> lock(clustersize_mutex);
   clustersize.bytes_total = clustersize.bytes_free = 0;
   for (auto o = ops.begin(); o != ops.end(); o++) {
-    if (!o->callback->getResult().ok())
+    if (!o->callback->getResult().ok()) {
+      kio_notice("Could not obtain capacity information for a drive: ", o->callback->getResult());
       continue;
+    }
     const auto& c = std::static_pointer_cast<GetLogCallback>(o->callback)->getLog()->capacity;
     clustersize.bytes_total += c.nominal_capacity_in_bytes;
     clustersize.bytes_free += c.nominal_capacity_in_bytes - (c.nominal_capacity_in_bytes * c.portion_full);
@@ -429,6 +430,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
         ops[i].callback->OnResult(status);
         ops[i].connection->setError(status);
+        kio_warning("Failed executing async operation ", i, " of ", ops.size(), " ", status);
       }
     }
 
@@ -443,6 +445,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         try {
           ops[i].connection->get()->RemoveHandler(hkeys[i]);
         } catch (...) { }
+        kio_warning("Network timeout for operation ", i, " of ", ops.size());
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
         ops[i].callback->OnResult(status);
         ops[i].connection->setError(status);

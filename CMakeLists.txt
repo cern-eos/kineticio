@@ -37,7 +37,7 @@ endif (CMAKE_COMPILER_IS_GNUCXX)
 # Set CXX flags
 if(DEBUG)
     message("Building DEBUG configuration, switch with -DDEBUG=false argument")
-    set(CMAKE_CXX_FLAGS "--std=c++0x -g -Wno-pragmas")
+    set(CMAKE_CXX_FLAGS "--std=c++0x -g")
 else()
     message("Building RELEASE configuration, switch with -DDEBUG=true argument")
     set(CMAKE_CXX_FLAGS "--std=c++0x -O2")
@@ -68,6 +68,7 @@ set(kineticio_SRC
     src/ErasureCoding.cc
     src/SequencePatternRecognition.cc
     src/BackgroundOperationHandler.cc
+    src/Utility.cc
 )
 set(kineticio_LIB
     ${JSONC_LIBRARIES}
@@ -88,16 +89,14 @@ install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
 if(DEBUG)
     include(ExternalProject)
     ExternalProject_add(catch
-      PREFIX catch
-      GIT_REPOSITORY https://github.com/philsquared/Catch
-      GIT_TAG v1.2.1-develop.11
-      UPDATE_COMMAND ""
-      CONFIGURE_COMMAND ""
-      BUILD_IN_SOURCE 1
-      BUILD_COMMAND ""
-      INSTALL_COMMAND cp single_include/catch.hpp  ${kineticio_SOURCE_DIR}/test/
+       PREFIX catch
+       DOWNLOAD_COMMAND wget -q https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp -O catch.hpp
+       CONFIGURE_COMMAND ""
+       BUILD_IN_SOURCE 1
+       BUILD_COMMAND ""
+       INSTALL_COMMAND ""
     )
-    SET_DIRECTORY_PROPERTIES(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${kineticio_SOURCE_DIR}/test/catch.hpp")
+    include_directories(${kineticio_BINARY_DIR}/catch/src)
 
     add_executable(kinetic-test
         ${kineticio_SRC}
@@ -112,10 +111,12 @@ if(DEBUG)
         test/SequencePatternRecognitionTest.cc
         test/SimulatorController.cc
         test/LRUCacheTest.cc
+        test/LoggingTest.cc
     )
     target_link_libraries(kinetic-test
        ${kineticio_LIB}
        ${CMAKE_THREAD_LIBS_INIT}
     )
+    add_dependencies(kinetic-test catch)
 endif(DEBUG)
 
