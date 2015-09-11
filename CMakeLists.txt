@@ -37,7 +37,7 @@ endif (CMAKE_COMPILER_IS_GNUCXX)
 # Set CXX flags
 if(DEBUG)
     message("Building DEBUG configuration, switch with -DDEBUG=false argument")
-    set(CMAKE_CXX_FLAGS "--std=c++0x -g -Wno-pragmas")
+    set(CMAKE_CXX_FLAGS "--std=c++0x -g")
 else()
     message("Building RELEASE configuration, switch with -DDEBUG=true argument")
     set(CMAKE_CXX_FLAGS "--std=c++0x -O2")
