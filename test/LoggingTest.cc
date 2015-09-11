@@ -21,7 +21,7 @@ static void tlog(const char* func, const char* file, int line, int priority, con
       printf("WARNING: ");
       break;
   }
-  printf("%s %s (%s:%d)\n",msg,func,file,line);
+  printf("%s /// %s (%s:%d)\n",msg,func,file,line);
 }
 
 class LogFunctionInitializer{

@@ -47,6 +47,7 @@ namespace kio { namespace utility {
   //--------------------------------------------------------------------------
   std::size_t uuidDecodeSize(const std::shared_ptr<const std::string>& uuid);
 
+
   //--------------------------------------------------------------------------
   //! Overloading operator<< for kinetic::StatusCode
   //!
@@ -62,7 +63,7 @@ namespace kio { namespace utility {
   //! string stream.
   //!
   //! @param os the output stream
-  //! @param s the input status
+  //! @param s the input status code
   //--------------------------------------------------------------------------
   std::ostream& operator<<(std::ostream& os, const kinetic::KineticStatus& s);
 

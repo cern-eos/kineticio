@@ -51,7 +51,9 @@ void FileIo::Open(const std::string &p, int flags,
   if (s.ok())
     lastChunkNumber.set(0);
   else if (s.statusCode() != StatusCode::REMOTE_VERSION_MISMATCH)
-    throw kio_exception(EIO, "Attempting to write metadata key '",  obj_path, "' to cluster returned unexpected error ", s);
+    throw kio_exception(EIO, "Attempting to write metadata key '", obj_path,
+                        "' to cluster returned unexpected error ", s);
+}
 
 
 void FileIo::Close(uint16_t timeout)
@@ -170,8 +172,6 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
                                make_shared<string>(""), true);
       if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
         throw kio_exception(EIO, "Deleting chunk ", *iter, " failed: ", status);
-
-
     }
   } while (keys->size() == max_keys_requested);
 

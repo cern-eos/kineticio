@@ -35,8 +35,8 @@ static std::string toString(const kinetic::StatusCode& c)
 
 std::ostream& kio::utility::operator<<(std::ostream& os, const kinetic::StatusCode& c)
 {
-os << toString(c);
-return os;
+  os << toString(c);
+  return os;
 }
 
 std::ostream& kio::utility::operator<<(std::ostream& os, const kinetic::KineticStatus& s)

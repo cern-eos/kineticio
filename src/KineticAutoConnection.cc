@@ -51,7 +51,7 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
     auto function = std::bind(&KineticAutoConnection::connect, this);
     bg.try_run(function);
   }
-  throw kio_exception(ENXIO, status);
+  throw kio_exception(ENXIO, status.message());
 }
 
 
