@@ -45,6 +45,12 @@ std::ostream& kio::utility::operator<<(std::ostream& os, const kinetic::KineticS
   return os;
 }
 
+std::ostream& kio::utility::operator<<(std::ostream& os, const std::chrono::seconds& s)
+{
+  os << s.count() << " seconds";
+  return os;
+}
+
 
 std::shared_ptr<const std::string> utility::constructChunkKey(const std::string& base, int chunk_number)
 {

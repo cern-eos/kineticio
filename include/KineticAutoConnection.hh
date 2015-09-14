@@ -29,7 +29,7 @@ public:
   //!
   //! @param status the error status that occurred.
   //--------------------------------------------------------------------------
-  void setError(kinetic::KineticStatus status);
+  void setError();
 
   //--------------------------------------------------------------------------
   //! Return copy of underlying connection pointer, reconnect if indicated by
@@ -39,6 +39,8 @@ public:
   //! @return copy of underlying connection pointer
   //--------------------------------------------------------------------------
   std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> get();
+
+
 
   //--------------------------------------------------------------------------
   //! Constructor.
@@ -59,18 +61,20 @@ public:
   ~KineticAutoConnection();
 
 private:
-  //! the underlying connectionstd::once_flag
+  //! the underlying connection
   std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> connection;
+  //! healthy if the underlying connection is believed to be currently working
+  bool healthy;
   //! the fd of an open connection
   int fd;
   //! the two interfaces of the target drive, first interface will be prioritized
   std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > options;
+  //! string representation of connection options for logging purposes
+  std::string logstring;
   //! timestamp of the last connection attempt
   std::chrono::system_clock::time_point timestamp;
   //! minimum time between reconnection attempts
   std::chrono::seconds ratelimit;
-  //! status of last reconnect attempt
-  kinetic::KineticStatus status;
   //! thread safety
   std::mutex mutex;
   //! handle reconnects in the background

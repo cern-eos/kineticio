@@ -152,10 +152,9 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
 
 double ClusterChunkCache::pressure()
 {
-  std::lock_guard<std::mutex> cachelock(cache_mutex);
   if(current_size <= target_size)
     return 0.0;
-  return (current_size-target_size) / (double) (capacity-target_size);
+  return (current_size-target_size) / static_cast<double>(capacity-target_size);
 }
 
 void ClusterChunkCache::do_flush(kio::FileIo *owner, std::shared_ptr<kio::ClusterChunk> chunk)
@@ -185,6 +184,9 @@ void do_readahead(std::shared_ptr<kio::ClusterChunk> chunk)
 
 void ClusterChunkCache::readahead(kio::FileIo* owner, int chunknumber)
 {
+  /* Don't do readahead if cache is already under pressure. */
+  if(pressure() > 0.1)
+    return;
   auto chunk = get(owner, chunknumber, ClusterChunk::Mode::STANDARD, RequestMode::READAHEAD);
   auto fun = std::bind(do_readahead, chunk);
   bg.try_run(fun);

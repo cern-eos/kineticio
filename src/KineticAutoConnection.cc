@@ -10,12 +10,14 @@ KineticAutoConnection::KineticAutoConnection(
     SocketListener &sw,
     std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> o,
     std::chrono::seconds r) :
-    connection(), fd(0), options(o), timestamp(), ratelimit(r),
-    status(kinetic::StatusCode::CLIENT_INTERNAL_ERROR, "No Connection attempt yet."),
+    connection(), healthy(false), fd(0), options(o), timestamp(), ratelimit(r),
     mutex(), bg(1), sockwatch(sw), mt()
 {
   std::random_device rd;
   mt.seed(rd());
+  logstring = utility::Convert::toString(
+      "(",options.first.host, ":", options.first.port, " and ", options.second.host, ":", options.second.port,")"
+  );
 }
 
 KineticAutoConnection::~KineticAutoConnection()
@@ -25,14 +27,14 @@ KineticAutoConnection::~KineticAutoConnection()
   }
 }
 
-void KineticAutoConnection::setError(kinetic::KineticStatus s)
+void KineticAutoConnection::setError()
 {
   std::lock_guard<std::mutex> lock(mutex);
-  status = s;
   if (fd) {
     sockwatch.unsubscribe(fd);
     fd = 0;
   }
+  healthy = false;
 }
 
 std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConnection::get()
@@ -40,18 +42,21 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
   std::call_once(intial_connect, &KineticAutoConnection::connect, this);
 
   std::lock_guard<std::mutex> lock(mutex);
-  if (status.ok())
+  if (healthy)
     return connection;
 
   /* Rate limit connection attempts. */
   using std::chrono::system_clock;
   using std::chrono::duration_cast;
   using std::chrono::seconds;
-  if (duration_cast<seconds>(system_clock::now() - timestamp) > ratelimit) {
+  auto duration = duration_cast<seconds>(system_clock::now() - timestamp);
+  if (duration > ratelimit) {
     auto function = std::bind(&KineticAutoConnection::connect, this);
     bg.try_run(function);
+    kio_debug("Attempting background reconnect. Last reconnect attempt hast been",
+               duration," ago. ratelimit is ", ratelimit);
   }
-  throw kio_exception(ENXIO, status.message());
+  throw kio_exception(ENXIO, "Error status set for connection ", logstring);
 }
 
 
@@ -93,17 +98,12 @@ void KineticAutoConnection::connect()
       try{
         sockwatch.subscribe(tmpfd, this);
       }catch(const std::exception& e){
-        status=KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
+        kio_warning(e.what());
         throw e;
       }
       fd = tmpfd;
-      status = KineticStatus(StatusCode::OK, "");
       connection = std::move(tmpcon);
-    }
-    else {
-      status = KineticStatus(StatusCode::CLIENT_IO_ERROR, utility::Convert::toString(
-          "Failed building connection to ", options.first.host, ":", options.first.port, " and ", options.second.host, ":", options.second.port
-      ));
+      healthy=true;
     }
   }
 }

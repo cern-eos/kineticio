@@ -423,13 +423,13 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         fd_set a;
         int fd;
         if (!con->Run(&a, &a, &fd)) {
-          throw std::runtime_error("Connection unusable.");
+          throw std::runtime_error("Connection::Run(...) returned false in KineticCluster::execute.");
         }
       }
       catch (const std::exception& e) {
         auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
         ops[i].callback->OnResult(status);
-        ops[i].connection->setError(status);
+        ops[i].connection->setError();
         kio_warning("Failed executing async operation ", i, " of ", ops.size(), " ", status);
       }
     }
@@ -448,7 +448,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         kio_warning("Network timeout for operation ", i, " of ", ops.size());
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
         ops[i].callback->OnResult(status);
-        ops[i].connection->setError(status);
+        ops[i].connection->setError();
       }
 
       /* Retry operations with CLIENT_IO_ERROR code result. Something went wrong with the connection,

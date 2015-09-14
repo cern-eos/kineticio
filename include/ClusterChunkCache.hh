@@ -133,7 +133,7 @@ private:
   const std::size_t capacity;
 
   //! current size of the cache
-  std::size_t current_size;
+  std::atomic<std::size_t> current_size;
 
   //! handle background readahead and flush requests
   BackgroundOperationHandler bg;

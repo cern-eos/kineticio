@@ -5,6 +5,12 @@ using namespace kio;
 
 SCENARIO("LRUCache Test.", "[LRU]")
 {
+  GIVEN ("An empty LRU cache") {
+    LRUCache<int, std::string> cache(3);
+    THEN("requesting an element throws"){
+      REQUIRE_THROWS_AS(cache.get(4), std::out_of_range);
+    }
+  }
   GIVEN ("A filled LRU cache") {
     LRUCache<int, std::string> cache(3);
     cache.add(1, "one");

@@ -41,31 +41,31 @@ ClusterMap::ClusterMap()
   /* get file contents */
   std::string location_data = readfile(location);
   if (location_data.empty()) {
-    fprintf(stderr, "File '%s' could not be read in.\n", location);
+    fprintf(stderr, "LIBKINETICIO: File '%s' could not be read in.\n", location);
     return;
   }
   std::string security_data = readfile(security);
   if (security_data.empty()) {
-    fprintf(stderr, "File '%s' could not be read in.\n", security);
+    fprintf(stderr, "LIBKINETICIO: File '%s' could not be read in.\n", security);
     return;
   }
   std::string cluster_data = readfile(cluster);
   if (cluster_data.empty()) {
-    fprintf(stderr, "File '%s' could not be read in.\n", cluster);
+    fprintf(stderr, "LIBKINETICIO: File '%s' could not be read in.\n", cluster);
     return;
   }
 
   /* parse files */
   if (parseJson(location_data, filetype::location)) {
-    fprintf(stderr, "Error while parsing location json file '%s\n", location);
+    fprintf(stderr, "LIBKINETICIO: Error while parsing location json file '%s\n", location);
     return;
   }
   if (parseJson(security_data, filetype::security)) {
-    fprintf(stderr, "Error while parsing security json file '%s\n", security);
+    fprintf(stderr, "LIBKINETICIO: Error while parsing security json file '%s\n", security);
     return;
   }
   if (parseJson(cluster_data, filetype::cluster)) {
-    fprintf(stderr, "Error while parsing cluster json file '%s\n", cluster);
+    fprintf(stderr, "LIBKINETICIO: Error while parsing cluster json file '%s\n", cluster);
     return;
   }
 
@@ -85,8 +85,11 @@ ClusterChunkCache& ClusterMap::getCache()
   return *dataCache;
 }
 
-std::shared_ptr<ClusterInterface>  ClusterMap::getCluster(const std::string &id)
+std::shared_ptr<ClusterInterface> ClusterMap::getCluster(const std::string &id)
 {
+  if(!ecCache)
+    throw kio_exception(EACCES, "ClusterMap not properly initialized. Check your json files.");
+
   std::unique_lock<std::mutex> locker(mutex);
 
   if (!listener)
@@ -204,6 +207,7 @@ int ClusterMap::parseClusterInformation(struct json_object *cluster)
   if (!json_object_object_get_ex(cluster, "minReconnectInterval", &tmp))
     return -EINVAL;
   cinfo.min_reconnect_interval = std::chrono::seconds(json_object_get_int(tmp));
+  printf("TMP: Read in %d seconds of connection ratelimit.\n",cinfo.min_reconnect_interval.count());
 
   if (!json_object_object_get_ex(cluster, "timeout", &tmp))
     return -EINVAL;

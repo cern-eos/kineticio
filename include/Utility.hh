@@ -49,7 +49,7 @@ namespace kio { namespace utility {
 
 
   //--------------------------------------------------------------------------
-  //! Overloading operator<< for kinetic::StatusCode
+  //! Providing operator<< for kinetic::StatusCode
   //!
   //! @param os the stream where a string representation of the status code
   //!   should be appended.
@@ -58,7 +58,7 @@ namespace kio { namespace utility {
   std::ostream& operator<<(std::ostream& os, const kinetic::StatusCode& c);
 
   //--------------------------------------------------------------------------
-  //! Overloading operator<< for kinetic::KineticStatus. This will append
+  //! Providing operator<< for kinetic::KineticStatus. This will append
   //! both the contained status code and status message to the provided
   //! string stream.
   //!
@@ -66,6 +66,14 @@ namespace kio { namespace utility {
   //! @param s the input status code
   //--------------------------------------------------------------------------
   std::ostream& operator<<(std::ostream& os, const kinetic::KineticStatus& s);
+
+  //--------------------------------------------------------------------------
+  //! Providing operator<< for std::chrono::seconds
+  //!
+  //! @param os the output stream
+  //! @param s the input seconds
+  //--------------------------------------------------------------------------
+  std::ostream& operator<<(std::ostream& os, const std::chrono::seconds& s);
 
   //--------------------------------------------------------------------------
   //! Anything-to-string conversion, the only reason to put this in its own

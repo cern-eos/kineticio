@@ -27,9 +27,10 @@ void epoll_listen(int epoll_fd, bool *shutdown)
       if(con)
       try {
         if (!con->get()->Run(&a, &a, &fd))
-          throw std::runtime_error("Connection Failed");
+          throw std::runtime_error("Connection::Run(...) return false in epoll_listen");
       } catch (const std::exception &e) {
-        con->setError(KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what()));
+        kio_warning(e.what());
+        con->setError();
       }
     }
   }
