@@ -52,11 +52,11 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
   auto duration = duration_cast<seconds>(system_clock::now() - timestamp);
   if (duration > ratelimit) {
     auto function = std::bind(&KineticAutoConnection::connect, this);
-    bg.try_run(function);
-    kio_debug("Attempting background reconnect. Last reconnect attempt hast been",
+    if(bg.try_run(function))
+    kio_debug("Attempting background reconnect. Last reconnect attempt hast been ",
                duration," ago. ratelimit is ", ratelimit);
   }
-  throw kio_exception(ENXIO, "Error status set for connection ", logstring);
+  throw kio_exception(ENXIO, "No valid connection ", logstring);
 }
 
 
@@ -90,6 +90,10 @@ void KineticAutoConnection::connect()
     tmpcon->NoOp(cb);
     tmpcon->Run(&a, &a, &tmpfd);
   }
+  else{
+    kio_debug("Connection attempt failed ",logstring);
+  }
+
   {
     std::lock_guard<std::mutex> lock(mutex);
     timestamp = std::chrono::system_clock::now();
@@ -104,6 +108,7 @@ void KineticAutoConnection::connect()
       fd = tmpfd;
       connection = std::move(tmpcon);
       healthy=true;
+      kio_debug("connection attemp succeeded ", logstring);
     }
   }
 }

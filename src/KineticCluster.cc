@@ -430,7 +430,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
         ops[i].callback->OnResult(status);
         ops[i].connection->setError();
-        kio_warning("Failed executing async operation ", i, " of ", ops.size(), " ", status);
+        kio_notice("Failed executing async operation ", i, " of ", ops.size(), " ", status);
       }
     }
 
@@ -445,7 +445,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         try {
           ops[i].connection->get()->RemoveHandler(hkeys[i]);
         } catch (...) { }
-        kio_warning("Network timeout for operation ", i, " of ", ops.size());
+        kio_notice("Network timeout for operation ", i, " of ", ops.size());
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
         ops[i].callback->OnResult(status);
         ops[i].connection->setError();

@@ -207,6 +207,10 @@ bool resultsEqual(const KineticAsyncOperation& lhs, const KineticAsyncOperation&
 
 bool getVersionEqual(const KineticAsyncOperation& lhs, const KineticAsyncOperation& rhs)
 {
+  if((!lhs.callback->getResult().ok() && lhs.callback->getResult().statusCode() != StatusCode::REMOTE_NOT_FOUND) ||
+     (!rhs.callback->getResult().ok() && rhs.callback->getResult().statusCode() != StatusCode::REMOTE_NOT_FOUND))
+    return false;
+
   return
       std::static_pointer_cast<GetVersionCallback>(lhs.callback)->getVersion()
       ==
