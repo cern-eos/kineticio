@@ -89,10 +89,11 @@ public:
   //!
   //! @param preferred_size size in bytes the cache should ideally not exceed
   //! @param capacity absolute maximum size of the cache in bytes
-  //! @param thread_capacity maximum number of threads to spawn for background
-  //!        IO
+  //! @param bg_threads number of threads to spawn for background IO
+  //! @param bg_queue_depth maximum number of functions queued for background
+  //!   execution
   //--------------------------------------------------------------------------
-  explicit ClusterChunkCache(size_t preferred_size, size_t capacity, size_t thread_capacity);
+  explicit ClusterChunkCache(size_t preferred_size, size_t capacity, size_t bg_threads, size_t bg_queue_depth);
 
   //--------------------------------------------------------------------------
   //! No copy constructor.

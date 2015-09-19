@@ -91,7 +91,7 @@ KineticAdminCluster::KeyCounts KineticAdminCluster::doOperation(Operation o)
   KeyCountsInternal c;
   try{
     std::unique_ptr<std::vector<std::string>> keys;
-    BackgroundOperationHandler background(connections.size()/2);
+    BackgroundOperationHandler background(connections.size()/2, connections.size());
 
     auto start_key  = std::make_shared<const std::string>(1,static_cast<char>(0));
     auto end_key    = std::make_shared<const std::string>(1,static_cast<char>(255));

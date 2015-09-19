@@ -17,7 +17,8 @@
   "configuration":{
     "cacheTargetSizeMB":1024,
     "cacheCapacityMB":2048,
-    "maxBackgroundIoThreads":20,
+    "maxBackgroundIoThreads":64,
+    "maxBackgroundIoQueue":128,
     "erasureCodings":5,
     "erasureDecodingTables":5
   },

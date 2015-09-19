@@ -82,6 +82,8 @@ private:
         size_t stripecache_capacity;
         //! the number of threads used for bg io in the data cache
         int background_io_threads;
+        //! the maximum number of operations queued for bg io
+        int background_io_queue_capacity;
         //! the number of erasure coding instances that may be cached
         int num_erasure_codings;
         //! the number of coding tables each erasure coding instance may cache

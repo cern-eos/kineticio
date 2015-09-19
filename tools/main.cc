@@ -78,7 +78,8 @@ void printKeyCount(const kio::KineticAdminCluster::KeyCounts& kc)
   cout << "Unrepairable: " << kc.unrepairable << endl;
 }
 
-int main(int argc, char** argv){
+int main(int argc, char** argv)
+{
   Configuration config;
   if(!parseArguments(argc, argv, config)){
     cout << "Incorrect arguments" << endl;
@@ -114,7 +115,7 @@ int main(int argc, char** argv){
       }
     }
   }catch(std::exception& e){
-    std::cout << "Encountered Exception: " << e.what() << endl;
+    cout << "Encountered Exception: " << e.what() << endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

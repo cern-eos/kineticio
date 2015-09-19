@@ -7,11 +7,12 @@
 using namespace kio;
 
 
-ClusterChunkCache::ClusterChunkCache(size_t preferred_size, size_t capacity, size_t threads) :
-    target_size(preferred_size), capacity(capacity), current_size(0), bg(threads)
+ClusterChunkCache::ClusterChunkCache(size_t preferred_size, size_t capacity, size_t bg_threads,
+                                       size_t bg_queue_depth) :
+    target_size(preferred_size), capacity(capacity), current_size(0), bg(bg_threads, bg_queue_depth)
 {
   if(capacity<target_size) throw std::logic_error("cache target size may not exceed capacity");
-  if(threads<0) throw std::logic_error("number of background threads cannot be negative.");
+  if(bg_threads<0) throw std::logic_error("number of background threads cannot be negative.");
 }
 
 void ClusterChunkCache::drop(kio::FileIo* owner)
@@ -172,12 +173,13 @@ void ClusterChunkCache::do_flush(kio::FileIo *owner, std::shared_ptr<kio::Cluste
 
 void ClusterChunkCache::async_flush(kio::FileIo* owner, std::shared_ptr<ClusterChunk> chunk)
 {
-  auto fun = std::bind(&ClusterChunkCache::do_flush, this, owner, chunk);
-  bg.run(fun);
+  bg.run(std::bind(&ClusterChunkCache::do_flush, this, owner, chunk));
 }
 
 void do_readahead(std::shared_ptr<kio::ClusterChunk> chunk)
 {
+  /* if readahaed should throw, there's no need to remember as in do_flush...
+   * we'll just re-encounter the exception should the chunk actually be read from */
   char buf[1];
   chunk->read(buf, 0, 1);
 }
@@ -188,8 +190,7 @@ void ClusterChunkCache::readahead(kio::FileIo* owner, int chunknumber)
   if(pressure() > 0.1)
     return;
   auto chunk = get(owner, chunknumber, ClusterChunk::Mode::STANDARD, RequestMode::READAHEAD);
-  auto fun = std::bind(do_readahead, chunk);
-  bg.try_run(fun);
+  bg.try_run(std::bind(do_readahead, chunk));
 }
 
 

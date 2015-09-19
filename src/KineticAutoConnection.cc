@@ -11,7 +11,7 @@ KineticAutoConnection::KineticAutoConnection(
     std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> o,
     std::chrono::seconds r) :
     connection(), healthy(false), fd(0), options(o), timestamp(), ratelimit(r),
-    mutex(), bg(1), sockwatch(sw), mt()
+    mutex(), bg(1,0), sockwatch(sw), mt()
 {
   std::random_device rd;
   mt.seed(rd());
@@ -51,9 +51,8 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
   using std::chrono::seconds;
   auto duration = duration_cast<seconds>(system_clock::now() - timestamp);
   if (duration > ratelimit) {
-    auto function = std::bind(&KineticAutoConnection::connect, this);
-    if(bg.try_run(function))
-    kio_debug("Attempting background reconnect. Last reconnect attempt hast been ",
+    if(bg.try_run(std::bind(&KineticAutoConnection::connect, this)))
+      kio_debug("Attempting background reconnect. Last reconnect attempt hast been ",
                duration," ago. ratelimit is ", ratelimit);
   }
   throw kio_exception(ENXIO, "No valid connection ", logstring);

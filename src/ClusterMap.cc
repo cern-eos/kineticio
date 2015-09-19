@@ -74,9 +74,8 @@ ClusterMap::ClusterMap()
   ));
 
   dataCache.reset(new ClusterChunkCache(
-      configuration.stripecache_target,
-      configuration.stripecache_capacity,
-      configuration.background_io_threads
+      configuration.stripecache_target, configuration.stripecache_capacity,
+      configuration.background_io_threads, configuration.background_io_queue_capacity
   ));
 
   listener.reset(new SocketListener());
@@ -269,6 +268,10 @@ int ClusterMap::parseConfiguration(struct json_object* config)
   if (!json_object_object_get_ex(config, "maxBackgroundIoThreads", &tmp))
     return -EINVAL;
   configuration.background_io_threads = json_object_get_int(tmp);
+
+  if (!json_object_object_get_ex(config, "maxBackgroundIoQueue", &tmp))
+    return -EINVAL;
+  configuration.background_io_queue_capacity = json_object_get_int(tmp);
 
   if (!json_object_object_get_ex(config, "erasureCodings", &tmp))
     return -EINVAL;

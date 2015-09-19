@@ -19,7 +19,7 @@ KineticCluster::KineticCluster(
     std::shared_ptr<ErasureCoding> ec,
     SocketListener& listener
 ) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout),
-    clustersize{1,0}, clustersize_background(1), erasure(ec)
+    clustersize{1,0}, clustersize_background(1,1), erasure(ec)
 {
   if (nData + nParity > info.size()) {
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
@@ -371,9 +371,7 @@ const ClusterLimits& KineticCluster::limits() const
 
 ClusterSize KineticCluster::size()
 {
-  auto function = std::bind(&KineticCluster::updateSize, this);
-  clustersize_background.try_run(function);
-
+  clustersize_background.try_run(std::bind(&KineticCluster::updateSize, this));
   std::lock_guard<std::mutex> lock(clustersize_mutex);
   return clustersize;
 }
