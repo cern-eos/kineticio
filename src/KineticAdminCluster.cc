@@ -86,35 +86,36 @@ void KineticAdminCluster::scanAndRepair(std::vector<std::shared_ptr<const std::s
   }
 }
 
-KineticAdminCluster::KeyCounts KineticAdminCluster::doOperation(Operation o)
-{
+KineticAdminCluster::KeyCounts KineticAdminCluster::doOperation(Operation o) {
   KeyCountsInternal c;
-  try{
-    std::unique_ptr<std::vector<std::string>> keys;
-    BackgroundOperationHandler background(connections.size()/2, connections.size());
+  {
+  std::unique_ptr<std::vector<std::string>> keys;
+  BackgroundOperationHandler background(connections.size() / 2, connections.size());
 
-    auto start_key  = std::make_shared<const std::string>(1,static_cast<char>(0));
-    auto end_key    = std::make_shared<const std::string>(1,static_cast<char>(255));
-    do {
-      auto status = range(start_key, end_key, 100, keys);
-      if (!status.ok())
-        throw kio_exception(EIO, "range() failed on cluster. Cannot proceed. ", status);
-      if (keys && keys->size()) {
-        start_key = std::make_shared<const std::string>(keys->back() + static_cast<char>(0));
-        c.total += keys->size();
+  auto start_key = std::make_shared<const std::string>(1, static_cast<char>(0));
+  auto end_key = std::make_shared<const std::string>(1, static_cast<char>(255));
+  do {
+    auto status = range(start_key, end_key, 100, keys);
+    if (!status.ok()) {
+      kio_warning("range() failed on cluster. Cannot proceed. ", status);
+      break;
+    }
+    if (keys && keys->size()) {
+      start_key = std::make_shared<const std::string>(keys->back() + static_cast<char>(0));
+      c.total += keys->size();
 
-        if(o != Operation::COUNT){
-          std::vector<std::shared_ptr<const std::string>> out;
-          for(auto it=keys->cbegin(); it!=keys->cend(); it++)
-            out.push_back(std::make_shared<const string>(std::move(*it)));
+      if (o != Operation::COUNT) {
+        std::vector<std::shared_ptr<const std::string>> out;
+        for (auto it = keys->cbegin(); it != keys->cend(); it++)
+          out.push_back(std::make_shared<const string>(std::move(*it)));
 
-          auto b = std::bind(&KineticAdminCluster::scanAndRepair, this, out, o, std::ref(c));
-          background.run(b);
-        }
+        auto b = std::bind(&KineticAdminCluster::scanAndRepair, this, out, o, std::ref(c));
+        background.run(b);
       }
-    } while (keys && keys->size());
-  }catch(std::exception &e){
-    kio_warning(e.what());
+    }
+  } while (keys && keys->size());
+
+  background.drain_queue();
   }
   return KeyCounts{c.total, c.incomplete, c.need_repair, c.repaired, c.unrepairable};
 }

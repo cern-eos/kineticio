@@ -62,7 +62,7 @@ SCENARIO("Repair integration test.", "[Repair]")
         c.start(0);
         cluster->size();
         // wait for connection to reconnect
-        sleep(1);
+        sleep(2);
         REQUIRE(cluster->repair().repaired == 1);
       }
     }

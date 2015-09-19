@@ -46,6 +46,11 @@ public:
   bool try_run(std::function<void()>&& function);
 
   //--------------------------------------------------------------------------
+  //! Block until queue is empty
+  //--------------------------------------------------------------------------
+  void drain_queue();
+
+  //--------------------------------------------------------------------------
   //! Constructor. Note that if queue_depth is set to zero, background threads
   //! will be spawned on demand instead of being managed in a threadpool.
   //!

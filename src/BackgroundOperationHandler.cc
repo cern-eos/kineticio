@@ -24,6 +24,13 @@ BackgroundOperationHandler::~BackgroundOperationHandler()
     usleep(1000);
 }
 
+void BackgroundOperationHandler::drain_queue()
+{
+  std::unique_lock<std::mutex> lck(queue_mutex);
+  while (!q.empty())
+    controller.wait(lck);
+}
+
 void BackgroundOperationHandler::worker_thread()
 {
   numthreads++;
