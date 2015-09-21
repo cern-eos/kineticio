@@ -31,7 +31,7 @@ bool KineticAdminCluster::needsRepair(const std::shared_ptr<const std::string>& 
   auto target_version = asyncops::mostFrequentVersion(ops);
 
   if(valid_results < nData+nParity){
-    kio_debug("Not all drives for key ", *key, " could be accessed: Only ", valid_results, " valid results for a "
+    kio_debug("Not all drives for key \"", *key, "\" could be accessed: Only ", valid_results, " valid results for a "
         "stripe size of ", nData+nParity);
     counts.incomplete++;
   }
@@ -41,7 +41,7 @@ bool KineticAdminCluster::needsRepair(const std::shared_ptr<const std::string>& 
     return false;
   }
   else if(target_version.frequency >=  nData) {
-    kio_notice("Key \"", *key, "\" requires repair.");
+    kio_debug("Key \"", *key, "\" requires repair.");
 
     counts.need_repair++;
     return true;
