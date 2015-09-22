@@ -1,5 +1,6 @@
 #include <iostream>
 #include <sys/syslog.h>
+#include <unistd.h>
 #include "ClusterMap.hh"
 #include "KineticIoFactory.hh"
 
@@ -93,6 +94,8 @@ int main(int argc, char** argv)
 
     switch(config.op){
       case Operation::STATUS: {
+        ac->status();
+        sleep(1);
         auto v = ac->status();
         cout << "Cluster Status: ";
         for(auto it=v.cbegin(); it!=v.cend(); it++)
@@ -101,8 +104,7 @@ int main(int argc, char** argv)
         break;
       }
       case Operation::COUNT: {
-        auto num = ac->count();
-        cout << "Total number of keys on cluster: " << num << endl;
+        cout << "Total number of keys on cluster: " << ac->count() << endl;
         break;
       }
       case Operation::SCAN: {

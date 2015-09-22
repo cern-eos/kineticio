@@ -2,21 +2,13 @@
 #define KINETICIO_KINETICREPAIRCLUSTER_HH
 
 #include "KineticCluster.hh"
+#include "AdminClusterInterface.hh"
 
 namespace kio{
 
-class KineticAdminCluster : public KineticCluster {
+class KineticAdminCluster : public KineticCluster, public KineticAdminClusterInterface {
 
 public:
-  struct KeyCounts{
-      int total;
-      int incomplete;
-      int need_repair;
-      int repaired;
-      int removed;
-      int unrepairable;
-  };
-
   // only count keys, don't even scan
   int count();
 
@@ -32,6 +24,8 @@ public:
   //! Perfect forwarding is nice, and I am lazy. Look in KineticCluster.hh for the correct arguments
   template<typename... Args>
   KineticAdminCluster(Args&& ... args) : KineticCluster(std::forward<Args>(args)...) {};
+
+  ~KineticAdminCluster(){};
 
 private:
   enum class Operation{

@@ -29,3 +29,8 @@ void Factory::registerLogFunction(logfunc_t log, shouldlogfunc_t shouldLog)
 {
   Logger::get().registerLogFunction(std::move(log), std::move(shouldLog));
 }
+
+std::unique_ptr<KineticAdminClusterInterface> Factory::makeAdminCluster(const char* cluster_id)
+{
+  return ClusterMap::getInstance().getAdminCluster(cluster_id);
+}

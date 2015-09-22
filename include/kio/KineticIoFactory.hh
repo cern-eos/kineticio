@@ -9,6 +9,7 @@
 #include <memory>
 #include "FileIoInterface.hh"
 #include "FileAttrInterface.hh"
+#include "AdminClusterInterface.hh"
 
 namespace kio{
   typedef std::function<void(const char* func, const char* file, int line, int level, const char* msg)> logfunc_t;
@@ -37,6 +38,15 @@ namespace kio{
     //--------------------------------------------------------------------------
     static std::unique_ptr<FileAttrInterface> makeFileAttr(const char* path);
 
+
+    //--------------------------------------------------------------------------
+    //! Construct an AdminCluster object and return it in a unique pointer.
+    //!
+    //! @param cluster_id the id of the cluster
+    //! @return unique pointer to constructed AdminCluster object.
+    //--------------------------------------------------------------------------
+    static std::unique_ptr<KineticAdminClusterInterface> makeAdminCluster(const char* cluster_id);
+
     //--------------------------------------------------------------------------
     //! The client may register a log function that will be used for debug and
     //! warning messages in the library. Fatal error messages will continue to
@@ -46,6 +56,9 @@ namespace kio{
     //! @param shouldLog function to query if a specific loglevel should be logged
     //--------------------------------------------------------------------------
     static void registerLogFunction(logfunc_t log, shouldlogfunc_t shouldLog);
+
+
+
   };
 }
 
