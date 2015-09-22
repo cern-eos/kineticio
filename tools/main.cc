@@ -90,11 +90,10 @@ int main(int argc, char** argv)
 
   try{
     kio::Factory::registerLogFunction(mlog, mshouldLog);
-    auto ac = kio::ClusterMap::getInstance().getAdminCluster(config.id);
+    auto ac = kio::Factory::makeAdminCluster(config.id.c_str());
 
     switch(config.op){
       case Operation::STATUS: {
-        ac->status();
         sleep(1);
         auto v = ac->status();
         cout << "Cluster Status: ";

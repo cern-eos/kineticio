@@ -64,16 +64,14 @@ void KineticAdminCluster::scanAndRepair(std::vector<std::shared_ptr<const std::s
         auto getstatus = this->get(*it, false, version, value);
         if(getstatus.ok()){
           auto putstatus = this->put(*it, version, value, false, version);
-          if (!putstatus.ok()) {
+          if (!putstatus.ok())
             throw kio_exception(EIO, "Failed put operation on repair target-key \"", **it, "\" ", putstatus);
-          }
           counts.repaired++;
         }
         else if(getstatus.statusCode() == StatusCode::REMOTE_NOT_FOUND){
           auto rmstatus = this->remove(*it,version,true);
-          if (!rmstatus.ok()) {
+          if (!rmstatus.ok())
             throw kio_exception(EIO, "Failed remove operation on repair target-key \"", **it, "\" ", rmstatus);
-          }
           counts.removed++;
         }
         else
@@ -117,7 +115,7 @@ KineticAdminCluster::KeyCounts KineticAdminCluster::doOperation(Operation o) {
 
   background.drain_queue();
   }
-  return KeyCounts{c.total, c.incomplete, c.need_repair, c.repaired, c.unrepairable};
+  return KeyCounts{c.total, c.incomplete, c.need_repair, c.repaired, c.removed, c.unrepairable};
 }
 
 int KineticAdminCluster::count()
