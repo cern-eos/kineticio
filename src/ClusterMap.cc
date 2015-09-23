@@ -207,7 +207,6 @@ int ClusterMap::parseClusterInformation(struct json_object *cluster)
   if (!json_object_object_get_ex(cluster, "minReconnectInterval", &tmp))
     return -EINVAL;
   cinfo.min_reconnect_interval = std::chrono::seconds(json_object_get_int(tmp));
-  printf("TMP: Read in %d seconds of connection ratelimit.\n",cinfo.min_reconnect_interval.count());
 
   if (!json_object_object_get_ex(cluster, "timeout", &tmp))
     return -EINVAL;

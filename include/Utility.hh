@@ -119,5 +119,9 @@ namespace kio { namespace utility {
   };
 }}
 
+/* Mark Adler's crc32c implementation. See crc32c.c */
+extern "C" {
+  uint32_t crc32c(uint32_t crc, const void* buf, size_t len);
+}
 #endif	/* __KINETICIO_UTILITY_HH__ */
 

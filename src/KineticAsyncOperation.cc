@@ -1,5 +1,5 @@
 #include "KineticAsyncOperation.hh"
-#include <zlib.h>
+#include "Utility.hh"
 
 using namespace kio;
 using namespace kinetic;
@@ -60,7 +60,7 @@ unique_ptr<CallbackSynchronization> asyncops::fillPut(
     auto &v = stripe[i];
 
     /* Generate Checksum, computing takes ~1ms per checksum */
-    auto checksum = crc32(0, (const Bytef *) v->c_str(), v->length());
+    auto checksum = crc32c(0, v->c_str(), v->length());
     auto tag = std::make_shared<string>(
         std::to_string((long long unsigned int) checksum)
     );

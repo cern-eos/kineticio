@@ -4,7 +4,6 @@ Providing a file interface (byterange read / write access) to kinetic hardware. 
 ### Dependencies
 + [CMake](http://www.cmake.org) build process manager
 + [json-c](https://github.com/json-c/json-c) JSON manipulation library
-+ [zlib](http://www.zlib.net/) for checksum calculation
 + [isa-l](https://01.org/intel%C2%AE-storage-acceleration-library-open-source-version) for erasure coding
 + **kinetic-cpp-client** c++ library implementation for the kinetic protocol. [This](https://github.com/plensing/kinetic-cpp-client) fork builds a shared library linking preinstalled dependencies instead of making dependencies during the build process. This can prevent conflicts when linking the library against a project (e.g. EOS) that has some of the same dependencies.  
 

@@ -1,6 +1,5 @@
 #include "KineticCluster.hh"
 #include "Utility.hh"
-#include <zlib.h>
 #include <set>
 #include <drive_log.h>
 #include "Logging.hh"
@@ -81,11 +80,8 @@ std::vector<shared_ptr<const string> > getOperationToStripe(
         record->value() &&
         record->value()->size()
         ) {
-      /* validate the checksum, computing takes ~1ms per checksum */
-      auto checksum = crc32(0,
-                            (const Bytef*) record->value()->c_str(),
-                            record->value()->length()
-      );
+
+      auto checksum = crc32c(0, record->value()->c_str(), record->value()->length());
       auto tag = std::to_string((long long unsigned int) checksum);
       if (tag == *record->tag()) {
         stripe.back() = record->value();
@@ -382,7 +378,7 @@ std::vector<KineticAsyncOperation> KineticCluster::initialize(
     const shared_ptr<const string> key,
     size_t size, off_t offset)
 {
-  std::size_t index = std::hash<std::string>()(*key) + offset;
+  auto index = crc32c(0, key->c_str(), key->length()) + offset;
   std::vector<KineticAsyncOperation> ops;
 
   while (size) {
@@ -395,7 +391,6 @@ std::vector<KineticAsyncOperation> KineticCluster::initialize(
         }
     );
     size--;
-
   }
   return ops;
 }

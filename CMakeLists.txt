@@ -8,8 +8,8 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(kinetic-c++ REQUIRED)
 find_package(jsonc REQUIRED)
 find_package(uuid REQUIRED)
-find_package(z REQUIRED)
 find_package(isal REQUIRED)
+find_package(Threads REQUIRED)
 
 ################################################################################
 # Force /usr/ installation prefix, same as EOS
@@ -50,10 +50,10 @@ include_directories(
     ${KINETIC-C++_INCLUDE_DIRS}
     ${JSONC_INCLUDE_DIRS}
     ${UUID_INCLUDE_DIRS}
-    ${Z_INCLUDE_DIRS}
     ${ISAL_INCLUDE_DIRS}
 )
 set(kineticio_SRC
+    src/crc32c.c
     src/ClusterChunkCache.cc
     src/ClusterChunk.cc
     src/ClusterMap.cc
@@ -73,9 +73,9 @@ set(kineticio_SRC
 set(kineticio_LIB
     ${JSONC_LIBRARIES}
     ${UUID_LIBRARIES}
-    ${Z_LIBRARIES}
     ${ISAL_LIBRARIES}
     ${KINETIC-C++_LIBRARIES}
+    ${CMAKE_THREAD_LIBS_INIT}
 )
 add_library(kineticio SHARED
     ${kineticio_SRC}
@@ -98,6 +98,9 @@ if(DEBUG)
     )
     include_directories(${kineticio_BINARY_DIR}/catch/src)
 
+    find_package(z REQUIRED)
+    include_directories(${Z_INCLUDE_DIRS})
+
     add_executable(kinetic-test
         ${kineticio_SRC}
         test/TestMain.cc
@@ -114,8 +117,8 @@ if(DEBUG)
         test/LoggingTest.cc
     )
     target_link_libraries(kinetic-test
-       ${kineticio_LIB}
-       ${CMAKE_THREAD_LIBS_INIT}
+        ${Z_LIBRARIES}
+        ${kineticio_LIB}
     )
     add_dependencies(kinetic-test catch)
 endif(DEBUG)
