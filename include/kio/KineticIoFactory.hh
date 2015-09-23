@@ -45,7 +45,7 @@ namespace kio{
     //! @param cluster_id the id of the cluster
     //! @return unique pointer to constructed AdminCluster object.
     //--------------------------------------------------------------------------
-    static std::unique_ptr<KineticAdminClusterInterface> makeAdminCluster(const char* cluster_id);
+    static std::unique_ptr<AdminClusterInterface> makeAdminCluster(const char* cluster_id);
 
     //--------------------------------------------------------------------------
     //! The client may register a log function that will be used for debug and

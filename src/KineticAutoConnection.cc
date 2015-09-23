@@ -107,7 +107,7 @@ void KineticAutoConnection::connect()
       fd = tmpfd;
       connection = std::move(tmpcon);
       healthy=true;
-      kio_debug("connection attemp succeeded ", logstring);
+      kio_debug("connection attempt succeeded ", logstring);
     }
   }
 }

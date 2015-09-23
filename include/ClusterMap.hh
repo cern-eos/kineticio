@@ -143,6 +143,14 @@ private:
   //--------------------------------------------------------------------------
   explicit ClusterMap();
 
+  //--------------------------------------------------------------------------
+  //! Set erasure coding instance and connection options based on the
+  //! inforamtion available in the supplied KineticClusterInfo.
+  //!
+  //! @param ki Cluster Information
+  //! @param ec Erase Coding instance to set
+  //! @param cops Connection Options to fill
+  //--------------------------------------------------------------------------
   void fillArgs(const KineticClusterInfo &ki,
                 std::shared_ptr<ErasureCoding>& ec,
                 std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>>& cops

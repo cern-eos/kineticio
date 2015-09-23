@@ -49,7 +49,7 @@ bool KineticAdminCluster::needsRepair(const std::shared_ptr<const std::string>& 
 
   throw std::runtime_error(utility::Convert::toString(
       "Key ", *key, " is unrepairable. We succeeded to read ", valid_results, " of ", nData+nParity,
-      "key versions, ", target_version.frequency, " of which have an equivalent version (", nData, ") needed."
+      " key versions, ", target_version.frequency, " of which have an equivalent version (", nData, ") needed."
   ));
 }
 
