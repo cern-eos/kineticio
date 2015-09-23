@@ -80,9 +80,9 @@ public:
   //--------------------------------------------------------------------------
   //! Destructor.
   //--------------------------------------------------------------------------
-  ~KineticCluster();
+  virtual ~KineticCluster();
 
-private:
+protected:
   //--------------------------------------------------------------------------
   //! Create a set of AsyncOperations and assign target drives / connections.
   //!
@@ -159,7 +159,7 @@ private:
   //--------------------------------------------------------------------------
   void updateSize();
 
-private:
+protected:
   //! number of data chunks in a stripe
   std::size_t nData;
 

@@ -14,6 +14,9 @@
   #include <atomic>
 #endif
 #include <functional>
+#include <condition_variable>
+#include <mutex>
+#include <queue>
 
 namespace kio {
 
@@ -24,31 +27,37 @@ namespace kio {
 class BackgroundOperationHandler {
 public:
   //--------------------------------------------------------------------------
-  //! Execute supplied function. If thread-limit is not exceeded, execution
-  //! is done asynchronously. However, if thread-limit is exceeded, the
-  //! supplied function is executed in the _calling_ thread.
+  //! If queue capacity is set to zero, run_noqueue will be called.
+  //! Execute supplied function asynchronously. If queue capacity is breached,
+  //! the calling thread will be blocked until queue shrinks below capacity.
   //!
   //! @param function the function to be executed.
   //--------------------------------------------------------------------------
-  void run(std::function<void()> function);
+  void run(std::function<void()>&& function);
 
   //--------------------------------------------------------------------------
-  //! Execute supplied function. If thread-limit is not exceeded, execution
-  //! is done asynchronously. However, if thread-limit is exceeded, the
-  //! supplied function is _not_ executed.
+  //! If queue capacity is set to zero, try_run_noqueue will be called.
+  //! If queue capacityis reached, function will not be executed.
+  //! Otherwise it will be queued for asynchronous execution.
   //!
   //! @param function the function to be executed.
-  //! @return true if function is being executed, false otherwise
+  //! @return true if function is queued for execution, false otherwise
   //--------------------------------------------------------------------------
-  bool try_run(std::function<void()> function);
+  bool try_run(std::function<void()>&& function);
 
   //--------------------------------------------------------------------------
-  //! Constructor.
-  //!
-  //! @param max_concurrent maximum number of concurrently spawned background
-  //!   threads
+  //! Block until queue is empty
   //--------------------------------------------------------------------------
-  explicit BackgroundOperationHandler(int max_concurrent);
+  void drain_queue();
+
+  //--------------------------------------------------------------------------
+  //! Constructor. Note that if queue_depth is set to zero, background threads
+  //! will be spawned on demand instead of being managed in a threadpool.
+  //!
+  //! @param worker_threads maximum number of spawned background threads
+  //! @param queue_depth maximum number of functions queued for execution
+  //--------------------------------------------------------------------------
+  explicit BackgroundOperationHandler(int worker_threads, int queue_depth);
 
   //--------------------------------------------------------------------------
   //! Destructor
@@ -57,17 +66,50 @@ public:
 
 private:
   //--------------------------------------------------------------------------
-  //! Threadsafe wrapper executing supplied function and counting thread use
-  //!
-  //! @param function function to execute
+  //! Threadsafe wrapper executing queued functions and counting thread use
   //--------------------------------------------------------------------------
-  void execute(std::function<void()> function);
+  void worker_thread();
+
+  //--------------------------------------------------------------------------
+  //! Threadsafe wrapper executing supplied function and counting thread use
+  //--------------------------------------------------------------------------
+  void execute_noqueue(std::function<void()> function);
+
+  //--------------------------------------------------------------------------
+  //! If threadlimit is not reached, a new thread will be spawned to execute
+  //! the supplied function. Otherwise the supplied function will be executed
+  //! in the _calling_ thread.
+  //!
+  //! @param function the function to be executed.
+  //--------------------------------------------------------------------------
+  void run_noqueue(std::function<void()> function);
+
+  //--------------------------------------------------------------------------
+  //! If threadlimit is not reached, a new thread will be spawned to execute
+  //! the supplied function. Otherwise the function is not executed.
+  //!
+  //! @param function the function to be executed.
+  //! @return true if function is executed, false otherwise
+  //--------------------------------------------------------------------------
+  bool try_run_noqueue(std::function<void()> function);
 
 private:
-  //! maximum number of background threads spawned concurrently
+  //! queue of functions to be executed
+  std::queue<std::function<void()>> q;
+  //! maximum number of queue entries
+  const int queue_capacity;
+  //! maximum number of background threads
   const int thread_capacity;
+  //! concurrency control for queue access;
+  std::mutex queue_mutex;
+  //! workers block until an item is inserted into queue
+  std::condition_variable worker;
+  //! controller will be triggered when an item is removed from queue
+  std::condition_variable controller;
   //! current number of active background threads
   std::atomic<int> numthreads;
+  //! signal worker threads to shutdown
+  std::atomic<bool> shutdown;
 };
 
 }

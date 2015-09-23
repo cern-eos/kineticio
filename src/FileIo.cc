@@ -326,13 +326,12 @@ void FileIo::LastChunkNumber::verify()
   const size_t max_keys_requested = 100;
   std::unique_ptr<std::vector<string>> keys;
   do {
-    KineticStatus status = parent.cluster->range(keys ?
-                                                 make_shared<const string>(keys->back()) :
-                                                 utility::constructChunkKey(parent.chunk_basename, last_chunk_number),
-                                                 utility::constructChunkKey(parent.chunk_basename,
-                                                                            std::numeric_limits<int>::max()),
-                                                 max_keys_requested,
-                                                 keys);
+    KineticStatus status = parent.cluster->range(
+        keys ? make_shared<const string>(keys->back()) :
+               utility::constructChunkKey(parent.chunk_basename, last_chunk_number),
+        utility::constructChunkKey(parent.chunk_basename,std::numeric_limits<int>::max()),
+        max_keys_requested,
+        keys);
 
     if (!status.ok())
       throw kio_exception(EIO, "KeyRange request unexpectedly failed for chunks with base name: ",
