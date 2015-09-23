@@ -18,7 +18,7 @@ KineticCluster::KineticCluster(
     std::shared_ptr<ErasureCoding> ec,
     SocketListener& listener
 ) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout),
-    clustersize{1,0}, clustersize_background(1), erasure(ec)
+    clustersize{1,0}, clustersize_background(1,1), erasure(ec)
 {
   if (nData + nParity > info.size()) {
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
@@ -151,20 +151,55 @@ KineticStatus KineticCluster::get(
   return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Confusion when attempting to get key" + *key);
 }
 
-/* handle races, 2 or more clients attempting to put/remove the same key at the same time */
+static int getVersionPosition(const shared_ptr<const string>& version, std::vector<KineticAsyncOperation>& vops)
+{
+  for(int i=0; i<vops.size(); i++){
+    if(vops[i].callback->getResult().ok() || vops[i].callback->getResult().statusCode() == StatusCode::REMOTE_NOT_FOUND)
+      if(std::static_pointer_cast<GetVersionCallback>(vops[i].callback)->getVersion() == *version)
+        return i;
+  }
+  return -1;
+}
+
+/* Handle races, 2 or more clients attempting to put/remove the same key at the same time. */
 bool KineticCluster::mayForce(const shared_ptr<const string>& key, const shared_ptr<const string>& version,
                               std::map<StatusCode, int, KineticCluster::compareStatusCode> rmap)
 {
-  if (rmap[StatusCode::OK] > (nData + nParity) / 2) {
+  if (rmap[StatusCode::OK] > (nData + nParity) / 2)
     return true;
-  }
 
   auto ops = initialize(key, nData + nParity);
   auto sync = asyncops::fillGetVersion(ops, key);
   execute(ops, *sync);
   auto most_frequent = asyncops::mostFrequentVersion(ops);
 
-  return *version == *most_frequent.version;
+  if (*version == *most_frequent.version)
+    return true;
+
+  if(most_frequent.frequency >= nData)
+    return false;
+
+  /* Super-Corner-Case: It could be that the client that should win the most_frequent match has crashed. For this
+   * reason, all competing clients will wait, polling the key versions until a timeout. If the timeout expires
+   * without the issue being resolved, overwrite permission will be given. As multiple clients
+   * could theoretically be in this loop concurrently, we specify timeout time by the position of the first
+   * occurence of the supplied version for a subchunk. */
+  auto timeout_time = std::chrono::system_clock::now() + (getVersionPosition(version, ops)+1) * operation_timeout;
+  do{
+    usleep(10000);
+    auto ops = initialize(key, nData + nParity);
+    auto sync = asyncops::fillGetVersion(ops, key);
+    execute(ops, *sync);
+
+    if(getVersionPosition(version, ops)<0)
+      return false;
+
+    most_frequent = asyncops::mostFrequentVersion(ops);
+    if(most_frequent.frequency >= nData)
+      return false;
+  }while(std::chrono::system_clock::now() < timeout_time);
+
+  return true;
 }
 
 KineticStatus KineticCluster::put(
@@ -210,35 +245,14 @@ KineticStatus KineticCluster::put(
   );
   auto rmap = execute(ops, *sync);
 
-  /* Error handling. If we just wrote a subset of the stripe, and one or more subchunks failed with not found or
-   * version missmatch errors, attempt to overwrite them... if we are in a race with another client writing the
-   * same stripe, we might have to abort and let the other client complete his put operation */
-
-   if (rmap[StatusCode::OK] && rmap[StatusCode::OK] < nData + nParity
-      && (rmap[StatusCode::REMOTE_VERSION_MISMATCH] || rmap[StatusCode::REMOTE_NOT_FOUND])) {
-
+  /* Partial stripe write has to be resolved. */
+  if (rmap[StatusCode::OK] && (rmap[StatusCode::REMOTE_VERSION_MISMATCH] || rmap[StatusCode::REMOTE_NOT_FOUND])) {
     if (mayForce(key, version_new, rmap)) {
-      std::vector<shared_ptr<const string> > fstripe;
-      std::vector<KineticAsyncOperation> fops;
-      for(int i=0; i<ops.size(); i++){
-        const auto& code = ops[i].callback->getResult().statusCode();
-        if( code == StatusCode::REMOTE_VERSION_MISMATCH || code == StatusCode::REMOTE_NOT_FOUND){
-          fops.push_back(initialize(key,1,i).front());
-          fstripe.push_back(stripe[i]);
-        }
-      }
-      auto fsync =  asyncops::fillPut(
-          fops, fstripe, key, version_new, version_old, WriteMode::IGNORE_VERSION
-      );
-      auto fmap = execute(fops, *fsync);
-
-      rmap[StatusCode::OK] += fmap[StatusCode::OK];
-      rmap[StatusCode::REMOTE_VERSION_MISMATCH] = rmap[StatusCode::REMOTE_NOT_FOUND] = 0;
+      auto forcesync = asyncops::fillPut(ops, stripe, key, version_new, version_new, WriteMode::IGNORE_VERSION);
+      rmap = execute(ops, *forcesync);
     }
-    else {
-      rmap[StatusCode::REMOTE_VERSION_MISMATCH] += rmap[StatusCode::OK] + rmap[StatusCode::REMOTE_NOT_FOUND];
-      rmap[StatusCode::OK] = rmap[StatusCode::REMOTE_NOT_FOUND] = 0;
-    }
+    else
+      return KineticStatus(StatusCode::REMOTE_VERSION_MISMATCH, "");
   }
 
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
@@ -259,8 +273,8 @@ KineticStatus KineticCluster::remove(
     bool force)
 {
   auto ops = initialize(key, nData + nParity);
-  auto sync = asyncops::fillRemove(ops, key, version,
-                                   force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION
+  auto sync = asyncops::fillRemove(
+      ops, key, version, force ? WriteMode::IGNORE_VERSION : WriteMode::REQUIRE_SAME_VERSION
   );
   auto rmap = execute(ops, *sync);
 
@@ -271,21 +285,14 @@ KineticStatus KineticCluster::remove(
     rmap[StatusCode::REMOTE_NOT_FOUND] = 0;
   }
 
-  if (rmap[StatusCode::OK] && rmap[StatusCode::OK] < nData + nParity && rmap[StatusCode::REMOTE_VERSION_MISMATCH]) {
+  /* Partial stripe remove has to be resolved */
+  if (rmap[StatusCode::OK] && rmap[StatusCode::REMOTE_VERSION_MISMATCH]) {
     if (mayForce(key, std::make_shared<const string>(""), rmap)) {
+      auto forcesync = asyncops::fillRemove(ops, key, version, WriteMode::IGNORE_VERSION);
+      rmap = execute(ops, *forcesync);
 
-      std::vector<KineticAsyncOperation> fops;
-      for(int i=0; i<ops.size(); i++){
-        const auto& code = ops[i].callback->getResult().statusCode();
-        if( code == StatusCode::REMOTE_VERSION_MISMATCH ){
-          fops.push_back(initialize(key,1,i).front());
-        }
-      }
-      auto fsync =  asyncops::fillRemove(fops, key, version, WriteMode::IGNORE_VERSION);
-      auto fmap = execute(fops, *fsync);
-
-      rmap[StatusCode::OK] += fmap[StatusCode::OK];
-      rmap[StatusCode::REMOTE_VERSION_MISMATCH] = 0;
+      rmap[StatusCode::OK]+=rmap[StatusCode::REMOTE_NOT_FOUND];
+      rmap[StatusCode::REMOTE_NOT_FOUND] = 0;
     }
     else {
       rmap[StatusCode::REMOTE_VERSION_MISMATCH] += rmap[StatusCode::OK];
@@ -294,9 +301,8 @@ KineticStatus KineticCluster::remove(
   }
 
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++)
-    if (it->second >= nData) {
+    if (it->second >= nData)
       return KineticStatus(it->first, "");
-    }
 
   return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Confusion when attempting to remove key" + *key);
 }
@@ -367,9 +373,7 @@ const ClusterLimits& KineticCluster::limits() const
 
 ClusterSize KineticCluster::size()
 {
-  auto function = std::bind(&KineticCluster::updateSize, this);
-  clustersize_background.try_run(function);
-
+  clustersize_background.try_run(std::bind(&KineticCluster::updateSize, this));
   std::lock_guard<std::mutex> lock(clustersize_mutex);
   return clustersize;
 }
@@ -425,7 +429,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
         ops[i].callback->OnResult(status);
         ops[i].connection->setError();
-        kio_warning("Failed executing async operation ", i, " of ", ops.size(), " ", status);
+        kio_notice("Failed executing async operation ", i, " of ", ops.size(), " ", status);
       }
     }
 
@@ -440,7 +444,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         try {
           ops[i].connection->get()->RemoveHandler(hkeys[i]);
         } catch (...) { }
-        kio_warning("Network timeout for operation ", i, " of ", ops.size());
+        kio_notice("Network timeout for operation ", i, " of ", ops.size());
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
         ops[i].callback->OnResult(status);
         ops[i].connection->setError();

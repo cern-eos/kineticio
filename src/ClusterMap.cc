@@ -74,10 +74,11 @@ ClusterMap::ClusterMap()
   ));
 
   dataCache.reset(new ClusterChunkCache(
-      configuration.stripecache_target,
-      configuration.stripecache_capacity,
-      configuration.background_io_threads
+      configuration.stripecache_target, configuration.stripecache_capacity,
+      configuration.background_io_threads, configuration.background_io_queue_capacity
   ));
+
+  listener.reset(new SocketListener());
 }
 
 ClusterChunkCache& ClusterMap::getCache()
@@ -85,37 +86,59 @@ ClusterChunkCache& ClusterMap::getCache()
   return *dataCache;
 }
 
+void ClusterMap::fillArgs(const KineticClusterInfo &ki,
+                          std::shared_ptr<ErasureCoding>& ec,
+                          std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>>& cops)
+{
+  for (auto wwn = ki.drives.begin(); wwn != ki.drives.end(); wwn++) {
+    if (!drivemap.count(*wwn))
+      throw kio_exception(ENODEV, "Nonexisting drive wwn requested: ", *wwn);
+    cops.push_back(drivemap.at(*wwn));
+  }
+
+  auto ectype = utility::Convert::toString(ki.numData, "-", ki.numParity);
+  try{
+    ec = ecCache->get(ectype);
+  }
+  catch(const std::out_of_range& e){
+    ec = std::make_shared<ErasureCoding>(ki.numData, ki.numParity, configuration.num_erasure_coding_tables);
+    ecCache->add(ectype, ec);
+  }
+}
+
+std::unique_ptr<KineticAdminCluster> ClusterMap::getAdminCluster(const std::string& id)
+{
+  if(!listener)
+    throw kio_exception(EACCES, "ClusterMap not properly initialized. Check your json files.");
+  if (!clustermap.count(id))
+    throw kio_exception(ENODEV, "Nonexisting cluster id requested: ", id);
+
+  std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> cops;
+  std::shared_ptr<ErasureCoding> ec;
+  KineticClusterInfo &ki = clustermap.at(id);
+  fillArgs(ki, ec, cops);
+
+  return std::unique_ptr<KineticAdminCluster>(new KineticAdminCluster(
+      ki.numData, ki.numParity, ki.blockSize,
+      cops, ki.min_reconnect_interval, ki.operation_timeout,
+      ec, *listener)
+  );
+}
+
 std::shared_ptr<ClusterInterface> ClusterMap::getCluster(const std::string &id)
 {
-  if(!ecCache)
+  if(!listener)
     throw kio_exception(EACCES, "ClusterMap not properly initialized. Check your json files.");
 
   std::unique_lock<std::mutex> locker(mutex);
-
-  if (!listener)
-    listener.reset(new SocketListener());
-
   if (!clustermap.count(id))
     throw kio_exception(ENODEV, "Nonexisting cluster id requested: ", id);
 
   KineticClusterInfo &ki = clustermap.at(id);
   if (!ki.cluster) {
     std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> cops;
-    for (auto wwn = ki.drives.begin(); wwn != ki.drives.end(); wwn++) {
-      if (!drivemap.count(*wwn))
-        throw kio_exception(ENODEV, "Nonexisting drive wwn requested: ", *wwn);
-      cops.push_back(drivemap.at(*wwn));
-    }
-
-    auto ectype = utility::Convert::toString(ki.numData, "-", ki.numParity);
     std::shared_ptr<ErasureCoding> ec;
-    try{
-      ec = ecCache->get(ectype);
-    }
-    catch(const std::out_of_range& e){
-      ec = std::make_shared<ErasureCoding>(ki.numData, ki.numParity, configuration.num_erasure_coding_tables);
-      ecCache->add(ectype, ec);
-    }
+    fillArgs(ki, ec, cops);
 
     ki.cluster = std::make_shared<KineticCluster>(
         ki.numData, ki.numParity, ki.blockSize,
@@ -245,6 +268,10 @@ int ClusterMap::parseConfiguration(struct json_object* config)
   if (!json_object_object_get_ex(config, "maxBackgroundIoThreads", &tmp))
     return -EINVAL;
   configuration.background_io_threads = json_object_get_int(tmp);
+
+  if (!json_object_object_get_ex(config, "maxBackgroundIoQueue", &tmp))
+    return -EINVAL;
+  configuration.background_io_queue_capacity = json_object_get_int(tmp);
 
   if (!json_object_object_get_ex(config, "erasureCodings", &tmp))
     return -EINVAL;

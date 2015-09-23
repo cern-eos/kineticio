@@ -64,6 +64,7 @@ set(kineticio_SRC
     src/KineticAsyncOperation.cc
     src/KineticCallbacks.cc
     src/KineticCluster.cc
+    src/KineticAdminCluster.cc
     src/SocketListener.cc
     src/ErasureCoding.cc
     src/SequencePatternRecognition.cc
@@ -85,6 +86,16 @@ target_link_libraries(kineticio
 )
 install(TARGETS kineticio LIBRARY DESTINATION lib64)
 install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
+
+
+add_executable(cluster-admin
+    ${kineticio_SRC}
+    tools/main.cc
+)
+target_link_libraries(cluster-admin
+        ${kineticio_LIB}
+        ${CMAKE_THREAD_LIBS_INIT}
+)
 
 if(DEBUG)
     include(ExternalProject)
@@ -115,6 +126,8 @@ if(DEBUG)
         test/SimulatorController.cc
         test/LRUCacheTest.cc
         test/LoggingTest.cc
+        test/KineticRepairClusterTest.cc
+
     )
     target_link_libraries(kinetic-test
         ${Z_LIBRARIES}

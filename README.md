@@ -15,7 +15,7 @@ Providing a file interface (byterange read / write access) to kinetic hardware. 
 + Run `make` && `make install`
 
 ### Configuration
-The **KINETIC_DRIVE_LOCATION**, **KINETIC_DRIVE_SECURITY** and **KINETIC_CLUSTER_DEFINITION** environment variables have to be set and point to json file(s) listing drive location, login details and the cluster configuration respectively. This can, but does not have to, be one and the same file. The json file at **KINETIC_CLUSTER_DEFINITION** may further include library-wide configuration options. See [localhost.json](test/localhost.json) as an example. 
+The **KINETIC_DRIVE_LOCATION**, **KINETIC_DRIVE_SECURITY** and **KINETIC_CLUSTER_DEFINITION** environment variables have to be set and point to json file(s) listing drive location, login details and the cluster configuration respectively. This can, but does not have to, be one and the same file. The json file at **KINETIC_CLUSTER_DEFINITION** further includes library-wide configuration options. See [localhost.json](test/localhost.json) as an example. 
 
 ### EOS support
-When this library is installed, kinetic support will automatically be enabled when compiling the kinetic branch of the [EOS repository](http://eos.cern.ch/cgi-bin/cgit.cgi/eos/).
+When this library is installed, kinetic support will automatically be enabled when compiling the kinetic branch of the [EOS repository](https://gitlab.cern.ch/dss/eos/tree/kinetic).
