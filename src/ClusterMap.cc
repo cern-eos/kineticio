@@ -3,7 +3,6 @@
 #include <sstream>
 #include "Logging.hh"
 #include "ClusterMap.hh"
-#include "KineticCluster.hh"
 
 using namespace kio;
 

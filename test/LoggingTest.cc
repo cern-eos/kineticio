@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "Logging.hh"
-#include <functional>
 
 using namespace kio;
 

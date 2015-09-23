@@ -1,7 +1,6 @@
 #include "catch.hpp"
 #include "KineticAutoConnection.hh"
 #include "SimulatorController.h"
-#include <condition_variable>
 
 using std::shared_ptr;
 using std::string;

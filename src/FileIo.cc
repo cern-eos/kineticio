@@ -2,8 +2,6 @@
 #include <Logging.hh>
 #include "FileIo.hh"
 #include "ClusterMap.hh"
-#include "LoggingException.hh"
-#include "Utility.hh"
 
 using std::shared_ptr;
 using std::unique_ptr;

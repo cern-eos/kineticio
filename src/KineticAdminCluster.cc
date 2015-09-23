@@ -1,6 +1,4 @@
 #include "KineticAdminCluster.hh"
-#include <memory>
-#include <string>
 #include <Logging.hh>
 
 using namespace kio;

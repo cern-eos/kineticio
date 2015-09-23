@@ -2,7 +2,6 @@
 #include "catch.hpp"
 #include <thread>
 #include "SimulatorController.h"
-#include <signal.h>
 
 /* Tests assume that location and security json file(s) exists and they contain information for
  * serial numbers SN1 and SN2, where SN1 is correct and SN2 is incorrect.

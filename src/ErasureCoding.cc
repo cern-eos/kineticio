@@ -1,8 +1,6 @@
 #include "ErasureCoding.hh"
 #include "Utility.hh"
 #include <isa-l.h>
-#include <sstream>
-#include <string.h>
 
 using std::string;
 using std::make_shared;

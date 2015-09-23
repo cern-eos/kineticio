@@ -65,7 +65,7 @@ public:
   //--------------------------------------------------------------------------
   virtual std::vector<bool> status() = 0;
 
-  virtual ~AdminClusterInterface() = default;
+  virtual ~AdminClusterInterface(){};
 };
 
 }
