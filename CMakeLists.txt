@@ -53,7 +53,6 @@ include_directories(
     ${ISAL_INCLUDE_DIRS}
 )
 set(kineticio_SRC
-    src/crc32c.c
     src/ClusterChunkCache.cc
     src/ClusterChunk.cc
     src/ClusterMap.cc
@@ -70,6 +69,8 @@ set(kineticio_SRC
     src/SequencePatternRecognition.cc
     src/BackgroundOperationHandler.cc
     src/Utility.cc
+    src/outside/crc32c.c
+    src/outside/MurmurHash3.cpp
 )
 set(kineticio_LIB
     ${JSONC_LIBRARIES}

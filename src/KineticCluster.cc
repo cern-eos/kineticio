@@ -3,6 +3,7 @@
 #include <set>
 #include <unistd.h>
 #include "Logging.hh"
+#include "outside/MurmurHash3.h"
 
 using std::unique_ptr;
 using std::shared_ptr;
@@ -382,7 +383,9 @@ std::vector<KineticAsyncOperation> KineticCluster::initialize(
     const shared_ptr<const string> key,
     size_t size, off_t offset)
 {
-  auto index = crc32c(0, key->c_str(), key->length()) + offset;
+  std::uint32_t index;
+  MurmurHash3_x86_32(key->c_str(),key->length(), 0, &index);
+  index += offset;
   std::vector<KineticAsyncOperation> ops;
 
   while (size) {
