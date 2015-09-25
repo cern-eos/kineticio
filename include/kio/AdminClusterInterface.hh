@@ -58,6 +58,13 @@ public:
   virtual KeyCounts repair() = 0;
 
   //--------------------------------------------------------------------------
+  //! Force delete _all_ keys on the cluster.
+  //!
+  //! @return statistics of keys
+  //--------------------------------------------------------------------------
+  virtual KeyCounts reset() = 0;
+
+  //--------------------------------------------------------------------------
   //! Obtain the current status of connections to all drives attached to this
   //! cluster.
   //!

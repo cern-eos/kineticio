@@ -34,3 +34,8 @@ std::unique_ptr<AdminClusterInterface> Factory::makeAdminCluster(const char* clu
 {
   return ClusterMap::getInstance().getAdminCluster(cluster_id);
 }
+
+void Factory::reloadConfiguration()
+{
+  ClusterMap::getInstance().loadConfiguration();
+}

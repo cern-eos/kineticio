@@ -54,16 +54,43 @@ SCENARIO("Repair integration test.", "[Repair]")
       REQUIRE(status.ok());
       REQUIRE(putversion);
 
+      THEN("It is marked as incomplete during a scan"){
+        auto kc = cluster->scan();
+        REQUIRE(kc.total == 1);
+        REQUIRE(kc.incomplete == 1);
+        REQUIRE(kc.need_repair == 0);
+        REQUIRE(kc.removed == 0);
+        REQUIRE(kc.repaired == 0);
+        REQUIRE(kc.unrepairable == 0);
+      }
       THEN("We can't repair it while the drive is down."){
         REQUIRE(cluster->repair().repaired == 0);
       }
+      THEN("We can still remove it by resetting the cluster."){
+        REQUIRE(cluster->reset().removed == 1);
+      }
 
-      THEN("We can repair it after the drive comes up again."){
+      AND_WHEN("The drive comes up again."){
         c.start(0);
         cluster->size();
         // wait for connection to reconnect
         sleep(2);
-        REQUIRE(cluster->repair().repaired == 1);
+
+        THEN("It is no longer marked as incomplete but as need_repair after a scan"){
+          auto kc = cluster->scan();
+          REQUIRE(kc.total == 1);
+          REQUIRE(kc.incomplete == 0);
+          REQUIRE(kc.need_repair == 1);
+          REQUIRE(kc.removed == 0);
+          REQUIRE(kc.repaired == 0);
+          REQUIRE(kc.unrepairable == 0);
+        }
+        THEN("We can repair the key.") {
+          REQUIRE(cluster->repair().repaired == 1);
+        }
+        THEN("We can reset the cluster."){
+          REQUIRE(cluster->reset().removed == 1);
+        }
       }
     }
   }

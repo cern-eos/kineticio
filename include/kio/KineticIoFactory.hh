@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 //! @file KineticIoFactory.hh
 //! @author Paul Hermann Lensing
-//! @brief Factory class for FileIo and FileAttr objects.
+//! @brief Factory class for public KineticIo objects.
 //------------------------------------------------------------------------------
 #ifndef __KINETICIO_FACTORY_HH__
 #define	__KINETICIO_FACTORY_HH__
@@ -19,7 +19,8 @@ namespace kio{
   //! The only way for clients of the public library interface to construct
   //! FileIo and FileAttr objects. Returns unique_ptr as the caller will
   //! have exclusive ownership (if wanted, caller can transfer ownership to
-  //! shared_ptr himself).
+  //! shared_ptr himself). Additionally, some administrative functionality
+  //! is supplied here.
   //----------------------------------------------------------------------------
   class Factory{
   public:
@@ -37,7 +38,6 @@ namespace kio{
     //! @return unique pointer to constructed FileAttr object.
     //--------------------------------------------------------------------------
     static std::unique_ptr<FileAttrInterface> makeFileAttr(const char* path);
-
 
     //--------------------------------------------------------------------------
     //! Construct an AdminCluster object and return it in a unique pointer.
@@ -57,8 +57,11 @@ namespace kio{
     //--------------------------------------------------------------------------
     static void registerLogFunction(logfunc_t log, shouldlogfunc_t shouldLog);
 
-
-
+    //--------------------------------------------------------------------------
+    //! The client may register may force a configuration load if the contents
+    //! of the JSON configuration files have changed.
+    //--------------------------------------------------------------------------
+    static void reloadConfiguration();
   };
 }
 

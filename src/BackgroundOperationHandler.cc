@@ -9,7 +9,7 @@ using namespace kio;
 BackgroundOperationHandler::BackgroundOperationHandler(int worker_threads, int queue_depth) :
    queue_capacity(queue_depth), thread_capacity(worker_threads), numthreads(0), shutdown(false)
 {
-  if(queue_capacity)
+  if(queue_depth)
   for(int i=0; i<worker_threads; i++)
     std::thread(&BackgroundOperationHandler::worker_thread, this).detach();
 }
@@ -22,6 +22,29 @@ BackgroundOperationHandler::~BackgroundOperationHandler()
   // Ensure all background threads have terminated before destructing the object.
   while (numthreads)
     usleep(1000);
+}
+
+void BackgroundOperationHandler::changeConfiguration(int worker_threads, int queue_depth)
+{
+  /* if we are in queue mode, and the changed configuration requires less worker threads,
+   * first kill all existing worker threads. */
+  if(queue_capacity && worker_threads < numthreads) {
+    shutdown = true;
+    worker.notify_all();
+    while (numthreads)
+      usleep(1000);
+    shutdown = false;
+  }
+
+  /* If the new configuration is in queue mode, start as many additional worker threads
+   * as required. */
+  if(queue_depth){
+    for(int i = queue_capacity ? numthreads.load() : 0; i<worker_threads; i++)
+      std::thread(&BackgroundOperationHandler::worker_thread, this).detach();
+  }
+
+  thread_capacity = worker_threads;
+  queue_capacity = queue_depth;
 }
 
 void BackgroundOperationHandler::drain_queue()

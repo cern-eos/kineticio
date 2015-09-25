@@ -53,6 +53,12 @@ public:
   ClusterChunkCache& getCache();
 
   //--------------------------------------------------------------------------
+  //! (Re)load the json configuration files and reconfigure the ClusterMap
+  //! accordingly.
+  //--------------------------------------------------------------------------
+  void loadConfiguration();
+
+  //--------------------------------------------------------------------------
   //! ClusterMap is shared among all FileIo objects.
   //--------------------------------------------------------------------------
   static ClusterMap& getInstance() {
@@ -167,45 +173,37 @@ private:
   //! @param filedata contents of a json file
   //! @param filetype specifies if filedata contains security or location
   //!        information.
-  //! @return 0 if successful, EINVAL if drive description incomplete or
-  //!         incorrect json.
   //--------------------------------------------------------------------------
-  int parseJson(const std::string& filedata, filetype type);
+  void parseJson(const std::string& filedata, filetype type);
 
   //--------------------------------------------------------------------------
   //! Creates a KineticConnection pair in the drive map containing the ip and
   //! port information.
   //!
   //! @param drive json root of one drive description containing location data
-  //! @return 0 if successful, EINVAL if name entry not available
   //--------------------------------------------------------------------------
-  int parseDriveLocation(struct json_object* drive);
+  void parseDriveLocation(struct json_object* drive);
 
   //--------------------------------------------------------------------------
   //! Adds security attributes to drive description
   //!
   //! @param drive json root of one drive description containing security data
-  //! @return 0 if successful, EINVAL if drive description incomplete or
-  //!         incorrect json,  ENODEV if drive id does not exist in map.
   //--------------------------------------------------------------------------
-  int parseDriveSecurity(struct json_object* drive);
+  void parseDriveSecurity(struct json_object* drive);
 
   //--------------------------------------------------------------------------
   //! Adds security attributes to drive description
   //!
   //! @param drive json root of one drive description containing security data
-  //! @return 0 if successful, EINVAL if drive description incomplete or
-  //!         incorrect json,  ENODEV if drive id does not exist in map.
   //--------------------------------------------------------------------------
-  int parseClusterInformation(struct json_object* cluster);
+  void parseClusterInformation(struct json_object* cluster);
 
   //--------------------------------------------------------------------------
   //! Adds security attributes to drive description
   //!
   //! @param drive json root of library configuration
-  //! @return 0 if successful, EINVAL if configuration is invalid
   //--------------------------------------------------------------------------
-  int parseConfiguration(struct json_object* configuration);
+  void parseConfiguration(struct json_object* configuration);
 
 };
 

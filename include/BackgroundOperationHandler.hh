@@ -51,6 +51,14 @@ public:
   void drain_queue();
 
   //--------------------------------------------------------------------------
+  //! Change configuration during runtime.
+  //!
+  //! @param worker_threads maximum number of spawned background threads
+  //! @param queue_depth maximum number of functions queued for execution
+  //--------------------------------------------------------------------------
+  void changeConfiguration(int worker_threads, int queue_depth);
+
+  //--------------------------------------------------------------------------
   //! Constructor. Note that if queue_depth is set to zero, background threads
   //! will be spawned on demand instead of being managed in a threadpool.
   //!
@@ -96,10 +104,10 @@ private:
 private:
   //! queue of functions to be executed
   std::queue<std::function<void()>> q;
-  //! maximum number of queue entries
-  const int queue_capacity;
-  //! maximum number of background threads
-  const int thread_capacity;
+  //! maximum number of queue entries, atomic to support changeConfiguration
+  std::atomic<int> queue_capacity;
+  //! maximum number of background threads, atomic to support changeConfiguration
+  std::atomic<int> thread_capacity;
   //! concurrency control for queue access;
   std::mutex queue_mutex;
   //! workers block until an item is inserted into queue

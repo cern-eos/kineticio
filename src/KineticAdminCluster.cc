@@ -19,7 +19,7 @@ std::vector<bool> KineticAdminCluster::status()
   return sv;
 }
 
-bool KineticAdminCluster::needsRepair(const std::shared_ptr<const std::string>& key, KeyCountsInternal& counts)
+bool KineticAdminCluster::scanKey(const std::shared_ptr<const std::string>& key, KeyCountsInternal& counts)
 {
   auto ops = initialize(key, nData + nParity);
   auto sync = asyncops::fillGetVersion(ops, key);
@@ -52,29 +52,44 @@ bool KineticAdminCluster::needsRepair(const std::shared_ptr<const std::string>& 
 }
 
 
-void KineticAdminCluster::scanAndRepair(std::vector<std::shared_ptr<const std::string>> keys, Operation o, KeyCountsInternal& counts)
+void KineticAdminCluster::applyOperation(
+    Operation o,
+    std::vector<std::shared_ptr<const std::string>> keys,
+    KeyCountsInternal& counts)
 {
   auto version = std::make_shared<const string>("");
   auto value = std::make_shared<const string>("");
+
   for(auto it = keys.cbegin(); it != keys.cend(); it++) {
     try {
-      if (needsRepair(*it, counts) && o == Operation::REPAIR) {
-        auto getstatus = this->get(*it, false, version, value);
-        if(getstatus.ok()){
-          auto putstatus = this->put(*it, version, value, false, version);
-          if (!putstatus.ok())
-            throw kio_exception(EIO, "Failed put operation on repair target-key \"", **it, "\" ", putstatus);
-          counts.repaired++;
-        }
-        else if(getstatus.statusCode() == StatusCode::REMOTE_NOT_FOUND){
-          auto rmstatus = this->remove(*it,version,true);
-          if (!rmstatus.ok())
-            throw kio_exception(EIO, "Failed remove operation on repair target-key \"", **it, "\" ", rmstatus);
-          counts.removed++;
-        }
-        else
-          throw kio_exception(EIO, "Failed get operation on repair target-key \"", **it, "\" ", getstatus);
+      if(o == Operation::SCAN) {
+        scanKey(*it, counts);
+        continue;
       }
+
+      /* set default to NO_FOUND so remove will be called for o == RESET */
+      KineticStatus status(StatusCode::REMOTE_NOT_FOUND, "");
+      if(o == Operation::REPAIR) {
+        if (!scanKey(*it, counts))
+          continue;
+        status = this->get(*it, false, version, value);
+      }
+
+      if (status.ok()) {
+        auto putstatus = this->put(*it, version, value, false, version);
+        if (!putstatus.ok())
+          throw kio_exception(EIO, "Failed put operation on target-key \"", **it, "\" ", putstatus);
+        counts.repaired++;
+      }
+      else if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
+        auto rmstatus = this->remove(*it, version, true);
+        if (!rmstatus.ok())
+          throw kio_exception(EIO, "Failed remove operation on target-key \"", **it, "\" ", rmstatus);
+        counts.removed++;
+      }
+      else
+        throw kio_exception(EIO, "Failed get operation on target-key \"", **it, "\" ", status);
+
     } catch (const std::exception& e) {
       counts.unrepairable++;
       kio_warning(e.what());
@@ -93,7 +108,7 @@ KineticAdminCluster::KeyCounts KineticAdminCluster::doOperation(Operation o) {
   do {
     auto status = range(start_key, end_key, 100, keys);
     if (!status.ok()) {
-      kio_warning("range() failed on cluster. Cannot proceed. ", status);
+      kio_warning("range(",*start_key, " - ", *end_key, ") failed on cluster. Cannot proceed. ", status);
       break;
     }
     if (keys && keys->size()) {
@@ -105,7 +120,7 @@ KineticAdminCluster::KeyCounts KineticAdminCluster::doOperation(Operation o) {
         for (auto it = keys->cbegin(); it != keys->cend(); it++)
           out.push_back(std::make_shared<const string>(std::move(*it)));
 
-        auto b = std::bind(&KineticAdminCluster::scanAndRepair, this, out, o, std::ref(c));
+        auto b = std::bind(&KineticAdminCluster::applyOperation, this, o, out, std::ref(c));
         background.run(b);
       }
     }
@@ -129,4 +144,9 @@ KineticAdminCluster::KeyCounts KineticAdminCluster::scan()
 KineticAdminCluster::KeyCounts KineticAdminCluster::repair()
 {
   return doOperation(Operation::REPAIR);
+}
+
+KineticAdminCluster::KeyCounts KineticAdminCluster::reset()
+{
+  return doOperation(Operation::RESET);
 }

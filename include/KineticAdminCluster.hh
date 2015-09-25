@@ -26,6 +26,9 @@ public:
   KeyCounts repair();
 
   //! See documentation of public interface in AdminClusterInterface
+  KeyCounts reset();
+
+  //! See documentation of public interface in AdminClusterInterface
   std::vector<bool> status();
 
   //! Perfect forwarding is nice, and I am lazy. Look in KineticCluster.hh for the correct arguments
@@ -40,7 +43,7 @@ private:
   //! The different types of admin cluster operations
   //--------------------------------------------------------------------------
   enum class Operation{
-      COUNT, SCAN, REPAIR
+      COUNT, SCAN, REPAIR, RESET
   };
 
   //--------------------------------------------------------------------------
@@ -58,12 +61,22 @@ private:
   };
 
   //--------------------------------------------------------------------------
-  //! The main loop for count / scan / repair operations.
+  //! The main loop for count / scan / repair / reset operations.
   //!
   //! @param o The operation type to be executed
   //! @return statistics of keys
   //--------------------------------------------------------------------------
   KeyCounts doOperation(Operation o);
+
+  //--------------------------------------------------------------------------
+  //! Apply a scan / repair / reset operation to the supplied keys.
+  //!
+  //! @param keys a set of keys to scan
+  //! @param o Operation type
+  //! @param counts keep statistics current by increasing repaired / removed
+  //!   and unrepairable counts as necessary.
+  //--------------------------------------------------------------------------
+  void applyOperation(Operation o, std::vector<std::shared_ptr<const std::string>> keys, KeyCountsInternal& counts);
 
   //--------------------------------------------------------------------------
   //! Check if the key requires repair. If the stripe of the key cannot be
@@ -75,18 +88,7 @@ private:
   //! @return Returns true if the key needs to be repaired, false if it is
   //! either fine or nothing can be done due to unreachable drives.
   //--------------------------------------------------------------------------
-  bool needsRepair(const std::shared_ptr<const std::string>& key, KeyCountsInternal& counts);
-
-  //--------------------------------------------------------------------------
-  //! Check all supplied keys, update keycounts. If this is called by a repair
-  //! operation, try to repair as required.
-  //!
-  //! @param keys a set of keys to scan
-  //! @param o Operation type, can be SCAN or REPAIR
-  //! @param counts keep statistics current by increasing repaired / removed
-  //!   and unrepairable counts as necessary.
-  //--------------------------------------------------------------------------
-  void scanAndRepair(std::vector<std::shared_ptr<const std::string>> keys, Operation o, KeyCountsInternal& counts);
+  bool scanKey(const std::shared_ptr<const std::string>& key, KeyCountsInternal& counts);
 };
 
 }

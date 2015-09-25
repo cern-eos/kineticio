@@ -15,6 +15,14 @@ ClusterChunkCache::ClusterChunkCache(size_t preferred_size, size_t capacity, siz
   if(bg_threads<0) throw std::logic_error("number of background threads cannot be negative.");
 }
 
+void ClusterChunkCache::changeConfiguration(size_t preferred_size, size_t cap, size_t bg_threads,
+                                            size_t bg_queue_depth)
+{
+  target_size = preferred_size;
+  capacity = cap;
+  bg.changeConfiguration(bg_threads, bg_queue_depth);
+}
+
 void ClusterChunkCache::drop(kio::FileIo* owner)
 {
   /* If we encountered a exception in a background flush, we don't care

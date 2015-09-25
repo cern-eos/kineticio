@@ -85,6 +85,18 @@ public:
   double pressure();
 
   //--------------------------------------------------------------------------
+  //! The configuration of an existing ClusterChunkCache object can be changed
+  //! during runtime.
+  //!
+  //! @param preferred_size size in bytes the cache should ideally not exceed
+  //! @param capacity absolute maximum size of the cache in bytes
+  //! @param bg_threads number of threads to spawn for background IO
+  //! @param bg_queue_depth maximum number of functions queued for background
+  //!   execution
+  //--------------------------------------------------------------------------
+  void changeConfiguration(size_t preferred_size, size_t capacity, size_t bg_threads, size_t bg_queue_depth);
+
+  //--------------------------------------------------------------------------
   //! Constructor.
   //!
   //! @param preferred_size size in bytes the cache should ideally not exceed
@@ -128,10 +140,10 @@ private:
 
 private:
   //! preferred size of the cache (soft cap)
-  const std::size_t target_size;
+  std::atomic<std::size_t> target_size;
 
   //! maximum size of the cache (hard cap)
-  const std::size_t capacity;
+  std::atomic<std::size_t> capacity;
 
   //! current size of the cache
   std::atomic<std::size_t> current_size;
