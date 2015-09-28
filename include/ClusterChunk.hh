@@ -82,7 +82,6 @@ public:
   //--------------------------------------------------------------------------
   std::size_t capacity() const;
 
-
   //--------------------------------------------------------------------------
   //! Test for your flushing needs. Chunk is considered dirty if it is either
   //! freshly created or it has been written since its last flush.
@@ -90,6 +89,11 @@ public:
   //! @return true if dirty, false otherwise.
   //--------------------------------------------------------------------------
   bool dirty() const;
+
+  //--------------------------------------------------------------------------
+  //! Get the key set for this chunk.
+  //--------------------------------------------------------------------------
+  const std::shared_ptr<const std::string>& getKey();
 
   //--------------------------------------------------------------------------
   //! Constructor.

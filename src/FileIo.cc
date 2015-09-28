@@ -21,6 +21,7 @@ FileIo::FileIo() :
 
 FileIo::~FileIo()
 {
+  cache.drop(this);
 }
 
 /* All necessary checks have been done in the 993 line long
@@ -56,7 +57,10 @@ void FileIo::Open(const std::string &p, int flags,
 
 void FileIo::Close(uint16_t timeout)
 {
-  Sync(timeout);
+  if (!cluster)
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
+
+  cache.flush(this);
   cache.drop(this);
   cluster.reset();
   obj_path.clear();
@@ -110,8 +114,7 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
       if (chunk_number >= lastChunkNumber.get()) {
         /* make sure length doesn't indicate that we read past filesize. */
         if (chunk->size() > chunk_offset)
-          length_todo -= std::min(chunk_length,
-                                  (size_t) chunk->size() - chunk_offset);
+          length_todo -= std::min(chunk_length, chunk->size() - chunk_offset);
         break;
       }
     }
@@ -144,13 +147,15 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
   int chunk_number = offset / chunk_capacity;
   int chunk_offset = offset - chunk_number * chunk_capacity;
 
-  /* Step 1) truncate the chunk containing the offset. */
-  cache.get(this, chunk_number, ClusterChunk::Mode::STANDARD)->truncate(chunk_offset);
+  if(offset>0){
+    /* Step 1) truncate the chunk containing the offset. */
+    cache.get(this, chunk_number, ClusterChunk::Mode::STANDARD)->truncate(chunk_offset);
 
-  /* Step 2) Ensure we don't have chunks past chunk_number in the cache. Since
-   * truncate isn't super common, go the easy way and just sync+drop the
-   * cache... this will also sync the just truncated chunk.  */
-  cache.flush(this);
+    /* Step 2) Ensure we don't have chunks past chunk_number in the cache. Since
+     * truncate isn't super common, go the easy way and just sync+drop the entire
+     * cache... this will also sync the just truncated chunk.  */
+    cache.flush(this);
+  }
   cache.drop(this);
 
   /* Step 3) Delete all chunks past chunk_number. When truncating to size 0,

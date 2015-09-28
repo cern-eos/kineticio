@@ -31,8 +31,6 @@ class ClusterChunkCache
 {
 
 public:
-  enum class RequestMode { READAHEAD, STANDARD };
-
   //--------------------------------------------------------------------------
   //! Return the cluster chunk associated with the supplied owner and chunk
   //! number. Throws on error. ALSO throws, if a background flush has failed
@@ -43,6 +41,7 @@ public:
   //! @param mode argument to pass to a chunk if it has to be created
   //! @return the chunk on success, throws on error
   //--------------------------------------------------------------------------
+  enum class RequestMode { READAHEAD, STANDARD };
   std::shared_ptr<kio::ClusterChunk> get(
       kio::FileIo* owner,
       int chunknumber,
@@ -58,8 +57,8 @@ public:
   void flush(kio::FileIo* owner);
 
   //--------------------------------------------------------------------------
-  //! Drops all chunks associated with the owner from the cache, dirty chunks
-  //! are not flushed.
+  //! Drop the owner from the cache, optionally also drop associated chunks
+  //! (dirty chunks will not be flushed in this case).
   //!
   //! @param owner a pointer to the kio::FileIo object the chunks belong to
   //--------------------------------------------------------------------------
@@ -118,6 +117,57 @@ public:
   void operator=(ClusterChunkCache&) = delete;
 
 private:
+  //! preferred size of the cache (soft cap), atomic so it may be changed during runtime
+  std::atomic<std::size_t> target_size;
+
+  //! maximum size of the cache (hard cap), atomic so it may be changed during runtime
+  std::atomic<std::size_t> capacity;
+
+  //! current size of the cache
+  std::atomic<std::size_t> current_size;
+
+  //! handle background readahead and flush requests
+  BackgroundOperationHandler bg;
+
+  struct CacheItem{
+    std::set<kio::FileIo*> owners;
+    std::shared_ptr<kio::ClusterChunk> chunk;
+  };
+
+  //! A linked list of cluster chunks stored in LRU order
+  std::list<CacheItem> cache;
+
+  //! the lookup table
+  typedef std::list<CacheItem>::iterator cache_iterator;
+  std::unordered_map<std::string, cache_iterator> lookup;
+
+  //! comparison operator so we can create std::set<cache_iterator>
+  struct cache_iterator_compare{
+    bool operator()(const cache_iterator& lhs, const cache_iterator& rhs) const{
+      return lhs->chunk < rhs->chunk;
+    }
+  };
+
+  //! keep set of cache items associated with each owner (for drop & flush commands)
+  std::unordered_map<const kio::FileIo*, std::set<cache_iterator, cache_iterator_compare>> owner_tables;
+
+  //! Exceptions occurring during background execution are stored and thrown at
+  //! the next get request of the owner.
+  std::unordered_map<const kio::FileIo*, std::exception> exceptions;
+
+  //! Track per FileIo access patterns and attempt to pre-fetch intelligently
+  std::unordered_map<const kio::FileIo*, SequencePatternRecognition> prefetch;
+
+  //! Thread safety when accessing exception map
+  std::mutex exception_mutex;
+
+  //! Thread safety when accessing pre-fetch map
+  std::mutex readahead_mutex;
+
+  //! Thread safety when accessing cache structures (lookup table and lru list)
+  std::mutex cache_mutex;
+
+private:
   //--------------------------------------------------------------------------
   //! Attempt to read the requested chunk number for the owner in a background
   //! thread. If this is not possible due to the number of active background
@@ -138,53 +188,14 @@ private:
   //--------------------------------------------------------------------------
   void do_flush(kio::FileIo *owner, std::shared_ptr<kio::ClusterChunk> chunk);
 
-private:
-  //! preferred size of the cache (soft cap)
-  std::atomic<std::size_t> target_size;
-
-  //! maximum size of the cache (hard cap)
-  std::atomic<std::size_t> capacity;
-
-  //! current size of the cache
-  std::atomic<std::size_t> current_size;
-
-  //! handle background readahead and flush requests
-  BackgroundOperationHandler bg;
-
-  //! The cache item structure
-  struct CacheItem
-  {
-    //! the chunk number
-    const int id;
-    //! the chunk owner
-    const kio::FileIo* owner;
-    //! the actual chunk
-    std::shared_ptr<kio::ClusterChunk> chunk;
-  };
-  typedef std::list<CacheItem>::iterator cache_iterator;
-  typedef std::unordered_map<int, cache_iterator> chunk_map;
-
-  //! A linked list of CacheItems stored in LRU order
-  std::list<CacheItem> cache;
-
-  //! the primary lookup table contains a chunk lookup table for every owner
-  std::unordered_map<const FileIo*, chunk_map> lookup;
-
-  //! Exceptions occurring during background execution are stored and thrown at
-  //! the next get request of the owner.
-  std::unordered_map<const kio::FileIo*, std::exception> exceptions;
-
-  //! Track per FileIo access patterns and attempt to pre-fetch intelligently
-  std::unordered_map<const kio::FileIo*, SequencePatternRecognition> prefetch;
-
-  //! Thread safety when accessing exception map
-  std::mutex exception_mutex;
-
-  //! Thread safety when accessing pre-fetch map
-  std::mutex readahead_mutex;
-
-  //! Thread safety when accessing cache structures (lookup table and lru list)
-  std::mutex cache_mutex;
+  //--------------------------------------------------------------------------
+  //! Remove an item from the cache as well as the lookup table and from
+  //! associated owners.
+  //!
+  //! @param it an iterator to the element to be removed
+  //! @return iterator to following element
+  //!--------------------------------------------------------------------------
+  cache_iterator remove_item(const cache_iterator& it);
 };
 
 

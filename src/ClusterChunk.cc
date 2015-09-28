@@ -29,6 +29,11 @@ ClusterChunk::~ClusterChunk()
   std::lock_guard<std::mutex> lock(mutex);
 }
 
+const std::shared_ptr<const std::string>& ClusterChunk::getKey()
+{
+  return key;
+}
+
 bool ClusterChunk::validateVersion()
 {
   /* See if check is unnecessary based on expiration. */
@@ -61,7 +66,7 @@ bool ClusterChunk::validateVersion()
 
 void ClusterChunk::getRemoteValue()
 {
-  std::shared_ptr<const string> remote_value;
+  auto remote_value = make_shared<const string>("");
   auto status = cluster->get(key, false, version, remote_value);
 
   if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
@@ -70,14 +75,15 @@ void ClusterChunk::getRemoteValue()
   /* We read in the current value from the drive. Remember the time. */
   timestamp = system_clock::now();
 
-  /* If remote is not available, keep the current value. */
+  /* If remote is not available, reset version. */
   if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
-    return;
+    version.reset();
 
   /* Merge all updates done on the local data copy (data) into the freshly
      read-in data copy. */
   auto merged_value = make_shared<string>(*remote_value);
-  merged_value->resize(std::max(remote_value->size(), value->size()));
+  if(!updates.empty())
+    merged_value->resize(std::max(remote_value->size(), value->size()));
 
   for (auto iter = updates.begin(); iter != updates.end(); ++iter) {
     auto update = *iter;
