@@ -207,8 +207,7 @@ bool resultsEqual(const KineticAsyncOperation& lhs, const KineticAsyncOperation&
 
 bool getVersionEqual(const KineticAsyncOperation& lhs, const KineticAsyncOperation& rhs)
 {
-  if((!lhs.callback->getResult().ok() && lhs.callback->getResult().statusCode() != StatusCode::REMOTE_NOT_FOUND) ||
-     (!rhs.callback->getResult().ok() && rhs.callback->getResult().statusCode() != StatusCode::REMOTE_NOT_FOUND))
+  if(!lhs.callback->getResult().ok() || !rhs.callback->getResult().ok())
     return false;
 
   return
@@ -219,8 +218,7 @@ bool getVersionEqual(const KineticAsyncOperation& lhs, const KineticAsyncOperati
 
 bool getRecordVersionEqual(const KineticAsyncOperation& lhs, const KineticAsyncOperation& rhs)
 {
-  if (!std::static_pointer_cast<GetCallback>(lhs.callback)->getRecord() ||
-      !std::static_pointer_cast<GetCallback>(rhs.callback)->getRecord())
+  if(!lhs.callback->getResult().ok() || !rhs.callback->getResult().ok())
     return false;
 
   return
@@ -233,7 +231,8 @@ asyncops::VersionCount asyncops::mostFrequentRecordVersion(std::vector<KineticAs
 {
   asyncops::VersionCount v{std::shared_ptr<const std::string>(), 0};
   auto& op = mostFrequent(ops, v.frequency, getRecordVersionEqual);
-  v.version = std::static_pointer_cast<GetCallback>(op.callback)->getRecord()->version();
+  if(v.frequency)
+    v.version = std::static_pointer_cast<GetCallback>(op.callback)->getRecord()->version();
   return v;
 }
 
@@ -241,9 +240,10 @@ asyncops::VersionCount asyncops::mostFrequentVersion(std::vector<KineticAsyncOpe
 {
   asyncops::VersionCount v{std::shared_ptr<const std::string>(), 0};
   auto& op = mostFrequent(ops, v.frequency, getVersionEqual);
-  v.version = std::make_shared<const std::string>(
-      std::static_pointer_cast<GetVersionCallback>(op.callback)->getVersion()
-  );
+  if(v.frequency)
+    v.version = std::make_shared<const std::string>(
+        std::static_pointer_cast<GetVersionCallback>(op.callback)->getVersion()
+    );
   return v;
 
 }

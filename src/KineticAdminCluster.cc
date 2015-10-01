@@ -33,24 +33,23 @@ bool KineticAdminCluster::scanKey(const std::shared_ptr<const std::string>& key,
         "stripe size of ", nData+nParity);
     counts.incomplete++;
   }
-
   if(target_version.frequency == valid_results && valid_results >= nData) {
     kio_debug("Key \"", *key, "\" does not require repair.");
     return false;
   }
-  else if(target_version.frequency >=  nData) {
-    kio_debug("Key \"", *key, "\" requires repair.");
-
+  else if(target_version.frequency >=  nData || rmap[StatusCode::REMOTE_NOT_FOUND] >= nData) {
+    kio_debug("Key \"", *key, "\" requires repair or removal.");
     counts.need_repair++;
     return true;
   }
 
   throw std::runtime_error(utility::Convert::toString(
-      "Key ", *key, " is unrepairable. We succeeded to read ", valid_results, " of ", nData+nParity,
-      " key versions, ", target_version.frequency, " of which have an equivalent version (", nData, ") needed."
+      "Key ", *key, " is unfixable. We succeeded to read from ", valid_results, " of ", nData+nParity, " drives. ",
+      rmap[StatusCode::REMOTE_NOT_FOUND], " drives do not store the key. ",
+      rmap[StatusCode::OK], " drives store they key, ", target_version.frequency, " of which have an equivalent version "
+      "(", nData, ") needed."
   ));
 }
-
 
 void KineticAdminCluster::applyOperation(
     Operation o,

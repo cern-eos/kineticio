@@ -159,18 +159,23 @@ protected:
   //--------------------------------------------------------------------------
   void updateSize();
 
+
 protected:
   //! number of data chunks in a stripe
-  std::size_t nData;
+  const std::size_t nData;
 
   //! number of parities in a stripe
-  std::size_t nParity;
+  const std::size_t nParity;
+
+  //! timeout of asynchronous operations
+  const std::chrono::seconds operation_timeout;
 
   //! all connections associated with this cluster
   std::vector< std::unique_ptr<KineticAutoConnection> > connections;
 
-  //! timeout of asynchronous operations
-  std::chrono::seconds operation_timeout;
+  //! time point we last required parity information during a get operation, can be used to enable / deable
+  //! reading parities with the data
+  std::chrono::system_clock::time_point parity_required;
 
   //! cluster limits are constant over cluster lifetime
   ClusterLimits clusterlimits;
@@ -181,8 +186,8 @@ protected:
   //! updating cluster size in the background
   BackgroundOperationHandler clustersize_background;
 
-  //! concurrency control
-  std::mutex clustersize_mutex;
+  //! concurrency control of clustersize and parity_required variables
+  std::mutex mutex;
 
   //! erasure coding
   std::shared_ptr<ErasureCoding> erasure;

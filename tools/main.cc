@@ -8,7 +8,7 @@ using std::cout;
 using std::endl;
 
 enum class Operation{
-    STATUS, COUNT, SCAN, REPAIR, INVALID
+    STATUS, COUNT, SCAN, REPAIR, RESET, INVALID
 };
 
 struct Configuration{
@@ -16,14 +16,27 @@ struct Configuration{
     std::string id;
 };
 
-void usage(){
-  cout << "-------------------------------------------------------" << endl;
-  cout << "-id clusterID, where clusterID is a valid cluster id   " << endl;
-  cout << "-status, obtain the cluster status." << endl;
-  cout << "-count, count number of keys on the cluster " << endl;
-  cout << "-scan, perform a scan only, no repair will be attempted" << endl;
-  cout << "-repair, scan & repair all keys possible in the cluster" << endl;
-  cout << "-------------------------------------------------------" << endl;
+int kinetic_help(){
+  fprintf(stdout, "'[eos] kinetic ..' provides the kinetic cluster management interface of EOS.\n");
+  fprintf(stdout, " Usage: kinetic -cluster id status|count|scan|repair|reset \n");
+  fprintf(stdout, "    status: print status of connections of the cluster. \n");
+  fprintf(stdout, "    count: number of keys existing in the cluster. \n");
+  fprintf(stdout, "    scan: check all keys existing in the cluster and display their status information (Warning: Long Runtime) \n");
+  fprintf(stdout, "    repair: check all keys existing in the cluster, repair as required, display their status information. (Warning: Long Runtime) \n");
+  fprintf(stdout, "    reset: force remove all keys on all drives associated with the cluster, you will loose ALL data! \n");
+  fprintf(stdout, " Usage: kinetic -config reload \n");
+  fprintf(stdout, "    reload: reload the json config files, existing transfers continue using previous cluster configuration. \n");
+  return 0;
+}
+
+void printKeyCount(const kio::AdminClusterInterface::KeyCounts& kc)
+{
+  fprintf(stdout, "Completed Operation. Scanned a total of %d keys\n", kc.total);
+  fprintf(stdout, "Stripes with inaccessible drives: %d\n", kc.incomplete);
+  fprintf(stdout, "Can Repair / Remove: %d\n", kc.need_repair);
+  fprintf(stdout, "Repaired: %d\n", kc.repaired);
+  fprintf(stdout, "Removed: %d\n", kc.removed);
+  fprintf(stdout, "Unrepairable: %d\n", kc.unrepairable);
 }
 
 bool mshouldLog(const char* func, int level){
@@ -64,19 +77,11 @@ bool parseArguments(int argc, char** argv, Configuration& config) {
       config.op = Operation::REPAIR;
     else if(strcmp("-status", argv[i]) == 0)
       config.op = Operation::STATUS;
+    else if(strcmp("-reset", argv[i]) == 0)
+      config.op = Operation::RESET;
   }
 
   return config.id.length() && config.op != Operation::INVALID;
-}
-
-void printKeyCount(const kio::KineticAdminCluster::KeyCounts& kc)
-{
-  cout << "Completed Operation. Scanned a total of " << kc.total << " keys." << endl;
-  cout << "Incomplete: " << kc.incomplete << endl;
-  cout << "Need Repair: " << kc.need_repair << endl;
-  cout << "Repaired: " << kc.repaired << endl;
-  cout << "Removed: " << kc.removed << endl;
-  cout << "Unrepairable: " << kc.unrepairable << endl;
 }
 
 int main(int argc, char** argv)
@@ -84,7 +89,7 @@ int main(int argc, char** argv)
   Configuration config;
   if(!parseArguments(argc, argv, config)){
     cout << "Incorrect arguments" << endl;
-    usage();
+    kinetic_help();
     return EXIT_FAILURE;
   }
 
@@ -112,6 +117,10 @@ int main(int argc, char** argv)
       }
       case Operation::REPAIR: {
         printKeyCount(ac->repair());
+        break;
+      }
+      case Operation::RESET: {
+        printKeyCount(ac->reset());
         break;
       }
     }

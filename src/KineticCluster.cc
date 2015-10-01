@@ -83,7 +83,7 @@ std::vector<shared_ptr<const string> > getOperationToStripe(
         ) {
 
       auto checksum = crc32c(0, record->value()->c_str(), record->value()->length());
-      auto tag = std::to_string((long long unsigned int) checksum);
+      auto tag = utility::Convert::toString(checksum);
       if (tag == *record->tag()) {
         stripe.back() = record->value();
         count++;
@@ -93,6 +93,7 @@ std::vector<shared_ptr<const string> > getOperationToStripe(
   return stripe;
 }
 
+
 KineticStatus KineticCluster::get(
     const shared_ptr<const string>& key,
     bool skip_value,
@@ -100,56 +101,77 @@ KineticStatus KineticCluster::get(
     shared_ptr<const string>& value
 )
 {
-  auto ops = initialize(key, nData + nParity);
+  /* If we haven't encountered the need for parities during get in the last 10 minutes, try to get the value
+   * without parities. */
+  bool getParities = true;
+  if(nData > nParity) {
+    std::lock_guard<std::mutex> lock(mutex);
+    if(std::chrono::duration_cast<std::chrono::minutes>(std::chrono::system_clock::now()-parity_required).count() > 10)
+      getParities = false;
+  }
+
+  auto ops = initialize(key, nData + (getParities ? nParity : 0));
   auto sync = skip_value ? asyncops::fillGetVersion(ops, key) : asyncops::fillGet(ops, key);
   auto rmap = execute(ops, *sync);
 
-  if (rmap[StatusCode::OK] >= nData) {
-    if (skip_value) {
-      auto target_version = asyncops::mostFrequentVersion(ops);
-      if (target_version.frequency >= nData)
-        version = target_version.version;
-      rmap[StatusCode::OK] = target_version.frequency;
-    }
-    else {
-      auto target_version = asyncops::mostFrequentRecordVersion(ops);
-      auto stripe_values = 0;
-      auto stripe = getOperationToStripe(ops, stripe_values, target_version.version);
+  auto target_version = skip_value ? asyncops::mostFrequentVersion(ops) : asyncops::mostFrequentRecordVersion(ops);
+  rmap[StatusCode::OK] = target_version.frequency;
 
-      /* stripe_values 0 -> empty value for key. */
-      if (stripe_values == 0) {
-        value = make_shared<const string>();
-        version = target_version.version;
-        return KineticStatus(StatusCode::OK, "");
-      }
+  /* Any status code encountered at least nData times is valid. If operation was a success, set return values. */
+  for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
+    if (it->second >= nData) {
+      if (it->first == StatusCode::OK){
+        /* set value */
+        if(!skip_value){
+          auto stripe_values = 0;
+          auto stripe = getOperationToStripe(ops, stripe_values, target_version.version);
 
-      /* missing blocks -> erasure code */
-      if (stripe_values < stripe.size()) {
-        try {
-          erasure->compute(stripe);
-        } catch (const std::exception& e) {
-          return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
+          /* stripe_values 0 -> empty value for key. */
+          if (stripe_values == 0) {
+            value = make_shared<const string>();
+          }
+          else{
+            /* missing blocks -> erasure code. If we skipped reading parities, we have to abort. */
+            if (stripe_values < stripe.size()){
+              if(!getParities)
+                break;
+              { std::lock_guard<std::mutex> lock(mutex);
+                parity_required = std::chrono::system_clock::now();
+              }
+              try {
+                erasure->compute(stripe);
+              } catch (const std::exception& e) {
+                return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
+              }
+            }
+
+            /* Create a single value from stripe values, around 0.5 ms per data subchunk. */
+            auto v = make_shared<string>();
+            v->reserve(stripe.front()->size() * nData);
+            for (int i = 0; i < nData; i++) {
+              *v += *stripe[i];
+            }
+
+            /* Resize value to size encoded in version (to support unaligned value sizes). */
+            v->resize(utility::uuidDecodeSize(target_version.version));
+            value = std::move(v);
+          }
+          /* set version */
+          version = target_version.version;
         }
       }
-
-      /* Create a single value from stripe values, around 0.5 ms per data subchunk. */
-      auto v = make_shared<string>();
-      v->reserve(stripe.front()->size() * nData);
-      for (int i = 0; i < nData; i++) {
-        *v += *stripe[i];
-      }
-
-      /* Resize value to size encoded in version (to support unaligned value sizes). */
-      v->resize(utility::uuidDecodeSize(target_version.version));
-      value = std::move(v);
-      version = std::move(target_version.version);
-    }
-  }
-  for (auto it = rmap.cbegin(); it != rmap.cend(); it++)
-    if (it->second >= nData) {
       return KineticStatus(it->first, "");
     }
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Confusion when attempting to get key" + *key);
+  }
+
+  if(!getParities){
+    { std::lock_guard<std::mutex> lock(mutex);
+      parity_required = std::chrono::system_clock::now();
+    }
+    return get(key, skip_value, version, value);
+  }
+
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key" + *key + "not accessible.");
 }
 
 static int getVersionPosition(const shared_ptr<const string>& version, std::vector<KineticAsyncOperation>& vops)
@@ -164,17 +186,20 @@ static int getVersionPosition(const shared_ptr<const string>& version, std::vect
 
 /* Handle races, 2 or more clients attempting to put/remove the same key at the same time. */
 bool KineticCluster::mayForce(const shared_ptr<const string>& key, const shared_ptr<const string>& version,
-                              std::map<StatusCode, int, KineticCluster::compareStatusCode> rmap)
+                              std::map<StatusCode, int, KineticCluster::compareStatusCode> ormap)
 {
-  if (rmap[StatusCode::OK] > (nData + nParity) / 2)
+  if (ormap[StatusCode::OK] > (nData + nParity) / 2)
     return true;
 
   auto ops = initialize(key, nData + nParity);
   auto sync = asyncops::fillGetVersion(ops, key);
-  execute(ops, *sync);
+  auto rmap = execute(ops, *sync);
   auto most_frequent = asyncops::mostFrequentVersion(ops);
 
-  if (*version == *most_frequent.version)
+  if(rmap[StatusCode::REMOTE_NOT_FOUND] >= nData)
+    return version->size() != 0;
+
+  if (most_frequent.frequency && *version == *most_frequent.version)
     return true;
 
   if(most_frequent.frequency >= nData)
@@ -190,13 +215,13 @@ bool KineticCluster::mayForce(const shared_ptr<const string>& key, const shared_
     usleep(10000);
     auto ops = initialize(key, nData + nParity);
     auto sync = asyncops::fillGetVersion(ops, key);
-    execute(ops, *sync);
+    auto rmap = execute(ops, *sync);
 
-    if(getVersionPosition(version, ops)<0)
+    if(getVersionPosition(version, ops) < 0)
       return false;
 
     most_frequent = asyncops::mostFrequentVersion(ops);
-    if(most_frequent.frequency >= nData)
+    if(most_frequent.frequency >= nData || rmap[StatusCode::REMOTE_NOT_FOUND] >= nData)
       return false;
   }while(std::chrono::system_clock::now() < timeout_time);
 
@@ -354,7 +379,7 @@ void KineticCluster::updateSize()
   execute(ops, *sync);
 
   /* Evaluate Operation Result. */
-  std::lock_guard<std::mutex> lock(clustersize_mutex);
+  std::lock_guard<std::mutex> lock(mutex);
   clustersize.bytes_total = clustersize.bytes_free = 0;
   for (auto o = ops.begin(); o != ops.end(); o++) {
     if (!o->callback->getResult().ok()) {
@@ -375,7 +400,7 @@ const ClusterLimits& KineticCluster::limits() const
 ClusterSize KineticCluster::size()
 {
   clustersize_background.try_run(std::bind(&KineticCluster::updateSize, this));
-  std::lock_guard<std::mutex> lock(clustersize_mutex);
+  std::lock_guard<std::mutex> lock(mutex);
   return clustersize;
 }
 
