@@ -19,7 +19,7 @@ KineticCluster::KineticCluster(
     std::shared_ptr<ErasureCoding> ec,
     SocketListener& listener
 ) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout),
-    clustersize{1,0}, clustersize_background(1,1), erasure(ec)
+    clustersize{1, 0}, clustersize_background(1, 1), erasure(ec)
 {
   if (nData + nParity > info.size()) {
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
@@ -40,9 +40,9 @@ KineticCluster::KineticCluster(
     auto rmap = execute(ops, *sync);
     if (rmap[StatusCode::OK]) {
       const auto& l = std::static_pointer_cast<GetLogCallback>(ops.front().callback)->getLog()->limits;
-      if(l.max_value_size < block_size) {
+      if (l.max_value_size < block_size) {
         throw kio_exception(ENXIO, "configured block size of ", block_size,
-                                   "is smaller than maximum drive block size of ", l.max_value_size);
+                            "is smaller than maximum drive block size of ", l.max_value_size);
       }
       clusterlimits.max_key_size = l.max_key_size;
       clusterlimits.max_value_size = block_size * nData;
@@ -104,10 +104,12 @@ KineticStatus KineticCluster::get(
   /* If we haven't encountered the need for parities during get in the last 10 minutes, try to get the value
    * without parities. */
   bool getParities = true;
-  if(nData > nParity) {
+  if (nData > nParity) {
     std::lock_guard<std::mutex> lock(mutex);
-    if(std::chrono::duration_cast<std::chrono::minutes>(std::chrono::system_clock::now()-parity_required).count() > 10)
-      getParities = false;
+    if (std::chrono::duration_cast<std::chrono::minutes>(std::chrono::system_clock::now() - parity_required).count() >
+        10) {
+          getParities = false;
+    }
   }
 
   auto ops = initialize(key, nData + (getParities ? nParity : 0));
@@ -120,9 +122,9 @@ KineticStatus KineticCluster::get(
   /* Any status code encountered at least nData times is valid. If operation was a success, set return values. */
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
     if (it->second >= nData) {
-      if (it->first == StatusCode::OK){
+      if (it->first == StatusCode::OK) {
         /* set value */
-        if(!skip_value){
+        if (!skip_value) {
           auto stripe_values = 0;
           auto stripe = getOperationToStripe(ops, stripe_values, target_version.version);
 
@@ -130,12 +132,14 @@ KineticStatus KineticCluster::get(
           if (stripe_values == 0) {
             value = make_shared<const string>();
           }
-          else{
+          else {
             /* missing blocks -> erasure code. If we skipped reading parities, we have to abort. */
-            if (stripe_values < stripe.size()){
-              if(!getParities)
+            if (stripe_values < stripe.size()) {
+              if (!getParities) {
                 break;
-              { std::lock_guard<std::mutex> lock(mutex);
+              }
+              {
+                std::lock_guard<std::mutex> lock(mutex);
                 parity_required = std::chrono::system_clock::now();
               }
               try {
@@ -164,8 +168,9 @@ KineticStatus KineticCluster::get(
     }
   }
 
-  if(!getParities){
-    { std::lock_guard<std::mutex> lock(mutex);
+  if (!getParities) {
+    {
+      std::lock_guard<std::mutex> lock(mutex);
       parity_required = std::chrono::system_clock::now();
     }
     return get(key, skip_value, version, value);
@@ -176,10 +181,14 @@ KineticStatus KineticCluster::get(
 
 static int getVersionPosition(const shared_ptr<const string>& version, std::vector<KineticAsyncOperation>& vops)
 {
-  for(int i=0; i<vops.size(); i++){
-    if(vops[i].callback->getResult().ok() || vops[i].callback->getResult().statusCode() == StatusCode::REMOTE_NOT_FOUND)
-      if(std::static_pointer_cast<GetVersionCallback>(vops[i].callback)->getVersion() == *version)
+  for (int i = 0; i < vops.size(); i++) {
+    if (vops[i].callback->getResult().ok() ||
+        vops[i].callback->getResult().statusCode() == StatusCode::REMOTE_NOT_FOUND) {
+      if (
+          std::static_pointer_cast<GetVersionCallback>(vops[i].callback)->getVersion() == *version) {
         return i;
+      }
+    }
   }
   return -1;
 }
@@ -188,42 +197,48 @@ static int getVersionPosition(const shared_ptr<const string>& version, std::vect
 bool KineticCluster::mayForce(const shared_ptr<const string>& key, const shared_ptr<const string>& version,
                               std::map<StatusCode, int, KineticCluster::compareStatusCode> ormap)
 {
-  if (ormap[StatusCode::OK] > (nData + nParity) / 2)
+  if (ormap[StatusCode::OK] > (nData + nParity) / 2) {
     return true;
+  }
 
   auto ops = initialize(key, nData + nParity);
   auto sync = asyncops::fillGetVersion(ops, key);
   auto rmap = execute(ops, *sync);
   auto most_frequent = asyncops::mostFrequentVersion(ops);
 
-  if(rmap[StatusCode::REMOTE_NOT_FOUND] >= nData)
+  if (rmap[StatusCode::REMOTE_NOT_FOUND] >= nData) {
     return version->size() != 0;
+  }
 
-  if (most_frequent.frequency && *version == *most_frequent.version)
+  if (most_frequent.frequency && *version == *most_frequent.version) {
     return true;
+  }
 
-  if(most_frequent.frequency >= nData)
+  if (most_frequent.frequency >= nData) {
     return false;
+  }
 
   /* Super-Corner-Case: It could be that the client that should win the most_frequent match has crashed. For this
    * reason, all competing clients will wait, polling the key versions until a timeout. If the timeout expires
    * without the issue being resolved, overwrite permission will be given. As multiple clients
    * could theoretically be in this loop concurrently, we specify timeout time by the position of the first
    * occurence of the supplied version for a subchunk. */
-  auto timeout_time = std::chrono::system_clock::now() + (getVersionPosition(version, ops)+1) * operation_timeout;
-  do{
+  auto timeout_time = std::chrono::system_clock::now() + (getVersionPosition(version, ops) + 1) * operation_timeout;
+  do {
     usleep(10000);
     auto ops = initialize(key, nData + nParity);
     auto sync = asyncops::fillGetVersion(ops, key);
     auto rmap = execute(ops, *sync);
 
-    if(getVersionPosition(version, ops) < 0)
+    if (getVersionPosition(version, ops) < 0) {
       return false;
+    }
 
     most_frequent = asyncops::mostFrequentVersion(ops);
-    if(most_frequent.frequency >= nData || rmap[StatusCode::REMOTE_NOT_FOUND] >= nData)
+    if (most_frequent.frequency >= nData || rmap[StatusCode::REMOTE_NOT_FOUND] >= nData) {
       return false;
-  }while(std::chrono::system_clock::now() < timeout_time);
+    }
+  } while (std::chrono::system_clock::now() < timeout_time);
 
   return true;
 }
@@ -242,8 +257,9 @@ KineticStatus KineticCluster::put(
   for (int i = 0; i < nData + nParity; i++) {
     auto subchunk = std::make_shared<string>();
     if (i < nData) {
-      if(i*chunk_size < value->size())
+      if (i * chunk_size < value->size()) {
         subchunk->assign(value->substr(i * chunk_size, chunk_size));
+      }
       subchunk->resize(chunk_size); // ensure that all chunks are the same size
     }
     stripe.push_back(std::move(subchunk));
@@ -277,8 +293,9 @@ KineticStatus KineticCluster::put(
       auto forcesync = asyncops::fillPut(ops, stripe, key, version_new, version_new, WriteMode::IGNORE_VERSION);
       rmap = execute(ops, *forcesync);
     }
-    else
+    else {
       return KineticStatus(StatusCode::REMOTE_VERSION_MISMATCH, "");
+    }
   }
 
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
@@ -289,7 +306,7 @@ KineticStatus KineticCluster::put(
       return KineticStatus(it->first, "");
     }
   }
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Confusion when attempting to put key" + *key);
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key" + *key + "not accessible.");
 }
 
 
@@ -317,7 +334,7 @@ KineticStatus KineticCluster::remove(
       auto forcesync = asyncops::fillRemove(ops, key, version, WriteMode::IGNORE_VERSION);
       rmap = execute(ops, *forcesync);
 
-      rmap[StatusCode::OK]+=rmap[StatusCode::REMOTE_NOT_FOUND];
+      rmap[StatusCode::OK] += rmap[StatusCode::REMOTE_NOT_FOUND];
       rmap[StatusCode::REMOTE_NOT_FOUND] = 0;
     }
     else {
@@ -327,48 +344,108 @@ KineticStatus KineticCluster::remove(
   }
 
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++)
-    if (it->second >= nData)
+    if (it->second >= nData) {
       return KineticStatus(it->first, "");
+    }
 
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Confusion when attempting to remove key" + *key);
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key" + *key + "not accessible.");
+}
+
+std::map<kinetic::StatusCode, int, KineticCluster::compareStatusCode>  KineticCluster::getRangeKeys(std::vector<KeyLists>& klists, const std::shared_ptr<const std::string>& end_key)
+{
+  const int max_requests = 100;
+  auto init_key = std::make_shared<const string>("getRangeKeyRequest");
+
+  /* Build an operation vector containing an operation for every KeyList that has space */
+  auto sync = std::unique_ptr<CallbackSynchronization>(new CallbackSynchronization());
+  std::vector<KineticAsyncOperation> ops;
+  for(int i=0; i<klists.size(); i++){
+    auto& list = klists[i];
+    bool list_requires_keys = (!list.keys || !list.next_keys) && *list.last_element != *end_key;
+
+    if(list_requires_keys){
+      auto op = initialize(init_key, 1, i);
+      asyncops::fillRange(op, list.last_element, end_key, max_requests, sync);
+      ops.push_back( op.front() );
+    }
+  }
+  auto rmap = execute(ops, *sync);
+
+  /* Move returned keys from operations to associated keylists */
+  for(int i=0, o=0; i<klists.size(); i++){
+    auto& list = klists[i];
+    bool list_requires_keys = (!list.keys || !list.next_keys) && *list.last_element != *end_key;
+
+    if(list_requires_keys){
+      auto& opkeys = std::static_pointer_cast<RangeCallback>(ops[o++].callback)->getKeys();
+      if (opkeys && opkeys->size()) {
+        list.last_element = std::make_shared<const string>(opkeys->back() + " ");
+        if (!list.keys)
+          list.keys = std::move(opkeys);
+        else
+          list.next_keys = std::move(opkeys);
+      }
+      /* If we required keys but failed obtaining any, we put end_key in last_element to prevent retries */
+      else
+        list.last_element = end_key;
+    }
+  }
+  return rmap;
 }
 
 KineticStatus KineticCluster::range(
     const std::shared_ptr<const std::string>& start_key,
     const std::shared_ptr<const std::string>& end_key,
-    int maxRequested,
+    int requested,
     std::unique_ptr<std::vector<std::string> >& keys)
 {
-  auto ops = initialize(start_key, connections.size());
-  auto sync = asyncops::fillRange(ops, start_key, end_key, maxRequested);
-  auto rmap = execute(ops, *sync);
+  bool need_keys = true;
+  keys.reset(new std::vector<std::string>());
+  std::vector<KeyLists> klists;
+  for(int i=0; i<connections.size(); i++)
+    klists.push_back(KeyLists(start_key));
 
-  if (rmap[StatusCode::OK] > connections.size() - nData - nParity) {
-    /* Process Results stored in Callbacks. */
-    /* merge in set to eliminate doubles  */
-    std::set<std::string> set;
-    for (auto o = ops.cbegin(); o != ops.cend(); o++) {
-      auto& opkeys = std::static_pointer_cast<RangeCallback>(o->callback)->getKeys();
-      if(opkeys)
-        set.insert(opkeys->begin(), opkeys->end());
+  while (requested) {
+
+    if(need_keys){
+      auto rmap = getRangeKeys(klists, end_key);
+      if(rmap[StatusCode::OK] < rmap.size() - nParity)
+        return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Too many drives could not be accessed.");
+      need_keys = false;
     }
 
-    /* assign to output parameter and cut excess results */
-    keys.reset(new std::vector<std::string>(set.begin(), set.end()));
-    if (keys->size() > maxRequested) {
-      keys->resize(maxRequested);
+    // find minimum front element
+    std::string element(*end_key);
+    for(auto it = klists.begin(); it != klists.end(); it++){
+      if(it->keys && it->keys->at(it->position) < element)
+        element = it->keys->at(it->position);
     }
+    if(element == *end_key)
+      break;
+
+    // move position counter past element in all key lists, count frequency
+    int element_frequency = 0;
+    for (auto it = klists.begin(); it != klists.end(); it++) {
+      if (it->keys && it->keys->at(it->position) == element) {
+        element_frequency++;
+        it->position++;
+        if(it->position == it->keys->size()){
+          it->keys = std::move(it->next_keys);
+          it->position = 0;
+          if(!it->keys)
+            need_keys = true;
+        }
+      }
+    }
+
+    if (element_frequency >= nData) {
+      keys->push_back(element);
+      requested--;
+    }
+    else
+      kio_debug("Key ", element, " has been read in only ", element_frequency, " times. Cluster repair might be advisable.");
   }
-
-  for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
-    if (it->second > connections.size() - nData - nParity) {
-      return KineticStatus(it->first, "");
-    }
-  }
-  return KineticStatus(
-      StatusCode::CLIENT_IO_ERROR,
-      "Confusion when attempting to get range from key" + *start_key + " to " + *end_key
-  );
+  return KineticStatus(StatusCode::OK, "");
 }
 
 
@@ -409,7 +486,7 @@ std::vector<KineticAsyncOperation> KineticCluster::initialize(
     size_t size, off_t offset)
 {
   std::uint32_t index;
-  MurmurHash3_x86_32(key->c_str(),key->length(), 0, &index);
+  MurmurHash3_x86_32(key->c_str(), key->length(), 0, &index);
   index += offset;
   std::vector<KineticAsyncOperation> ops;
 

@@ -272,14 +272,13 @@ std::string FileIo::ftsRead(void *fts_handle)
   ftsState *state = (ftsState *) fts_handle;
 
   if (state->keys->size() <= state->index) {
-    const size_t max_key_requests = 100;
     state->index = 0;
     /* add a space character (lowest ascii printable) to make the range request
        non-including. */
     cluster->range(
         make_shared<string>(state->keys->back() + " "),
         state->end_key,
-        max_key_requests, state->keys
+        1000, state->keys
     );
   }
   return state->keys->empty() ? "" : state->keys->at(state->index++);

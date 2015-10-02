@@ -105,9 +105,9 @@ KineticAdminCluster::KeyCounts KineticAdminCluster::doOperation(Operation o) {
   auto start_key = std::make_shared<const std::string>(1, static_cast<char>(0));
   auto end_key = std::make_shared<const std::string>(1, static_cast<char>(255));
   do {
-    auto status = range(start_key, end_key, 100, keys);
+    auto status = range(start_key, end_key, 500, keys);
     if (!status.ok()) {
-      kio_warning("range(",*start_key, " - ", *end_key, ") failed on cluster. Cannot proceed. ", status);
+      kio_warning("range() failed on cluster. Cannot proceed. ", status);
       break;
     }
     if (keys && keys->size()) {

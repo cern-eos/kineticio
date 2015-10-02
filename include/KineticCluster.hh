@@ -159,6 +159,20 @@ protected:
   //--------------------------------------------------------------------------
   void updateSize();
 
+  struct KeyLists {
+    std::shared_ptr<const std::string> last_element;
+    size_t position;
+    std::shared_ptr<std::vector<std::string>> keys;
+    std::shared_ptr<std::vector<std::string>> next_keys;
+
+    KeyLists(const std::shared_ptr<const std::string>& element) : last_element(element), position(0) {}
+
+  };
+
+  std::map<kinetic::StatusCode, int, compareStatusCode> getRangeKeys(
+      std::vector<KeyLists>& klists,
+      const std::shared_ptr<const std::string>& end_key
+  );
 
 protected:
   //! number of data chunks in a stripe

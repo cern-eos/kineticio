@@ -120,8 +120,7 @@ public:
   //!   is included in the range
   //! @param end    the end point of the requested key range, supplied key is
   //!   included in the range
-  //! @param maxRequested the maximum number of keys requested (cannot be higher
-  //!   than limits allow)
+  //! @param maxRequested the maximum number of keys requested
   //! @param keys   on success, contains existing key names in supplied range
   //! @return status of operation
   //----------------------------------------------------------------------------

@@ -121,14 +121,13 @@ unique_ptr<CallbackSynchronization> asyncops::fillRemove(
   return sync;
 }
 
-unique_ptr<CallbackSynchronization> asyncops::fillRange(
+void asyncops::fillRange(
     std::vector<KineticAsyncOperation>& ops,
     const std::shared_ptr<const std::string>& start_key,
     const std::shared_ptr<const std::string>& end_key,
-    int maxRequested
+    int maxRequested, std::unique_ptr<CallbackSynchronization>& sync
 )
 {
-  auto sync = std::unique_ptr<CallbackSynchronization>(new CallbackSynchronization());
   for (auto o = ops.begin(); o != ops.end(); o++) {
     auto cb = std::make_shared<RangeCallback>(*sync);
     o->callback = cb;
@@ -146,6 +145,17 @@ unique_ptr<CallbackSynchronization> asyncops::fillRange(
         maxRequested,
         cb);
   }
+}
+
+unique_ptr<CallbackSynchronization> asyncops::fillRange(
+    std::vector<KineticAsyncOperation>& ops,
+    const std::shared_ptr<const std::string>& start_key,
+    const std::shared_ptr<const std::string>& end_key,
+    int maxRequested
+)
+{
+  auto sync = std::unique_ptr<CallbackSynchronization>(new CallbackSynchronization());
+  asyncops::fillRange(ops, start_key, end_key, maxRequested, sync);
   return sync;
 }
 
