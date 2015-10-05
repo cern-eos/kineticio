@@ -1,4 +1,3 @@
-#include <unistd.h>
 #include <fcntl.h>
 #include <Logging.hh>
 #include "FileIo.hh"
@@ -61,7 +60,7 @@ void FileIo::Open(const std::string &p, int flags,
   }
 
   if(!status.ok())
-    throw kio_exception(EIO, "Unexpected error opening file ", obj_path, ": ", status);
+    throw kio_exception(EIO, "Unexpected error opening file ", p, ": ", status);
 
   /* Setting cluster & path variables. */
   cluster = c;
@@ -89,15 +88,6 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
 {
   if (!cluster)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
-
-  /* Delay response in case of cache pressure in order to throttle requests in high
-   * pressure scenarios. For now, we simply delay for a percentage of the timeout time. */
-  int delay;
-  do{
-    delay = (timeout ? timeout : 60) * cache.pressure();
-    if(delay) sleep(delay);
-    if(timeout) timeout -= delay;
-  }while(delay);
 
   const size_t chunk_capacity = cluster->limits().max_value_size;
   size_t length_todo = length;

@@ -27,8 +27,7 @@ class FileIo;
 //! LRU cache for ClusterChunks. Threadsafe. Will create chunks
 //! that are not in cache automatically during get()
 //----------------------------------------------------------------------------
-class ClusterChunkCache
-{
+class ClusterChunkCache {
 
 public:
   //--------------------------------------------------------------------------
@@ -41,7 +40,10 @@ public:
   //! @param mode argument to pass to a chunk if it has to be created
   //! @return the chunk on success, throws on error
   //--------------------------------------------------------------------------
-  enum class RequestMode { READAHEAD, STANDARD };
+  enum class RequestMode {
+    READAHEAD, STANDARD
+  };
+
   std::shared_ptr<kio::ClusterChunk> get(
       kio::FileIo* owner,
       int chunknumber,
@@ -74,14 +76,6 @@ public:
   //! @param chunk the chunk to flush
   //--------------------------------------------------------------------------
   void async_flush(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk);
-
-  //--------------------------------------------------------------------------
-  //! Return a value between [0...1] showing the current cache pressure. This
-  //! can be used to throttle workload to guard against cache thrashing.
-  //!
-  //! @return value between 0 and 1 signifying cache pressure.
-  //--------------------------------------------------------------------------
-  double pressure();
 
   //--------------------------------------------------------------------------
   //! The configuration of an existing ClusterChunkCache object can be changed
@@ -129,7 +123,7 @@ private:
   //! handle background readahead and flush requests
   BackgroundOperationHandler bg;
 
-  struct CacheItem{
+  struct CacheItem {
     std::set<kio::FileIo*> owners;
     std::shared_ptr<kio::ClusterChunk> chunk;
   };
@@ -142,8 +136,9 @@ private:
   std::unordered_map<std::string, cache_iterator> lookup;
 
   //! comparison operator so we can create std::set<cache_iterator>
-  struct cache_iterator_compare{
-    bool operator()(const cache_iterator& lhs, const cache_iterator& rhs) const{
+  struct cache_iterator_compare {
+    bool operator()(const cache_iterator& lhs, const cache_iterator& rhs) const
+    {
       return lhs->chunk < rhs->chunk;
     }
   };
@@ -158,6 +153,12 @@ private:
   //! Track per FileIo access patterns and attempt to pre-fetch intelligently
   std::unordered_map<const kio::FileIo*, SequencePatternRecognition> prefetch;
 
+  //! Ratelimit attempts to shrink the current cache size by removing clean items from the tail
+  std::chrono::system_clock::time_point cache_cleanup_timestamp;
+
+  //! Thread safety when accessing cache_cleanup_timestamp
+  std::mutex cache_cleanup_mutex;
+
   //! Thread safety when accessing exception map
   std::mutex exception_mutex;
 
@@ -168,6 +169,20 @@ private:
   std::mutex cache_mutex;
 
 private:
+
+  //--------------------------------------------------------------------------
+  //! Return a value between [0...1] showing the current cache pressure. This
+  //! can be used to throttle workload to guard against cache thrashing.
+  //!
+  //! @return value between 0 and 1 signifying cache pressure.
+  //--------------------------------------------------------------------------
+  double cache_pressure();
+
+  //--------------------------------------------------------------------------
+  //! Block in case the cache is under pressure.
+  //--------------------------------------------------------------------------
+  void throttle();
+
   //--------------------------------------------------------------------------
   //! Attempt to read the requested chunk number for the owner in a background
   //! thread. If this is not possible due to the number of active background
@@ -186,7 +201,7 @@ private:
   //! @param owner a pointer to the kio::FileIo object the chunk belongs to
   //! @param chunk the chunk to flush to the backend
   //--------------------------------------------------------------------------
-  void do_flush(kio::FileIo *owner, std::shared_ptr<kio::ClusterChunk> chunk);
+  void do_flush(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk);
 
   //--------------------------------------------------------------------------
   //! Remove an item from the cache as well as the lookup table and from
@@ -197,7 +212,6 @@ private:
   //!--------------------------------------------------------------------------
   cache_iterator remove_item(const cache_iterator& it);
 };
-
 
 
 }

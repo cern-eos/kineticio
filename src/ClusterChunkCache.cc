@@ -3,6 +3,7 @@
 #include "Utility.hh"
 #include "Logging.hh"
 #include <thread>
+#include <unistd.h>
 
 using namespace kio;
 
@@ -86,6 +87,34 @@ ClusterChunkCache::cache_iterator ClusterChunkCache::remove_item(const cache_ite
   return cache.erase(it);
 }
 
+void ClusterChunkCache::throttle()
+{
+  using namespace std::chrono;
+  static const milliseconds ratelimit(50);
+
+  for(auto wait_pressure = 0.0; true; wait_pressure += 0.01) {
+    {
+      std::lock_guard<std::mutex> ratelimit_lock(cache_cleanup_mutex);
+      if(duration_cast<milliseconds>(system_clock::now() - cache_cleanup_timestamp) > ratelimit){
+        cache_cleanup_timestamp = system_clock::now();
+
+        std::lock_guard<std::mutex> cachelock(cache_mutex);
+        int check_items = cache.size() / 2;
+        for (auto it = --cache.end(); current_size > target_size && check_items; it--, check_items--) {
+          if (!it->chunk->dirty())
+            it = remove_item(it);
+        }
+      }
+    }
+
+    if(cache_pressure() <= wait_pressure)
+      break;
+
+    /* Sleep 100 ms to give dirty chunks a chance to flush before retrying */
+    usleep(1000 * 100);
+  }
+}
+
 std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
     kio::FileIo* owner, int chunknumber, ClusterChunk::Mode mode, RequestMode rm)
 {
@@ -97,13 +126,13 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
     }
   }
 
-  if (mode == ClusterChunk::Mode::STANDARD && rm == RequestMode::STANDARD) {
-    std::lock_guard<std::mutex> readaheadlock(readahead_mutex);
-    auto& sequence = prefetch[owner];
-    sequence.add(chunknumber);
-    auto prediction = sequence.predict(SequencePatternRecognition::PredictionType::CONTINUE);
-    for (auto it = prediction.cbegin(); it != prediction.cend(); it++)
-      readahead(owner, *it);
+  /* If we are called by a client of the cache */
+  if(rm == RequestMode::STANDARD){
+    /* Register requested chunk with readahead logic unless we are opening the chunk for create */
+    if (mode != ClusterChunk::Mode::CREATE)
+      readahead(owner, chunknumber);
+    /* Throttle this request as indicated by cache pressure */
+    throttle();
   }
 
   std::lock_guard<std::mutex> cachelock(cache_mutex);
@@ -120,12 +149,6 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
     return cache.front().chunk;
   }
 
-  /* try to remove non-dirty items from tail of cache & lookup tables if size > target_size. */
-  for (auto it = --cache.end(); current_size > target_size && it != cache.begin(); it--) {
-    if (!it->chunk->dirty())
-      it = remove_item(it);
-  }
-
   /* If cache size approaches capacity, we have to try flushing dirty chunks manually. */
   if (capacity < current_size + owner->cluster->limits().max_value_size) {
     kio_notice("Cache capacity reached.");
@@ -136,11 +159,6 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
       }
       catch (const std::exception& e) {
         throw kio_exception(EIO, "Failed freeing cache space: ", e.what());
-        // alternatively, splice into front and retry next cache element....
-        // cache.splice(cache.begin(), cache, --cache.end());
-        // std::lock_guard<std::mutex> exeptionlock(exception_mutex);
-        // exceptions[item.owner] = e;
-        // continue;
       }
     }
     remove_item(it);
@@ -160,7 +178,7 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
   return chunk;
 }
 
-double ClusterChunkCache::pressure()
+double ClusterChunkCache::cache_pressure()
 {
   if (current_size <= target_size) {
     return 0.0;
@@ -196,12 +214,18 @@ void do_readahead(std::shared_ptr<kio::ClusterChunk> chunk)
 
 void ClusterChunkCache::readahead(kio::FileIo* owner, int chunknumber)
 {
-  /* Don't do readahead if cache is already under pressure. */
-  if (pressure() > 0.1) {
-    return;
+  std::list<int> prediction;
+  { std::lock_guard<std::mutex> readaheadlock(readahead_mutex);
+    auto& sequence = prefetch[owner];
+    sequence.add(chunknumber);
+    /* Don't do readahead if cache is already under pressure. */
+    if (cache_pressure() < 0.1)
+      prediction = sequence.predict(SequencePatternRecognition::PredictionType::CONTINUE);
   }
-  auto chunk = get(owner, chunknumber, ClusterChunk::Mode::STANDARD, RequestMode::READAHEAD);
-  bg.try_run(std::bind(do_readahead, chunk));
+  for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
+    auto chunk = get(owner, *it, ClusterChunk::Mode::STANDARD, RequestMode::READAHEAD);
+    bg.try_run(std::bind(do_readahead, chunk));
+  }
 }
 
 
