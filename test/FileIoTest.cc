@@ -55,17 +55,25 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
   }
 
-  GIVEN ("A kio object that has not been openend."){
+  GIVEN ("A valid path, but no existing file."){
     std::string base_path("kinetic:Cluster1:");
     std::string path(base_path+"filename");
 
-    THEN("All public operations (except Statfs) throw LoggingExceptions"){
+    THEN("All IO operations throw LoggingExceptions"){
       REQUIRE_THROWS_AS(fileio->Read(0,read_buf,buf_size), LoggingException);
       REQUIRE_THROWS_AS(fileio->Write(0,write_buf,buf_size), LoggingException);
       REQUIRE_THROWS_AS(fileio->Truncate(0), LoggingException);
       REQUIRE_THROWS_AS(fileio->Remove(), LoggingException);
       REQUIRE_THROWS_AS(fileio->Sync(), LoggingException);
       REQUIRE_THROWS_AS(fileio->Close(), LoggingException);
+    }
+
+    THEN("Attempting to open without create flag fails with ENOENT."){
+      try{
+        fileio->Open(path.c_str(), 0);
+      }catch(const LoggingException& le){
+        REQUIRE(le.errnum() == ENOENT);
+      }
     }
 
     THEN("Statfs succeeds"){
@@ -91,10 +99,19 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
   }
 
-  GIVEN("Open succeeds on healthy cluster"){
+  GIVEN("A file is created."){
     std::string base_path("kinetic:Cluster2:");
     std::string path(base_path+"filename");
-    REQUIRE_NOTHROW(fileio->Open(path.c_str(), 0));
+
+    REQUIRE_NOTHROW(fileio->Open(path.c_str(), O_CREAT));
+
+    THEN("Trying to create the same file again fails with EEXIST"){
+      try{
+        fileio->Open(path.c_str(), O_CREAT);
+      }catch(const LoggingException& le){
+        REQUIRE(le.errnum() == EEXIST);
+      }
+    }
 
     WHEN("A buffer is read into memory"){
       int size = 20;

@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <fcntl.h>
 #include <Logging.hh>
 #include "FileIo.hh"
 #include "ClusterMap.hh"
@@ -29,29 +30,44 @@ FileIo::~FileIo()
 void FileIo::Open(const std::string &p, int flags,
                   mode_t mode, const std::string &opaque, uint16_t timeout)
 {
-  /* TODO: throttle on number of open files? */
-  cluster = ClusterMap::getInstance().getCluster(utility::extractClusterID(p));
+  auto c = ClusterMap::getInstance().getCluster(utility::extractClusterID(p));
 
-  /* Setting path variables. There is no need to encode kinetic:clusterID in
-   * all chunk keys. */
+  KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "");
+  if(flags & O_CREAT) {
+    shared_ptr<const string> version;
+    status = c->put(
+        make_shared<string>(p),
+        make_shared<const string>(),
+        make_shared<const string>(),
+        false,
+        version);
+
+    if (status.ok())
+      lastChunkNumber.set(0);
+    else if (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH)
+      throw kio_exception(EEXIST, "File ", p, "openend with O_CREAT flag set already exists.");
+  }
+  else {
+    shared_ptr<const string> version;
+    std::shared_ptr<const string> value;
+    status = c->get(
+        make_shared<string>(p),
+        true,
+        version,
+        value
+    );
+    if(status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
+      throw kio_exception(ENOENT, "File ", p, "does not exist and connot be openend without O_CREAT flag.");
+  }
+
+  if(!status.ok())
+    throw kio_exception(EIO, "Unexpected error opening file ", obj_path, ": ", status);
+
+  /* Setting cluster & path variables. */
+  cluster = c;
   obj_path = p;
   chunk_basename = obj_path.substr(obj_path.find_last_of(':') + 1, obj_path.length());
 
-  /* Put the metadata key... if it already exists the operation will fail with
-   * a version missmatch error, which is fine... */
-  shared_ptr<const string> version_out;
-  auto s = cluster->put(
-      make_shared<string>(obj_path),
-      make_shared<const string>(),
-      make_shared<const string>(),
-      false,
-      version_out);
-
-  if (s.ok())
-    lastChunkNumber.set(0);
-  else if (s.statusCode() != StatusCode::REMOTE_VERSION_MISMATCH)
-    throw kio_exception(EIO, "Attempting to write metadata key '", obj_path,
-                        "' to cluster returned unexpected error ", s);
 }
 
 
