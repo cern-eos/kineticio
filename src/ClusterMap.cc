@@ -69,11 +69,13 @@ void ClusterMap::loadConfiguration()
   if(!dataCache)
     dataCache.reset(new ClusterChunkCache(
         configuration.stripecache_target, configuration.stripecache_capacity,
-        configuration.background_io_threads, configuration.background_io_queue_capacity
+        configuration.background_io_threads, configuration.background_io_queue_capacity,
+        configuration.readahead_window_size
     ));
   else
     dataCache->changeConfiguration(configuration.stripecache_target, configuration.stripecache_capacity,
-                                   configuration.background_io_threads, configuration.background_io_queue_capacity
+                                   configuration.background_io_threads, configuration.background_io_queue_capacity,
+                                   configuration.readahead_window_size
     );
 
   if(!listener)
@@ -243,6 +245,7 @@ void ClusterMap::parseConfiguration(struct json_object* config)
   configuration.stripecache_capacity = loadJsonIntEntry(config, "cacheCapacityMB");
   configuration.stripecache_capacity *= 1024*1024;
 
+  configuration.readahead_window_size = loadJsonIntEntry(config, "maxReadaheadWindow");
   configuration.background_io_threads = loadJsonIntEntry(config, "maxBackgroundIoThreads");
   configuration.background_io_queue_capacity = loadJsonIntEntry(config, "maxBackgroundIoQueue");
   configuration.num_erasure_codings = loadJsonIntEntry(config, "erasureCodings");

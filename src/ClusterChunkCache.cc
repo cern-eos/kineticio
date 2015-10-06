@@ -9,16 +9,18 @@ using namespace kio;
 
 
 ClusterChunkCache::ClusterChunkCache(size_t preferred_size, size_t capacity, size_t bg_threads,
-                                     size_t bg_queue_depth) :
-    target_size(preferred_size), capacity(capacity), current_size(0), bg(bg_threads, bg_queue_depth)
+                                     size_t bg_queue_depth, size_t readahead_size) :
+    target_size(preferred_size), capacity(capacity), current_size(0), bg(bg_threads, bg_queue_depth),
+    readahead_window_size(readahead_size)
 {
   if (capacity < target_size) throw std::logic_error("cache target size may not exceed capacity");
   if (bg_threads < 0) throw std::logic_error("number of background threads cannot be negative.");
 }
 
 void ClusterChunkCache::changeConfiguration(size_t preferred_size, size_t cap, size_t bg_threads,
-                                            size_t bg_queue_depth)
+                                            size_t bg_queue_depth, size_t readahead_size)
 {
+  readahead_window_size = readahead_size;
   target_size = preferred_size;
   capacity = cap;
   bg.changeConfiguration(bg_threads, bg_queue_depth);
@@ -206,8 +208,8 @@ void ClusterChunkCache::async_flush(kio::FileIo* owner, std::shared_ptr<ClusterC
 
 void do_readahead(std::shared_ptr<kio::ClusterChunk> chunk)
 {
-  /* if readahaed should throw, there's no need to remember as in do_flush...
-   * we'll just re-encounter the exception should the chunk actually be read from */
+  /* if readahaed should throw, there's no need to remember as in do_flush...  we'll just re-encounter the exception
+   * should the chunk actually be read from */
   char buf[1];
   chunk->read(buf, 0, 1);
 }
@@ -216,6 +218,8 @@ void ClusterChunkCache::readahead(kio::FileIo* owner, int chunknumber)
 {
   std::list<int> prediction;
   { std::lock_guard<std::mutex> readaheadlock(readahead_mutex);
+    if(!prefetch.count(owner))
+      prefetch.emplace(owner, SequencePatternRecognition(readahead_window_size));
     auto& sequence = prefetch[owner];
     sequence.add(chunknumber);
     /* Don't do readahead if cache is already under pressure. */

@@ -87,7 +87,7 @@ public:
   //! @param bg_queue_depth maximum number of functions queued for background
   //!   execution
   //--------------------------------------------------------------------------
-  void changeConfiguration(size_t preferred_size, size_t capacity, size_t bg_threads, size_t bg_queue_depth);
+  void changeConfiguration(size_t preferred_size, size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_size);
 
   //--------------------------------------------------------------------------
   //! Constructor.
@@ -98,7 +98,7 @@ public:
   //! @param bg_queue_depth maximum number of functions queued for background
   //!   execution
   //--------------------------------------------------------------------------
-  explicit ClusterChunkCache(size_t preferred_size, size_t capacity, size_t bg_threads, size_t bg_queue_depth);
+  explicit ClusterChunkCache(size_t preferred_size, size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_window_size);
 
   //--------------------------------------------------------------------------
   //! No copy constructor.
@@ -112,13 +112,15 @@ public:
 
 private:
   //! preferred size of the cache (soft cap), atomic so it may be changed during runtime
-  std::atomic<std::size_t> target_size;
+  std::atomic<size_t> target_size;
 
   //! maximum size of the cache (hard cap), atomic so it may be changed during runtime
-  std::atomic<std::size_t> capacity;
+  std::atomic<size_t> capacity;
 
   //! current size of the cache
-  std::atomic<std::size_t> current_size;
+  std::atomic<size_t> current_size;
+
+  std::atomic<int> readahead_window_size;
 
   //! handle background readahead and flush requests
   BackgroundOperationHandler bg;

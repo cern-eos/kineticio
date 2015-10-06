@@ -87,6 +87,8 @@ private:
         size_t stripecache_target;
         //! the absolut maximum size of the data cache in bytes
         size_t stripecache_capacity;
+        //! the maximum number of keys prefetched by readahead algorithm
+        size_t readahead_window_size;
         //! the number of threads used for bg io in the data cache
         int background_io_threads;
         //! the maximum number of operations queued for bg io

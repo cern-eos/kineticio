@@ -19,6 +19,7 @@
     "cacheCapacityMB":2048,
     "maxBackgroundIoThreads":16,
     "maxBackgroundIoQueue":16,
+    "maxReadaheadWindow":10,
     "erasureCodings":5,
     "erasureDecodingTables":5
   },
