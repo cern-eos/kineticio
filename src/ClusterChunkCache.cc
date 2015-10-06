@@ -219,7 +219,7 @@ void ClusterChunkCache::readahead(kio::FileIo* owner, int chunknumber)
   std::list<int> prediction;
   { std::lock_guard<std::mutex> readaheadlock(readahead_mutex);
     if(!prefetch.count(owner))
-      prefetch.emplace(owner, SequencePatternRecognition(readahead_window_size));
+      prefetch[owner] = SequencePatternRecognition(readahead_window_size);
     auto& sequence = prefetch[owner];
     sequence.add(chunknumber);
     /* Don't do readahead if cache is already under pressure. */
