@@ -4,6 +4,9 @@
 using namespace kio;
 using namespace kinetic;
 
+KineticAdminCluster::~KineticAdminCluster()
+{
+}
 
 std::vector<bool> KineticAdminCluster::status()
 {
@@ -96,56 +99,58 @@ void KineticAdminCluster::applyOperation(
   }
 }
 
-KineticAdminCluster::KeyCounts KineticAdminCluster::doOperation(Operation o) {
+KineticAdminCluster::KeyCounts KineticAdminCluster::doOperation(Operation o, size_t maximum, bool restart)
+{
   KeyCountsInternal c;
-  {
   std::unique_ptr<std::vector<std::string>> keys;
-  BackgroundOperationHandler background(connections.size() / 2, connections.size());
+  {
+    BackgroundOperationHandler background(num_threads, 0);
 
-  auto start_key = std::make_shared<const std::string>(1, static_cast<char>(0));
-  auto end_key = std::make_shared<const std::string>(1, static_cast<char>(255));
-  do {
-    auto status = range(start_key, end_key, 100, keys);
-    if (!status.ok()) {
-      kio_warning("range(",*start_key, " - ", *end_key, ") failed on cluster. Cannot proceed. ", status);
-      break;
-    }
-    if (keys && keys->size()) {
-      start_key = std::make_shared<const std::string>(keys->back() + static_cast<char>(0));
-      c.total += keys->size();
+    auto end_key = std::make_shared<const std::string>(1, static_cast<char>(255));
+    if (!start_key || restart)
+      start_key = std::make_shared<const std::string>(1, static_cast<char>(0));
 
-      if (o != Operation::COUNT) {
-        std::vector<std::shared_ptr<const std::string>> out;
-        for (auto it = keys->cbegin(); it != keys->cend(); it++)
-          out.push_back(std::make_shared<const string>(std::move(*it)));
-
-        auto b = std::bind(&KineticAdminCluster::applyOperation, this, o, out, std::ref(c));
-        background.run(b);
+    do {
+      auto status = range(start_key, end_key, maximum - c.total > 100 ? 100 : maximum - c.total, keys);
+      if (!status.ok()) {
+        kio_warning("range(", *start_key, " - ", *end_key, ") failed on cluster. Cannot proceed. ", status);
+        break;
       }
-    }
-  } while (keys && keys->size());
+      if (keys && keys->size()) {
+        start_key = std::make_shared<const std::string>(keys->back() + static_cast<char>(0));
+        c.total += keys->size();
 
-  background.drain_queue();
+        if (o != Operation::COUNT) {
+          std::vector<std::shared_ptr<const std::string>> out;
+          for (auto it = keys->cbegin(); it != keys->cend(); it++)
+            out.push_back(std::make_shared<const string>(std::move(*it)));
+
+          auto b = std::bind(&KineticAdminCluster::applyOperation, this, o, out, std::ref(c));
+          background.run(b);
+        }
+      }
+    } while (keys && keys->size() && c.total < maximum);
+
   }
   return KeyCounts{c.total, c.incomplete, c.need_repair, c.repaired, c.removed, c.unrepairable};
 }
 
-int KineticAdminCluster::count()
+int KineticAdminCluster::count(size_t maximum, bool restart)
 {
-  return doOperation(Operation::COUNT).total;
+  return doOperation(Operation::COUNT, maximum, restart).total;
 }
 
-KineticAdminCluster::KeyCounts KineticAdminCluster::scan()
+KineticAdminCluster::KeyCounts KineticAdminCluster::scan(size_t maximum, bool restart)
 {
-  return doOperation(Operation::SCAN);
+  return doOperation(Operation::SCAN, maximum, restart);
 }
 
-KineticAdminCluster::KeyCounts KineticAdminCluster::repair()
+KineticAdminCluster::KeyCounts KineticAdminCluster::repair(size_t maximum, bool restart)
 {
-  return doOperation(Operation::REPAIR);
+  return doOperation(Operation::REPAIR, maximum, restart);
 }
 
-KineticAdminCluster::KeyCounts KineticAdminCluster::reset()
+KineticAdminCluster::KeyCounts KineticAdminCluster::reset(size_t maximum, bool restart)
 {
-  return doOperation(Operation::RESET);
+  return doOperation(Operation::RESET, maximum, restart);
 }

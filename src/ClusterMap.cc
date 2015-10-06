@@ -105,7 +105,7 @@ void ClusterMap::fillArgs(const KineticClusterInfo &ki,
   }
 }
 
-std::unique_ptr<KineticAdminCluster> ClusterMap::getAdminCluster(const std::string& id)
+std::unique_ptr<KineticAdminCluster> ClusterMap::getAdminCluster(const std::string& id, size_t numthreads)
 {
   if(!listener)
     throw kio_exception(EACCES, "ClusterMap not properly initialized. Check your json files.");
@@ -119,7 +119,7 @@ std::unique_ptr<KineticAdminCluster> ClusterMap::getAdminCluster(const std::stri
   KineticClusterInfo &ki = clustermap.at(id);
   fillArgs(ki, ec, cops);
 
-  return std::unique_ptr<KineticAdminCluster>(new KineticAdminCluster(
+  return std::unique_ptr<KineticAdminCluster>(new KineticAdminCluster(numthreads,
       ki.numData, ki.numParity, ki.blockSize,
       cops, ki.min_reconnect_interval, ki.operation_timeout,
       ec, *listener)

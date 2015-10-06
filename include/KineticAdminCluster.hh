@@ -16,29 +16,37 @@ namespace kio{
 //------------------------------------------------------------------------------
 class KineticAdminCluster : public KineticCluster, public AdminClusterInterface {
 public:
-  //! See documentation of public interface in AdminClusterInterface
-  int count();
 
   //! See documentation of public interface in AdminClusterInterface
-  KeyCounts scan();
+  int count(size_t maximum, bool restart=false);
 
   //! See documentation of public interface in AdminClusterInterface
-  KeyCounts repair();
+  KeyCounts scan(size_t maximum, bool restart=false);
 
   //! See documentation of public interface in AdminClusterInterface
-  KeyCounts reset();
+  KeyCounts repair(size_t maximum,bool restart=false);
+
+  //! See documentation of public interface in AdminClusterInterface
+  KeyCounts reset(size_t maximum, bool restart=false);
 
   //! See documentation of public interface in AdminClusterInterface
   std::vector<bool> status();
 
   //! Perfect forwarding is nice, and I am lazy. Look in KineticCluster.hh for the correct arguments
   template<typename... Args>
-  KineticAdminCluster(Args&& ... args) : KineticCluster(std::forward<Args>(args)...) {};
+  KineticAdminCluster(size_t numthreads, Args&& ... args) :
+      KineticCluster(std::forward<Args>(args)...), num_threads(numthreads) {};
 
   //! Destructor
-  ~KineticAdminCluster(){};
+  ~KineticAdminCluster();
 
 private:
+  //! keeping track of the start key for continuing operations
+  std::shared_ptr<const std::string> start_key;
+
+  //! number of background io threads to spawn
+  size_t num_threads;
+
   //--------------------------------------------------------------------------
   //! The different types of admin cluster operations
   //--------------------------------------------------------------------------
@@ -64,9 +72,11 @@ private:
   //! The main loop for count / scan / repair / reset operations.
   //!
   //! @param o The operation type to be executed
+  //! @param maximum number of keys to execute the operation on
+  //! @param restart continue with last seen key or start fresh
   //! @return statistics of keys
   //--------------------------------------------------------------------------
-  KeyCounts doOperation(Operation o);
+  KeyCounts doOperation(Operation o, size_t maximum, bool restart);
 
   //--------------------------------------------------------------------------
   //! Apply a scan / repair / reset operation to the supplied keys.

@@ -37,32 +37,44 @@ public:
   //--------------------------------------------------------------------------
   //! Only count the number of keys existing on the cluster.
   //!
+  //! @param maximum number of keys to count
+  //! @param restart if not true, the next call will continue where the
+  //!   previous call stopped
   //! @return the number of keys
   //--------------------------------------------------------------------------
-  virtual int count() = 0;
+  virtual int count(size_t maximum, bool restart=false) = 0;
 
   //--------------------------------------------------------------------------
   //! Scan all subchunks of every key and check if keys need to
   //! be repaired. This is a scan only, no write operations will occur.
   //!
+  //! @param maximum number of keys to scan
+  //! @param restart if not true, the next call will continue where the
+  //!   previous call stopped
   //! @return statistics of keys
   //--------------------------------------------------------------------------
-  virtual KeyCounts scan() = 0;
+  virtual KeyCounts scan(size_t maximum, bool restart=false) = 0;
 
   //--------------------------------------------------------------------------
   //! Scan all subchunks of every key and check if keys need to
   //! be repaired. If so, attempt repair.
   //!
+  //! @param maximum number of keys to repair
+  //! @param restart if not true, the next call will continue where the
+  //!   previous call stopped
   //! @return statistics of keys
   //--------------------------------------------------------------------------
-  virtual KeyCounts repair() = 0;
+  virtual KeyCounts repair(size_t maximum, bool restart=false) = 0;
 
   //--------------------------------------------------------------------------
   //! Force delete _all_ keys on the cluster.
   //!
+  //! @param maximum number of keys to remove
+  //! @param restart if not true, the next call will continue where the
+  //!   previous call stopped
   //! @return statistics of keys
   //--------------------------------------------------------------------------
-  virtual KeyCounts reset() = 0;
+  virtual KeyCounts reset(size_t maximum, bool restart=false) = 0;
 
   //--------------------------------------------------------------------------
   //! Obtain the current status of connections to all drives attached to this

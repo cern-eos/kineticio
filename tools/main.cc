@@ -14,18 +14,19 @@ enum class Operation{
 struct Configuration{
     Operation op;
     std::string id;
+    int numthreads;
 };
 
 int kinetic_help(){
-  fprintf(stdout, "'[eos] kinetic ..' provides the kinetic cluster management interface of EOS.\n");
-  fprintf(stdout, " Usage: kinetic -cluster id status|count|scan|repair|reset \n");
+  fprintf(stdout, "'kinetic ..' provides the kinetic cluster management interface of EOS.\n");
+  fprintf(stdout, " Usage: kinetic -id clusterid status|count|scan|repair|reset [-threads numthreads]\n");
+  fprintf(stdout, "    clusterid: the unique name of the cluster. \n");
+  fprintf(stdout, "    numthreads: number of io threads (optional). \n");
   fprintf(stdout, "    status: print status of connections of the cluster. \n");
   fprintf(stdout, "    count: number of keys existing in the cluster. \n");
   fprintf(stdout, "    scan: check all keys existing in the cluster and display their status information (Warning: Long Runtime) \n");
   fprintf(stdout, "    repair: check all keys existing in the cluster, repair as required, display their status information. (Warning: Long Runtime) \n");
   fprintf(stdout, "    reset: force remove all keys on all drives associated with the cluster, you will loose ALL data! \n");
-  fprintf(stdout, " Usage: kinetic -config reload \n");
-  fprintf(stdout, "    reload: reload the json config files, existing transfers continue using previous cluster configuration. \n");
   return 0;
 }
 
@@ -62,13 +63,14 @@ void mlog(const char* func, const char* file, int line, int level, const char* m
 
 
 bool parseArguments(int argc, char** argv, Configuration& config) {
-  if(argc!=4)
-    return false;
   config.op = Operation::INVALID;
+  config.numthreads = 1;
 
   for(int i = 1; i < argc; i++){
     if(strcmp("-id", argv[i]) == 0)
       config.id = std::string(argv[i+1]);
+    if(strcmp("-threads", argv[i]) == 0)
+      config.numthreads = atoi(argv[i+1]);
     else if(strcmp("-scan", argv[i]) == 0)
       config.op = Operation::SCAN;
     else if(strcmp("-count", argv[i]) == 0)
@@ -84,6 +86,66 @@ bool parseArguments(int argc, char** argv, Configuration& config) {
   return config.id.length() && config.op != Operation::INVALID;
 }
 
+kio::AdminClusterInterface::KeyCounts operator+= (kio::AdminClusterInterface::KeyCounts& lhs, const kio::AdminClusterInterface::KeyCounts& rhs)
+{
+  lhs.total+=rhs.total;
+  lhs.incomplete+=rhs.incomplete;
+  lhs.need_repair+=rhs.need_repair;
+  lhs.removed+=rhs.removed;
+  lhs.repaired+=rhs.repaired;
+  lhs.unrepairable+=rhs.unrepairable;
+  return lhs;
+}
+
+int countkeys(std::unique_ptr<kio::AdminClusterInterface>& ac){
+  fprintf(stdout, "Counting number of keys on cluster: \n");
+  auto total = 0;
+  while(true){
+    auto c = ac->count(5000);
+    if(!c) break;
+    total += c;
+    fprintf(stdout, "\r\t %d",total);
+    fflush(stdout);
+  }
+  fprintf(stdout, "\n");
+  return total;
+}
+
+kio::AdminClusterInterface::KeyCounts doOperation(
+    std::unique_ptr<kio::AdminClusterInterface>& ac,
+    Configuration& config
+)
+{
+
+  kio::AdminClusterInterface::KeyCounts kc{0,0,0,0,0,0};
+  auto totalkeys = countkeys(ac);
+  auto numsteps = 50;
+  auto perstep = (totalkeys+numsteps-1) / numsteps;
+
+  for(int i=0; i<numsteps; i++){
+    switch(config.op){
+      case Operation::SCAN:
+        kc += ac->scan(perstep, i==0);
+        break;
+      case Operation::REPAIR:
+        kc += ac->repair(perstep, i==0);
+        break;
+      case Operation::RESET:
+        kc += ac->reset(perstep, i==0);
+        break;
+    }
+    fprintf(stdout, "\r[");
+    for(int j=0; j<=i; j++)
+      fprintf(stdout, "*");
+    for(int j=i+1; j<numsteps; j++)
+      fprintf(stdout, "-");
+    fprintf(stdout, "]");
+    fflush(stdout);
+  }
+  fprintf(stdout, "\n");
+  printKeyCount(kc);
+}
+
 int main(int argc, char** argv)
 {
   Configuration config;
@@ -95,7 +157,7 @@ int main(int argc, char** argv)
 
   try{
     kio::Factory::registerLogFunction(mlog, mshouldLog);
-    auto ac = kio::Factory::makeAdminCluster(config.id.c_str());
+    auto ac = kio::Factory::makeAdminCluster(config.id.c_str(), config.numthreads);
 
     switch(config.op){
       case Operation::STATUS: {
@@ -108,21 +170,11 @@ int main(int argc, char** argv)
         break;
       }
       case Operation::COUNT: {
-        cout << "Total number of keys on cluster: " << ac->count() << endl;
+        countkeys(ac);
         break;
       }
-      case Operation::SCAN: {
-        printKeyCount(ac->scan());
-        break;
-      }
-      case Operation::REPAIR: {
-        printKeyCount(ac->repair());
-        break;
-      }
-      case Operation::RESET: {
-        printKeyCount(ac->reset());
-        break;
-      }
+      default:
+        doOperation(ac, config);
     }
   }catch(std::exception& e){
     cout << "Encountered Exception: " << e.what() << endl;
