@@ -197,7 +197,8 @@ private:
       std::chrono::system_clock::time_point last_chunk_number_timestamp;
   };
 
-private:
+  /* protected instead of private to allow mocking in cache performance testing */
+protected:
   //! we don't want to have to look in the drive map for every access...
   std::shared_ptr<ClusterInterface> cluster;
 

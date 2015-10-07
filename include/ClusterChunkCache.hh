@@ -4,7 +4,7 @@
 //! @brief An fst-wide cache for cluster chunks. 
 //------------------------------------------------------------------------------
 #ifndef CLUSTERCHUNKCACHE_HH
-#define  CLUSTERCHUNKCACHE_HH
+#define CLUSTERCHUNKCACHE_HH
 
 /*----------------------------------------------------------------------------*/
 #include "SequencePatternRecognition.hh"
@@ -120,7 +120,11 @@ private:
   //! current size of the cache
   std::atomic<size_t> current_size;
 
-  std::atomic<int> readahead_window_size;
+  //! the maximum number of chunks to prefetch 
+  int readahead_window_size;
+  
+  //! the number of tail items to examine to keep current_size <= target_size
+  int tail_items; 
 
   //! handle background readahead and flush requests
   BackgroundOperationHandler bg;
@@ -171,7 +175,6 @@ private:
   std::mutex cache_mutex;
 
 private:
-
   //--------------------------------------------------------------------------
   //! Return a value between [0...1] showing the current cache pressure. This
   //! can be used to throttle workload to guard against cache thrashing.

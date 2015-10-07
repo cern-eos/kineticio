@@ -11,7 +11,7 @@ using namespace kio;
 ClusterChunkCache::ClusterChunkCache(size_t preferred_size, size_t capacity, size_t bg_threads,
                                      size_t bg_queue_depth, size_t readahead_size) :
     target_size(preferred_size), capacity(capacity), current_size(0), bg(bg_threads, bg_queue_depth),
-    readahead_window_size(readahead_size)
+    readahead_window_size(readahead_size), tail_items(0)
 {
   if (capacity < target_size) throw std::logic_error("cache target size may not exceed capacity");
   if (bg_threads < 0) throw std::logic_error("number of background threads cannot be negative.");
@@ -20,7 +20,14 @@ ClusterChunkCache::ClusterChunkCache(size_t preferred_size, size_t capacity, siz
 void ClusterChunkCache::changeConfiguration(size_t preferred_size, size_t cap, size_t bg_threads,
                                             size_t bg_queue_depth, size_t readahead_size)
 {
-  readahead_window_size = readahead_size;
+  {
+    std::lock_guard<std::mutex> lock(readahead_mutex);  
+    readahead_window_size = readahead_size;
+  }
+  {
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    tail_items = 0;
+  }
   target_size = preferred_size;
   capacity = cap;
   bg.changeConfiguration(bg_threads, bg_queue_depth);
@@ -55,7 +62,7 @@ void ClusterChunkCache::drop(kio::FileIo* owner)
 void ClusterChunkCache::flush(kio::FileIo* owner)
 {
   /* If we encountered a exception in a background flush, we don't care
-     about it, if it is still an isue we will re-encounter it during the flush operation. */
+     about it, if it is still an issue we will re-encounter it during the flush operation. */
   { std::lock_guard<std::mutex> lock(exception_mutex);
     if (exceptions.count(owner))
       exceptions.erase(owner);
@@ -94,15 +101,20 @@ void ClusterChunkCache::throttle()
   using namespace std::chrono;
   static const milliseconds ratelimit(50);
 
-  for(auto wait_pressure = 0.0; true; wait_pressure += 0.01) {
+  for(auto wait_pressure = 0.1; true; wait_pressure += 0.01) {
     {
       std::lock_guard<std::mutex> ratelimit_lock(cache_cleanup_mutex);
       if(duration_cast<milliseconds>(system_clock::now() - cache_cleanup_timestamp) > ratelimit){
         cache_cleanup_timestamp = system_clock::now();
 
         std::lock_guard<std::mutex> cachelock(cache_mutex);
-        int check_items = cache.size() / 2;
-        for (auto it = --cache.end(); current_size > target_size && check_items; it--, check_items--) {
+        
+        /* Attempt to free items from the tail of the cache if size > target_size. Don't access list::size() every time, 
+           as it has linear runtime with gcc */
+        if(!tail_items && current_size > target_size)            
+            tail_items = cache.size() * 0.25; 
+        int checked_items = 0;
+        for (auto it = --cache.end(); current_size > target_size && it != cache.begin() && checked_items<tail_items; it--, checked_items++) {
           if (!it->chunk->dirty())
             it = remove_item(it);
         }
@@ -145,13 +157,23 @@ std::shared_ptr<kio::ClusterChunk> ClusterChunkCache::get(
     /* Splicing the element into the front of the list will keep iterators valid. */
     cache.splice(cache.begin(), cache, lookup[*key]);
 
-    /* set owner<->cache_item relationship. Since we have std::sets there's no need to test for existance */
+    /* set owner<->cache_item relationship. Since we have std::sets there's no need to test for existence */
     owner_tables[owner].insert(cache.begin());
     cache.front().owners.insert(owner);
     return cache.front().chunk;
   }
+  
+  /* Attempt to free items from the tail of the cache if size > target_size. Don't access list::size() every time, 
+          as it has linear runtime with gcc */
+  if(!tail_items && current_size > target_size)         
+    tail_items = cache.size() * 0.25; 
+  int checked_items = 0;
+  for (auto it = --cache.end(); current_size > target_size && it != cache.begin() && checked_items<tail_items; it--, checked_items++) {
+    if (!it->chunk->dirty())
+      it = remove_item(it);
+  }
 
-  /* If cache size approaches capacity, we have to try flushing dirty chunks manually. */
+  /* If cache size would exceed capacity, we have to try flushing dirty chunks manually. */
   if (capacity < current_size + owner->cluster->limits().max_value_size) {
     kio_notice("Cache capacity reached.");
     auto& it = --cache.end();

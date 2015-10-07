@@ -128,7 +128,7 @@ if(DEBUG)
         test/LRUCacheTest.cc
         test/LoggingTest.cc
         test/KineticRepairClusterTest.cc
-
+        test/ClusterChunkCacheTest.cc
     )
     target_link_libraries(kinetic-test
         ${Z_LIBRARIES}
