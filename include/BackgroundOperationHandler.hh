@@ -37,18 +37,13 @@ public:
 
   //--------------------------------------------------------------------------
   //! If queue capacity is set to zero, try_run_noqueue will be called.
-  //! If queue capacityis reached, function will not be executed.
+  //! If queue capacity is reached, function will not be executed.
   //! Otherwise it will be queued for asynchronous execution.
   //!
   //! @param function the function to be executed.
   //! @return true if function is queued for execution, false otherwise
   //--------------------------------------------------------------------------
   bool try_run(std::function<void()>&& function);
-
-  //--------------------------------------------------------------------------
-  //! Block until queue is empty
-  //--------------------------------------------------------------------------
-  void drain_queue();
 
   //--------------------------------------------------------------------------
   //! Change configuration during runtime.
@@ -60,7 +55,7 @@ public:
 
   //--------------------------------------------------------------------------
   //! Constructor. Note that if queue_depth is set to zero, background threads
-  //! will be spawned on demand instead of being managed in a threadpool.
+  //! will be spawned on demand instead of being managed in a thread-pool.
   //!
   //! @param worker_threads maximum number of spawned background threads
   //! @param queue_depth maximum number of functions queued for execution

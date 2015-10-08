@@ -44,9 +44,11 @@ namespace kio{
     //!
     //! @param cluster_id the id of the cluster
     //! @param numthreads the number of background IO threads for scan/repair
+    //! @param indicator_only if set, operations will only be performed on 
+    //!     keys indicated by indicator keys
     //! @return unique pointer to constructed AdminCluster object.
     //--------------------------------------------------------------------------
-    static std::unique_ptr<AdminClusterInterface> makeAdminCluster(const char* cluster_id, size_t numthreads);
+    static std::unique_ptr<AdminClusterInterface> makeAdminCluster(const char* cluster_id, bool indicator_only, size_t numthreads);
 
     //--------------------------------------------------------------------------
     //! The client may register a log function that will be used for debug and

@@ -41,10 +41,12 @@ public:
   //! Obtain an admin cluster instance for the supplied identifier.
   //!
   //! @param id the unique identifier for the cluster
+  //! @param indicator if set, admin operations will only be performed on keys
+  //!   marked by indicator keys 
   //! @param numthreads number of background io threads during scan operations
   //! @return a valid admin cluster object
   //--------------------------------------------------------------------------
-  std::unique_ptr<KineticAdminCluster> getAdminCluster(const std::string& id, size_t numthreads);
+  std::unique_ptr<KineticAdminCluster> getAdminCluster(const std::string& id, bool indicator, size_t numthreads);
 
   //--------------------------------------------------------------------------
   //! Obtain a reference to the io data cache.

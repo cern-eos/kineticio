@@ -33,6 +33,13 @@ public:
     //! #keys were repair was detected to be necessary but failed
     int unrepairable;
   };
+  
+  //--------------------------------------------------------------------------
+  //! Key statistics since the last restart
+  //!
+  //! @return the key statistics since the last restart 
+  //--------------------------------------------------------------------------
+  virtual KeyCounts getCounts() = 0;
 
   //--------------------------------------------------------------------------
   //! Only count the number of keys existing on the cluster.
@@ -40,7 +47,7 @@ public:
   //! @param maximum number of keys to count
   //! @param restart if not true, the next call will continue where the
   //!   previous call stopped
-  //! @return the number of keys
+  //! @return the number of keys processed 
   //--------------------------------------------------------------------------
   virtual int count(size_t maximum, bool restart=false) = 0;
 
@@ -51,9 +58,9 @@ public:
   //! @param maximum number of keys to scan
   //! @param restart if not true, the next call will continue where the
   //!   previous call stopped
-  //! @return statistics of keys
+  //! @return the number of keys processed 
   //--------------------------------------------------------------------------
-  virtual KeyCounts scan(size_t maximum, bool restart=false) = 0;
+  virtual int scan(size_t maximum, bool restart=false) = 0;
 
   //--------------------------------------------------------------------------
   //! Scan all subchunks of every key and check if keys need to
@@ -62,9 +69,9 @@ public:
   //! @param maximum number of keys to repair
   //! @param restart if not true, the next call will continue where the
   //!   previous call stopped
-  //! @return statistics of keys
+  //! @return the number of keys processed 
   //--------------------------------------------------------------------------
-  virtual KeyCounts repair(size_t maximum, bool restart=false) = 0;
+  virtual int repair(size_t maximum, bool restart=false) = 0;
 
   //--------------------------------------------------------------------------
   //! Force delete _all_ keys on the cluster.
@@ -72,9 +79,9 @@ public:
   //! @param maximum number of keys to remove
   //! @param restart if not true, the next call will continue where the
   //!   previous call stopped
-  //! @return statistics of keys
+  //! @return the number of keys processed 
   //--------------------------------------------------------------------------
-  virtual KeyCounts reset(size_t maximum, bool restart=false) = 0;
+  virtual int reset(size_t maximum, bool restart=false) = 0;
 
   //--------------------------------------------------------------------------
   //! Obtain the current status of connections to all drives attached to this

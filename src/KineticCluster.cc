@@ -61,9 +61,21 @@ KineticCluster::~KineticCluster()
 {
 }
 
+
+/* Fire and forget put callback... not doing anything with the result. */
+class FFPutCallback : public kinetic::PutCallbackInterface
+{
+public:
+  void Success() { }
+  void Failure(kinetic::KineticStatus error) { }
+  FFPutCallback() { }
+  ~FFPutCallback() { }
+};
+
 /* Build a stripe vector from the records returned by a get operation. Only
  * accept values with valid CRC. */
 std::vector<shared_ptr<const string> > getOperationToStripe(
+    const std::shared_ptr<const std::string>& key,
     std::vector<KineticAsyncOperation>& ops,
     int& count,
     const std::shared_ptr<const string>& target_version
@@ -72,9 +84,9 @@ std::vector<shared_ptr<const string> > getOperationToStripe(
   std::vector<shared_ptr<const string> > stripe;
   count = 0;
 
-  for (auto o = ops.begin(); o != ops.end(); o++) {
+  for (int i=0; i<ops.size(); i++) {
     stripe.push_back(make_shared<const string>());
-    auto& record = std::static_pointer_cast<GetCallback>(o->callback)->getRecord();
+    auto& record = std::static_pointer_cast<GetCallback>(ops[i].callback)->getRecord();
 
     if (record &&
         *record->version() == *target_version &&
@@ -88,9 +100,62 @@ std::vector<shared_ptr<const string> > getOperationToStripe(
         stripe.back() = record->value();
         count++;
       }
+      /* In case of crc verification failure, schedule a put operation to the subchunk so it will version
+         mismatch in future gets and can be easily identified for repair */
+      else{
+        kio_warning("subchunk ", i, " of stripe ", *key, " failed crc verification.");
+        std::string cor_string("crc failed");
+        auto cor_crc = crc32c(0, cor_string.c_str(), cor_string.length());
+        auto corrupt = std::make_shared<const KineticRecord>(
+            cor_string, cor_string, utility::Convert::toString(cor_crc), record->algorithm()
+        );        
+        try{
+          auto con = ops[i].connection->get(); 
+          con->Put(key,
+              record->version(), 
+              kinetic::WriteMode::REQUIRE_SAME_VERSION, 
+              corrupt, 
+              std::make_shared<FFPutCallback>()
+          );
+        }catch(const std::exception& e){
+          kio_warning("Failed scheduling overwrite after detecting corrupt data for subchunk ", i, " of stripe ", *key, ": ", e.what());
+        }
+      }
     }
   }
   return stripe;
+}
+
+
+void KineticCluster::putIndicatorKey(const std::shared_ptr<const std::string>& key, const std::vector<KineticAsyncOperation>& ops)
+{
+    /* Obtain an operation index where the execution succeeded. */
+    int i=0;
+    while(i+1 < ops.size()){
+      if(ops[++i].callback->getResult().statusCode() != StatusCode::CLIENT_IO_ERROR)
+        break;
+    }
+       
+    /* Set up record, version is set to "indicator" so that multiple attempts to write the same indicator key 
+     * fail with VERSION_MISMATCH instead of overwriting every single time. */
+    auto record = std::make_shared<const KineticRecord>(
+            "", "indicator", "", com::seagate::kinetic::client::proto::Command_Algorithm_INVALID_ALGORITHM
+    );
+    
+    /* Schedule a write... we're not sticking around. If something fails, tough luck. */
+    try{
+      auto con = ops[i].connection->get();
+      con->Put(utility::keyToIndicator(*key), 
+              make_shared<const string>(), 
+              kinetic::WriteMode::REQUIRE_SAME_VERSION, 
+              record, 
+              std::make_shared<FFPutCallback>());
+
+      fd_set a;
+      con->Run(&a, &a, &i);
+    }catch(const std::exception& e){
+      kio_warning("Failed scheduling indication-key write for target-key ", *key, ": ", e.what());
+    };
 }
 
 
@@ -101,8 +166,8 @@ KineticStatus KineticCluster::get(
     shared_ptr<const string>& value
 )
 {
-  /* If we haven't encountered the need for parities during get in the last 10 minutes, try to get the value
-   * without parities. */
+  /* Try to get the value without parities, unless the cluster has been switched into parity mode in the last 10 
+   * minutes. */
   bool getParities = true;
   if(nData > nParity) {
     std::lock_guard<std::mutex> lock(mutex);
@@ -118,29 +183,33 @@ KineticStatus KineticCluster::get(
   rmap[StatusCode::OK] = target_version.frequency;
 
   /* Any status code encountered at least nData times is valid. If operation was a success, set return values. */
-  for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
+  for (auto it = rmap.begin(); it != rmap.end(); it++) {
     if (it->second >= nData) {
-      if (it->first == StatusCode::OK){
+      if (it->first == StatusCode::OK){        
         /* set value */
         if(!skip_value){
           auto stripe_values = 0;
-          auto stripe = getOperationToStripe(ops, stripe_values, target_version.version);
+          auto stripe = getOperationToStripe(key, ops, stripe_values, target_version.version);
 
           /* stripe_values 0 -> empty value for key. */
           if (stripe_values == 0) {
             value = make_shared<const string>();
           }
           else{
-            /* missing blocks -> erasure code. If we skipped reading parities, we have to abort. */
+            /* adjust the StatusCode::OK count if chunks fail crc or version tests. */
+            if(stripe_values < it->second)
+              it->second = stripe_values;
+            
+            /* missing blocks -> erasure code. */
             if (stripe_values < stripe.size()){
+              /*  If we skipped reading parities, we have to abort. */  
               if(!getParities)
-                break;
-              { std::lock_guard<std::mutex> lock(mutex);
-                parity_required = std::chrono::system_clock::now();
-              }
+                break;                             
+              /* Now for the actual erasure coding */
               try {
                 erasure->compute(stripe);
               } catch (const std::exception& e) {
+                putIndicatorKey(key, ops);
                 return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
               }
             }
@@ -160,6 +229,9 @@ KineticStatus KineticCluster::get(
           version = target_version.version;
         }
       }
+      /* Put down an indicator if there is anything wrong with this stripe. */  
+      if(it->second < nData+nParity && getParities)
+        putIndicatorKey(key, ops);
       return KineticStatus(it->first, "");
     }
   }
@@ -286,10 +358,12 @@ KineticStatus KineticCluster::put(
       if (it->first == StatusCode::OK) {
         version_out = version_new;
       }
+      if(it->second < nData+nParity)
+        putIndicatorKey(key, ops);
       return KineticStatus(it->first, "");
     }
   }
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Confusion when attempting to put key" + *key);
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR,  "Key" + *key + "not accessible.");
 }
 
 
@@ -326,11 +400,14 @@ KineticStatus KineticCluster::remove(
     }
   }
 
-  for (auto it = rmap.cbegin(); it != rmap.cend(); it++)
-    if (it->second >= nData)
+  for (auto it = rmap.cbegin(); it != rmap.cend(); it++){
+    if (it->second >= nData){
+      if(it->second < nData+nParity)
+        putIndicatorKey(key, ops);
       return KineticStatus(it->first, "");
-
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Confusion when attempting to remove key" + *key);
+    }
+  }
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR,  "Key" + *key + "not accessible.");
 }
 
 KineticStatus KineticCluster::range(
@@ -367,7 +444,7 @@ KineticStatus KineticCluster::range(
   }
   return KineticStatus(
       StatusCode::CLIENT_IO_ERROR,
-      "Confusion when attempting to get range from key" + *start_key + " to " + *end_key
+      "Range failed from key" + *start_key + " to " + *end_key
   );
 }
 

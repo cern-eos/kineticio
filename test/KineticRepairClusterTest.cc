@@ -32,7 +32,7 @@ SCENARIO("Repair integration test.", "[Repair]")
     std::size_t nParity = 1;
     std::size_t blocksize = 1024*1024;
 
-    auto cluster = make_shared<KineticAdminCluster>(1, nData, nParity, blocksize, info,
+    auto cluster = make_shared<KineticAdminCluster>(1, false, nData, nParity, blocksize, info,
                                                std::chrono::seconds(1),
                                                std::chrono::seconds(1),
                                                std::make_shared<ErasureCoding>(nData, nParity, 5),
@@ -55,7 +55,8 @@ SCENARIO("Repair integration test.", "[Repair]")
       REQUIRE(putversion);
 
       THEN("It is marked as incomplete during a scan"){
-        auto kc = cluster->scan(std::numeric_limits<int>::max(), true);
+        REQUIRE(cluster->scan(std::numeric_limits<int>::max(), true) == 1);
+        auto kc = cluster->getCounts();
         REQUIRE(kc.total == 1);
         REQUIRE(kc.incomplete == 1);
         REQUIRE(kc.need_repair == 0);
@@ -64,10 +65,12 @@ SCENARIO("Repair integration test.", "[Repair]")
         REQUIRE(kc.unrepairable == 0);
       }
       THEN("We can't repair it while the drive is down."){
-        REQUIRE(cluster->repair(std::numeric_limits<int>::max(), true).repaired == 0);
+        REQUIRE(cluster->repair(std::numeric_limits<int>::max(), true) == 1);
+        REQUIRE(cluster->getCounts().repaired == 0);
       }
       THEN("We can still remove it by resetting the cluster."){
-        REQUIRE(cluster->reset(std::numeric_limits<int>::max(), true).removed == 1);
+        REQUIRE(cluster->reset(std::numeric_limits<int>::max(), true) == 1);
+        REQUIRE(cluster->getCounts().removed == 1);
       }
 
       AND_WHEN("The drive comes up again."){
@@ -77,7 +80,8 @@ SCENARIO("Repair integration test.", "[Repair]")
         sleep(2);
 
         THEN("It is no longer marked as incomplete but as need_repair after a scan"){
-          auto kc = cluster->scan(std::numeric_limits<int>::max(), true);
+          REQUIRE(cluster->scan(std::numeric_limits<int>::max(), true) == 1);
+          auto kc = cluster->getCounts();
           REQUIRE(kc.total == 1);
           REQUIRE(kc.incomplete == 0);
           REQUIRE(kc.need_repair == 1);
@@ -86,10 +90,12 @@ SCENARIO("Repair integration test.", "[Repair]")
           REQUIRE(kc.unrepairable == 0);
         }
         THEN("We can repair the key.") {
-          REQUIRE(cluster->repair(std::numeric_limits<int>::max(), true).repaired == 1);
+          REQUIRE(cluster->repair(std::numeric_limits<int>::max(), true) == 1);
+          REQUIRE(cluster->getCounts().repaired == 1);
         }
         THEN("We can reset the cluster."){
-          REQUIRE(cluster->reset(std::numeric_limits<int>::max(), true).removed == 1);
+          REQUIRE(cluster->reset(std::numeric_limits<int>::max(), true) == 1);
+          REQUIRE(cluster->getCounts().removed == 1);
         }
       }
     }

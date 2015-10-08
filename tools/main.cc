@@ -8,25 +8,34 @@ using std::cout;
 using std::endl;
 
 enum class Operation{
-    STATUS, COUNT, SCAN, REPAIR, RESET, INVALID
+  STATUS, COUNT, SCAN, REPAIR, RESET, INVALID
+};
+
+enum class Target{
+  ALL, INDICATOR, INVALID
 };
 
 struct Configuration{
     Operation op;
+    Target target; 
     std::string id;
     int numthreads;
 };
 
 int kinetic_help(){
-  fprintf(stdout, "'kinetic ..' provides the kinetic cluster management interface of EOS.\n");
-  fprintf(stdout, " Usage: kinetic -id clusterid status|count|scan|repair|reset [-threads numthreads]\n");
-  fprintf(stdout, "    clusterid: the unique name of the cluster. \n");
-  fprintf(stdout, "    numthreads: number of io threads (optional). \n");
+  fprintf(stdout, " Usage: -id clusterid -op status|count|scan|repair|reset -target all|indicator [-threads numthreads]\n"); 
+  fprintf(stdout, " -id: specify the cluster identifier \n");
+  fprintf(stdout, " -op: specify one of the following operations to execute\n");
   fprintf(stdout, "    status: print status of connections of the cluster. \n");
   fprintf(stdout, "    count: number of keys existing in the cluster. \n");
   fprintf(stdout, "    scan: check all keys existing in the cluster and display their status information (Warning: Long Runtime) \n");
   fprintf(stdout, "    repair: check all keys existing in the cluster, repair as required, display their status information. (Warning: Long Runtime) \n");
   fprintf(stdout, "    reset: force remove all keys on all drives associated with the cluster, you will loose ALL data! \n");
+  fprintf(stdout, " -target: specify one of the following target ranges\n");
+  fprintf(stdout, "    all: perform operation on all keys of the cluster. \n");
+  fprintf(stdout, "    indicator: perform operation only on indicator keys (written automatically when encountering partial failures during a get operation). \n");
+  fprintf(stdout, " -threads: (optional) specify the number of background io threads \n");
+  fprintf(stdout, "================================== OTHER ================================== \n");
   return 0;
 }
 
@@ -64,26 +73,35 @@ void mlog(const char* func, const char* file, int line, int level, const char* m
 
 bool parseArguments(int argc, char** argv, Configuration& config) {
   config.op = Operation::INVALID;
+  config.target = Target::INVALID;
   config.numthreads = 1;
 
   for(int i = 1; i < argc; i++){
     if(strcmp("-id", argv[i]) == 0)
       config.id = std::string(argv[i+1]);
-    if(strcmp("-threads", argv[i]) == 0)
+    else if(strcmp("-threads", argv[i]) == 0)
       config.numthreads = atoi(argv[i+1]);
-    else if(strcmp("-scan", argv[i]) == 0)
-      config.op = Operation::SCAN;
-    else if(strcmp("-count", argv[i]) == 0)
-      config.op = Operation::COUNT;
-    else if(strcmp("-repair", argv[i]) == 0)
-      config.op = Operation::REPAIR;
-    else if(strcmp("-status", argv[i]) == 0)
-      config.op = Operation::STATUS;
-    else if(strcmp("-reset", argv[i]) == 0)
-      config.op = Operation::RESET;
+    else if(strcmp("-op",argv[i]) == 0){
+      if(strcmp("scan", argv[i+1]) == 0)
+        config.op = Operation::SCAN;
+      else if(strcmp("count", argv[i+1]) == 0)
+        config.op = Operation::COUNT;
+      else if(strcmp("repair", argv[i+1]) == 0)
+        config.op = Operation::REPAIR;
+      else if(strcmp("status", argv[i+1]) == 0)
+        config.op = Operation::STATUS;
+      else if(strcmp("reset", argv[i+1]) == 0)
+        config.op = Operation::RESET;
+    }
+    else if(strcmp("-target",argv[i]) == 0){
+      if(strcmp("all", argv[i+1]) == 0)
+        config.target = Target::ALL;
+      else if(strcmp("indicator", argv[i+1]) == 0)
+        config.target= Target::INDICATOR;
+     }
   }
 
-  return config.id.length() && config.op != Operation::INVALID;
+  return config.id.length() && config.op != Operation::INVALID && config.target != Target::INVALID;
 }
 
 kio::AdminClusterInterface::KeyCounts operator+= (kio::AdminClusterInterface::KeyCounts& lhs, const kio::AdminClusterInterface::KeyCounts& rhs)
@@ -107,7 +125,7 @@ int countkeys(std::unique_ptr<kio::AdminClusterInterface>& ac){
     fprintf(stdout, "\r\t %d",total);
     fflush(stdout);
   }
-  fprintf(stdout, "\n");
+  fprintf(stdout, "\r\t %d\n",total);;
   return total;
 }
 
@@ -116,22 +134,22 @@ kio::AdminClusterInterface::KeyCounts doOperation(
     Configuration& config
 )
 {
-
-  kio::AdminClusterInterface::KeyCounts kc{0,0,0,0,0,0};
-  auto totalkeys = countkeys(ac);
+  const auto totalkeys = countkeys(ac);
   auto numsteps = 50;
-  auto perstep = (totalkeys+numsteps-1) / numsteps;
+  const auto perstep = (totalkeys+numsteps-1) / numsteps;
 
-  for(int i=0; i<numsteps; i++){
+  int step = perstep; 
+  
+  for(int i=0; step; i++){
     switch(config.op){
       case Operation::SCAN:
-        kc += ac->scan(perstep, i==0);
+        step = ac->scan(perstep, i==0);
         break;
       case Operation::REPAIR:
-        kc += ac->repair(perstep, i==0);
+        step = ac->repair(perstep, i==0);
         break;
       case Operation::RESET:
-        kc += ac->reset(perstep, i==0);
+        step = ac->reset(perstep, i==0);
         break;
     }
     fprintf(stdout, "\r[");
@@ -143,7 +161,7 @@ kio::AdminClusterInterface::KeyCounts doOperation(
     fflush(stdout);
   }
   fprintf(stdout, "\n");
-  printKeyCount(kc);
+  printKeyCount(ac->getCounts());
 }
 
 int main(int argc, char** argv)
@@ -157,7 +175,7 @@ int main(int argc, char** argv)
 
   try{
     kio::Factory::registerLogFunction(mlog, mshouldLog);
-    auto ac = kio::Factory::makeAdminCluster(config.id.c_str(), config.numthreads);
+    auto ac = kio::Factory::makeAdminCluster(config.id.c_str(), config.target == Target::INDICATOR, config.numthreads);
 
     switch(config.op){
       case Operation::STATUS: {

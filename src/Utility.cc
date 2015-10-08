@@ -74,7 +74,7 @@ std::shared_ptr<const std::string> utility::uuidGenerateEncodeSize(std::size_t s
   std::ostringstream ss;
   ss << std::setw(10) << std::setfill('0') << size;
 
-  return std::make_shared<std::string>(
+  return std::make_shared<const std::string>(
       ss.str() + std::string(reinterpret_cast<const char *>(uuid), sizeof(uuid_t))
    );
 }
@@ -85,4 +85,14 @@ std::size_t utility::uuidDecodeSize(const std::shared_ptr<const std::string>& uu
     throw std::invalid_argument("invalid version supplied.");
   std::string size(uuid->substr(0,10));
   return atoi(size.c_str());
+}
+
+std::shared_ptr<const std::string> utility::keyToIndicator(const std::string& key)
+{
+  return std::make_shared<const std::string>("-indicator-" + key);
+}
+
+std::shared_ptr<const std::string> utility::indicatorToKey(const std::string& indicator_key)
+{
+  return std::make_shared<const std::string>(indicator_key.substr(sizeof("-indicator"),std::string::npos));  
 }

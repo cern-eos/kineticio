@@ -7,6 +7,10 @@ bool tshouldLog(const char *name, int level){
   return true;
 }
 
+bool tneverShouldLog(const char *name, int level){
+  return false; 
+}
+
 static void tlog(const char* func, const char* file, int line, int priority, const char *msg)
 {
   switch(priority) {
@@ -23,14 +27,6 @@ static void tlog(const char* func, const char* file, int line, int priority, con
   printf("%s /// %s (%s:%d)\n",msg,func,file,line);
 }
 
-class LogFunctionInitializer{
-public:
-    LogFunctionInitializer(){
-      kio::Factory::registerLogFunction(tlog, tshouldLog);
-    }
-};
-static LogFunctionInitializer kio_loginit;
-
 
 SCENARIO("LoggingTest", "[log]"){
 
@@ -40,7 +36,9 @@ SCENARIO("LoggingTest", "[log]"){
       double d = 0.99;
       std::string s = "'happy'";
       kinetic::KineticStatus status (kinetic::StatusCode::OK, "Test message.");
+       kio::Factory::registerLogFunction(tlog, tshouldLog);
       kio_notice("Integer ", i,", Double ", d, ", String ", s, ", KineticStatus ", status);
+      kio::Factory::registerLogFunction(tlog, tneverShouldLog);
     }
   }
 };

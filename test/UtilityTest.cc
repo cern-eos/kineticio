@@ -28,6 +28,18 @@ SCENARIO("Utility Test.", "[Utility]"){
       }
     }
   }
+  
+  GIVEN("a key"){
+    auto key = std::make_shared<const string>("/this/is/a/key");
+    THEN("We can construct an indicator key"){
+      auto indicator = utility::keyToIndicator(*key);
+      
+      AND_THEN("We can reconstruct the key from the indicator"){
+        auto reconstructed = utility::indicatorToKey(*indicator);
+        REQUIRE(*reconstructed == *key);
+      }
+    }
+  }
 
   GIVEN("a stripe vector"){
     std::vector< std::shared_ptr<const string> > stripe;

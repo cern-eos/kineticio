@@ -2,6 +2,7 @@
 #include "catch.hpp"
 #include "KineticCluster.hh"
 #include "SimulatorController.h"
+#include "Utility.hh"
 
 using std::shared_ptr;
 using std::string;
@@ -79,6 +80,27 @@ SCENARIO("Cluster integration test.", "[Cluster]")
       THEN("With == nParity drive failures.") {
         for (int i = 0; i < nParity; i++)
           c.stop(i);
+        
+        AND_WHEN("The key is read in again"){
+            std::shared_ptr<const string> value;
+            std::shared_ptr<const string> version;
+            
+            auto status = cluster->get(make_shared<string>("key"), true, version, value);
+            REQUIRE(status.ok());
+            
+            THEN("An indicator key will have been generated, showing that the stripe had a problem."){
+                std::unique_ptr<std::vector<string>> keys; 
+                auto status = cluster->range(
+                  utility::keyToIndicator(""),
+                  utility::keyToIndicator("~"),
+                  100,
+                  keys
+                );
+                REQUIRE(status.ok());
+                REQUIRE(keys->size() == 1);
+                REQUIRE(keys->at(0) == *utility::keyToIndicator("key"));
+            }
+        }
 
         THEN("with > nParity failures") {
           c.stop(nParity);

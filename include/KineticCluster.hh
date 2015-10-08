@@ -158,6 +158,16 @@ protected:
   //! Update the clustersize variable.
   //--------------------------------------------------------------------------
   void updateSize();
+  
+  //--------------------------------------------------------------------------
+  //! In case a get operation notices missing / corrupt / inaccessible chunks,
+  //! it may put an indicator key, so that the affected stripe may be looked 
+  //! at by a repair process. This will be done asynchronously. 
+  //! 
+  //! @param key the key of the affected stripe
+  //! @param ops the operation vector containing the failed operation 
+  //--------------------------------------------------------------------------
+  void putIndicatorKey(const std::shared_ptr<const std::string>& key, const std::vector<KineticAsyncOperation>& ops);
 
 
 protected:

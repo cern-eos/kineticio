@@ -12,9 +12,25 @@
 #include <kinetic/kinetic.h>
 
 namespace kio { namespace utility {
-
+  
   //--------------------------------------------------------------------------
-  //! Create the kinetic key from the supplied path and chunk number.
+  //! Create the kinetic indicator key from the supplied key.
+  //!
+  //! @param key the key 
+  //! @return the indicator key for the supplied key 
+  //--------------------------------------------------------------------------
+  std::shared_ptr<const std::string> keyToIndicator(const std::string& key);
+  
+  //--------------------------------------------------------------------------
+  //! Obtain the original key from an indicator key
+  //!
+  //! @param indicator_key the indicator key 
+  //! @return the orginal key 
+  //--------------------------------------------------------------------------
+  std::shared_ptr<const std::string> indicatorToKey(const std::string& indicator_key); 
+  
+  //--------------------------------------------------------------------------
+  //! Create the kinetic chunk key from the supplied path and chunk number.
   //!
   //! @param path base path
   //! @param chunk_number the chunk number

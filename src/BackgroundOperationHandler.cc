@@ -16,6 +16,12 @@ BackgroundOperationHandler::BackgroundOperationHandler(int worker_threads, int q
 
 BackgroundOperationHandler::~BackgroundOperationHandler()
 {
+  {
+    std::unique_lock<std::mutex> lck(queue_mutex);
+    while (!q.empty())
+      controller.wait(lck);
+  }
+  
   shutdown = true;
   worker.notify_all();
 
@@ -39,19 +45,12 @@ void BackgroundOperationHandler::changeConfiguration(int worker_threads, int que
   /* If the new configuration is in queue mode, start as many additional worker threads
    * as required. */
   if(queue_depth){
-    for(int i = queue_capacity ? numthreads.load() : 0; i<worker_threads; i++)
+    for(int i = queue_capacity ? numthreads.load() : 0; i < worker_threads; i++)
       std::thread(&BackgroundOperationHandler::worker_thread, this).detach();
   }
 
   thread_capacity = worker_threads;
   queue_capacity = queue_depth;
-}
-
-void BackgroundOperationHandler::drain_queue()
-{
-  std::unique_lock<std::mutex> lck(queue_mutex);
-  while (!q.empty())
-    controller.wait(lck);
 }
 
 void BackgroundOperationHandler::worker_thread()
@@ -113,6 +112,7 @@ bool BackgroundOperationHandler::try_run(std::function<void()>&& function)
 
 void BackgroundOperationHandler::execute_noqueue(std::function<void()> function)
 {
+  numthreads++;
   try {
     function();
   }
@@ -122,10 +122,9 @@ void BackgroundOperationHandler::execute_noqueue(std::function<void()> function)
 
 bool BackgroundOperationHandler::try_run_noqueue(std::function<void()> function)
 {
-  if (numthreads.load() >= thread_capacity)
+  if (numthreads >= thread_capacity)
     return false;
 
-  numthreads++;
   std::thread(&BackgroundOperationHandler::execute_noqueue, this, std::move(function)).detach();
   return true;
 }

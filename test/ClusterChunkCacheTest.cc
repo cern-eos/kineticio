@@ -83,23 +83,22 @@ public:
 
 SCENARIO("Cache Performance Test.", "[Cache]"){ 
     
-    GIVEN("A Cache Object"){
-       ClusterChunkCache ccc(1024*10000, 1024*20000, 20, 20, 0);
-       std::shared_ptr<ClusterInterface> cluster(new MockCluster());
-       MockFileIo fio("thepath",cluster);
-       
-       int num_items = 100000;
-       
-       auto tstart = system_clock::now();
-       for(int i=0; i<num_items; i++){
-           ccc.get((FileIo*)&fio, i, ClusterChunk::Mode::STANDARD);
-       }
-       auto tend = system_clock::now();
-             
-       printf("%ld items per second\n", (num_items * 1000) / duration_cast<milliseconds>(tend-tstart).count());
-       
-       
-        
+    GIVEN("A Cache Object and a mocked FileIo object"){
+        ClusterChunkCache ccc(1024*10000, 1024*20000, 20, 20, 0);
+        std::shared_ptr<ClusterInterface> cluster(new MockCluster());
+        MockFileIo fio("thepath",cluster);
+
+        THEN("We can exercise the cache"){
+            int num_items = 100000;
+
+            auto tstart = system_clock::now();
+            for(int i=0; i<num_items; i++){
+                ccc.get((FileIo*)&fio, i, ClusterChunk::Mode::STANDARD);
+            }
+            auto tend = system_clock::now();
+
+            printf("%ld items per second\n", (num_items * 1000) / duration_cast<milliseconds>(tend-tstart).count());
+      }
     }
 }
 
