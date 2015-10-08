@@ -32,7 +32,7 @@ SCENARIO("Repair integration test.", "[Repair]")
     std::size_t nParity = 1;
     std::size_t blocksize = 1024*1024;
 
-    auto cluster = make_shared<KineticAdminCluster>(1, false, nData, nParity, blocksize, info,
+    auto cluster = make_shared<KineticAdminCluster>(false, 1, nData, nParity, blocksize, info,
                                                std::chrono::seconds(1),
                                                std::chrono::seconds(1),
                                                std::make_shared<ErasureCoding>(nData, nParity, 5),
@@ -70,6 +70,7 @@ SCENARIO("Repair integration test.", "[Repair]")
       }
       THEN("We can still remove it by resetting the cluster."){
         REQUIRE(cluster->reset(std::numeric_limits<int>::max(), true) == 1);
+        auto kc = cluster->getCounts();
         REQUIRE(cluster->getCounts().removed == 1);
       }
 

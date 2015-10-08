@@ -35,18 +35,17 @@ int kinetic_help(){
   fprintf(stdout, "    all: perform operation on all keys of the cluster. \n");
   fprintf(stdout, "    indicator: perform operation only on indicator keys (written automatically when encountering partial failures during a get operation). \n");
   fprintf(stdout, " -threads: (optional) specify the number of background io threads \n");
-  fprintf(stdout, "================================== OTHER ================================== \n");
   return 0;
 }
 
 void printKeyCount(const kio::AdminClusterInterface::KeyCounts& kc)
 {
-  fprintf(stdout, "Completed Operation. Scanned a total of %d keys\n", kc.total);
+  fprintf(stdout, "Completed Operation. Scanned a total of %d keys\n\n", kc.total);
   fprintf(stdout, "Stripes with inaccessible drives: %d\n", kc.incomplete);
-  fprintf(stdout, "Can Repair / Remove: %d\n", kc.need_repair);
-  fprintf(stdout, "Repaired: %d\n", kc.repaired);
-  fprintf(stdout, "Removed: %d\n", kc.removed);
-  fprintf(stdout, "Unrepairable: %d\n", kc.unrepairable);
+  fprintf(stdout, "Stripes requiring action: %d\n", kc.need_repair);
+  fprintf(stdout, "Stripes Repaired: %d\n", kc.repaired);
+  fprintf(stdout, "Stripes Removed: %d\n", kc.removed);
+  fprintf(stdout, "Not repairable: %d\n", kc.unrepairable);
 }
 
 bool mshouldLog(const char* func, int level){

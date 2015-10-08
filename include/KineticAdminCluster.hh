@@ -40,8 +40,7 @@ public:
   KineticAdminCluster(bool indicator_only, size_t numthreads, Args&& ... args) :
       KineticCluster(std::forward<Args>(args)...), 
       indicator_keys(indicator_only), 
-      threads(numthreads), 
-      bg(new BackgroundOperationHandler(numthreads,0)) 
+      threads(numthreads)
   {};
 
   //! Destructor

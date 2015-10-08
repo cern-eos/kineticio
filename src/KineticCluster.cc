@@ -130,7 +130,7 @@ std::vector<shared_ptr<const string> > getOperationToStripe(
 void KineticCluster::putIndicatorKey(const std::shared_ptr<const std::string>& key, const std::vector<KineticAsyncOperation>& ops)
 {
     /* Obtain an operation index where the execution succeeded. */
-    int i=0;
+    int i = -1;
     while(i+1 < ops.size()){
       if(ops[++i].callback->getResult().statusCode() != StatusCode::CLIENT_IO_ERROR)
         break;
