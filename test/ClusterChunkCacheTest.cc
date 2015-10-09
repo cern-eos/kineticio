@@ -22,6 +22,11 @@ public:
   {
       return _size; 
   };
+  
+  ClusterIo iostats()
+  {
+    return {0,0,0,0,0};
+  }
 
   kinetic::KineticStatus get(
     const std::shared_ptr<const std::string>& key,

@@ -14,21 +14,66 @@ FileAttr::~FileAttr()
 {
 }
 
+enum class RequestType {
+  STANDARD, READ_OPS, READ_BW, WRITE_OPS, WRITE_BW, MAX_BW
+};
+
+RequestType getRequestType(const char *name)
+{
+  if(strcmp(name, "sys.iostats.max-bw") == 0)
+    return RequestType::MAX_BW;
+  if(strcmp(name, "sys.iostats.read-bw") == 0)
+    return RequestType::READ_BW;
+  if(strcmp(name, "sys.iostats.read-ops") == 0)
+    return RequestType::READ_OPS;
+  if(strcmp(name, "sys.iostats.write-bw") == 0)
+    return RequestType::WRITE_BW;
+  if(strcmp(name, "sys.iostats.write-ops") == 0)
+    return RequestType::WRITE_OPS;
+  return RequestType::STANDARD; 
+}
+
 bool FileAttr::Get(const char *name, char *content, size_t &size)
 {
-  if (!cluster) {
+  if (!cluster)
     return false;
-  }
-  std::shared_ptr<const string> version;
+  
+  auto type = getRequestType(name); 
   std::shared_ptr<const string> value;
-  auto status = cluster->get(
-      utility::constructAttributeKey(path,name),
-      false, version, value);
+  
+  if(type == RequestType::STANDARD){
+    std::shared_ptr<const string> version;
+    auto status = cluster->get(
+        utility::constructAttributeKey(path, name),
+        false, version, value);
 
-  /* Requested attribute doesn't exist or there was connection problem. */
-  if (!status.ok())
-    return false;
-
+    /* Requested attribute doesn't exist or there was connection problem. */
+    if (!status.ok())
+      return false;
+  }else{  
+    auto stats = cluster->iostats();
+    double MB = 1024*1024;
+    double result = 0;
+    switch(type){
+      case RequestType::MAX_BW: 
+        result = stats.number_drives*50*MB;
+        break;
+      case RequestType::READ_BW:
+        result = stats.read_bytes/MB;
+        break;
+      case RequestType::READ_OPS:
+        result = stats.read_ops;
+        break;
+      case RequestType::WRITE_BW: 
+        result = stats.write_bytes/MB;
+        break;
+      case RequestType::WRITE_OPS:
+        result = stats.write_ops;
+        break; 
+    }
+    value = std::make_shared<const string>(utility::Convert::toString(result));
+  }
+  
   if (size > value->size())
     size = value->size();
   value->copy(content, size, 0);

@@ -19,7 +19,7 @@ KineticCluster::KineticCluster(
     std::shared_ptr<ErasureCoding> ec,
     SocketListener& listener
 ) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout),
-    clustersize{1,0}, clustersize_background(1,1), erasure(ec)
+     statistics_snapshot{0,0,0,0,0}, clusterio{0,0,0,0,0}, clustersize{1,0}, background(1,1), erasure(ec)
 {
   if (nData + nParity > info.size()) {
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
@@ -42,7 +42,7 @@ KineticCluster::KineticCluster(
       const auto& l = std::static_pointer_cast<GetLogCallback>(ops.front().callback)->getLog()->limits;
       if(l.max_value_size < block_size) {
         throw kio_exception(ENXIO, "configured block size of ", block_size,
-                                   "is smaller than maximum drive block size of ", l.max_value_size);
+                                   "is bigger than maximum drive block size of ", l.max_value_size);
       }
       clusterlimits.max_key_size = l.max_key_size;
       clusterlimits.max_value_size = block_size * nData;
@@ -53,8 +53,8 @@ KineticCluster::KineticCluster(
   if (!clusterlimits.max_key_size || !clusterlimits.max_value_size || !clusterlimits.max_version_size) {
     throw kio_exception(ENXIO, "Failed obtaining cluster limits!");
   }
-  /* Start a bg update of cluster capacity */
-  size();
+  /* Start a bg update of cluster io statistics and capacity */
+  background.try_run(std::bind(&KineticCluster::updateStatistics, this));
 }
 
 KineticCluster::~KineticCluster()
@@ -449,24 +449,64 @@ KineticStatus KineticCluster::range(
 }
 
 
-void KineticCluster::updateSize()
+void KineticCluster::updateStatistics()
 {
+  using namespace std::chrono;
+  
+  /* Let's rate-limit the update frequency to something sensible */
+  {  std::lock_guard<std::mutex> lock(mutex);
+  if(duration_cast<seconds>(system_clock::now()-statistics_timepoint) < seconds(5))
+    return; 
+  }
+  
   auto ops = initialize(make_shared<string>("all"), connections.size());
-  auto sync = asyncops::fillLog(ops, {Command_GetLog_Type::Command_GetLog_Type_CAPACITIES});
+  auto sync = asyncops::fillLog(ops, 
+    {Command_GetLog_Type::Command_GetLog_Type_CAPACITIES, Command_GetLog_Type::Command_GetLog_Type_STATISTICS}
+  );
   execute(ops, *sync);
 
-  /* Evaluate Operation Result. */
-  std::lock_guard<std::mutex> lock(mutex);
-  clustersize.bytes_total = clustersize.bytes_free = 0;
+  /* Set up temporary variables */
+  auto timep = system_clock::now();
+  auto period = duration_cast<milliseconds>(timep-statistics_timepoint).count();
+  ClusterSize size{0,0}; 
+  ClusterIo io{0,0,0,0,0}; 
+  
+  /* Evaluate Operation Results. */
   for (auto o = ops.begin(); o != ops.end(); o++) {
     if (!o->callback->getResult().ok()) {
-      kio_notice("Could not obtain capacity information for a drive: ", o->callback->getResult());
+      kio_notice("Could not obtain statistics / capacity information for a drive: ", o->callback->getResult());
       continue;
     }
-    const auto& c = std::static_pointer_cast<GetLogCallback>(o->callback)->getLog()->capacity;
-    clustersize.bytes_total += c.nominal_capacity_in_bytes;
-    clustersize.bytes_free += c.nominal_capacity_in_bytes - (c.nominal_capacity_in_bytes * c.portion_full);
+    const auto& log = std::static_pointer_cast<GetLogCallback>(o->callback)->getLog();
+    
+    size.bytes_total += log->capacity.nominal_capacity_in_bytes;
+    size.bytes_free += log->capacity.nominal_capacity_in_bytes - (log->capacity.nominal_capacity_in_bytes * log->capacity.portion_full);
+  
+    for(auto it = log->operation_statistics.cbegin(); it != log->operation_statistics.cend(); it++){
+      if(it->name == "GET_RESPONSE"){
+        io.read_ops += it->count;
+        io.read_bytes += it->bytes;
+      }
+      else if(it->name == "PUT"){
+        io.write_ops += it->count; 
+        io.write_bytes += it->bytes;
+      }
+    }
+    io.number_drives++; 
   }
+    
+  /* update cluster variables */
+  std::lock_guard<std::mutex> lock(mutex);
+  statistics_timepoint = timep;
+  clustersize = size;
+  
+  clusterio.read_ops = ((io.read_ops - statistics_snapshot.read_ops) * 1000) / period;
+  clusterio.read_bytes = ((io.read_bytes - statistics_snapshot.read_bytes) *1000) / period;
+  clusterio.write_ops = ((io.write_ops - statistics_snapshot.write_ops) *1000) / period;
+  clusterio.write_bytes = ((io.write_bytes - statistics_snapshot.write_bytes) *1000) / period; 
+  clusterio.number_drives = io.number_drives; 
+  
+  statistics_snapshot = io;
 }
 
 const ClusterLimits& KineticCluster::limits() const
@@ -476,9 +516,16 @@ const ClusterLimits& KineticCluster::limits() const
 
 ClusterSize KineticCluster::size()
 {
-  clustersize_background.try_run(std::bind(&KineticCluster::updateSize, this));
+  background.try_run(std::bind(&KineticCluster::updateStatistics, this));
   std::lock_guard<std::mutex> lock(mutex);
   return clustersize;
+}
+
+ClusterIo KineticCluster::iostats()
+{
+  background.try_run(std::bind(&KineticCluster::updateStatistics, this));
+  std::lock_guard<std::mutex> lock(mutex);
+  return clusterio;
 }
 
 std::vector<KineticAsyncOperation> KineticCluster::initialize(

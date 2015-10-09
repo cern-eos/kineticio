@@ -40,6 +40,15 @@ struct ClusterLimits{
   uint32_t max_value_size;
 };
 
+/* All values per second */
+struct ClusterIo{
+  uint64_t read_ops; 
+  uint64_t read_bytes; 
+  uint64_t write_ops;
+  uint64_t write_bytes; 
+  uint32_t number_drives;
+};
+
 //------------------------------------------------------------------------------
 //! Interface to a cluster, primarily intended to interface with Kinetic
 //! drives.
@@ -62,9 +71,18 @@ public:
   //! Check the maximum size of the Cluster. Function will not block but
   //! might return outdated values.
   //!
-  //! @return clsuter size
+  //! @return cluster size
   //----------------------------------------------------------------------------
   virtual ClusterSize size() = 0;
+  
+  //----------------------------------------------------------------------------
+  //! Report usage as ops / bandwidth per second. Equivalent to size(), the 
+  //! function will update values asynchronously and might return outdated 
+  //! values. 
+  //!
+  //! @return cluster io statistics
+  //----------------------------------------------------------------------------
+  virtual ClusterIo iostats() = 0;
 
   //----------------------------------------------------------------------------
   //! Get the value and version associated with the supplied key.

@@ -166,6 +166,15 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
             REQUIRE(fileio->ftsClose(handle) == 0);
         }
       }
+      
+      AND_THEN("We can use the attr interface to request io stats"){
+        size_t size = buf_size;
+        REQUIRE(a->Get("sys.iostats.read-ops", read_buf, size) == true);
+        REQUIRE(a->Get("sys.iostats.read-bw", read_buf, size) == true);
+        REQUIRE(a->Get("sys.iostats.write-ops", read_buf, size) == true);
+        REQUIRE(a->Get("sys.iostats.write-bw", read_buf, size) == true);
+        REQUIRE(a->Get("sys.iostats.max-bw", read_buf, size) == true);
+      }
     }
 
     THEN("Attempting to read an empty file reads 0 bytes."){

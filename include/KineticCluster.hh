@@ -29,6 +29,8 @@ public:
   //! See documentation in superclass.
   ClusterSize size();
   //! See documentation in superclass.
+  ClusterIo iostats(); 
+  //! See documentation in superclass.
   kinetic::KineticStatus get(
       const std::shared_ptr<const std::string>& key,
       bool skip_value,
@@ -155,9 +157,9 @@ protected:
   );
 
   //--------------------------------------------------------------------------
-  //! Update the clustersize variable.
+  //! Update the clusterio statistics and capacity information.
   //--------------------------------------------------------------------------
-  void updateSize();
+  void updateStatistics();
   
   //--------------------------------------------------------------------------
   //! In case a get operation notices missing / corrupt / inaccessible chunks,
@@ -179,24 +181,33 @@ protected:
 
   //! timeout of asynchronous operations
   const std::chrono::seconds operation_timeout;
-
+  
   //! all connections associated with this cluster
   std::vector< std::unique_ptr<KineticAutoConnection> > connections;
 
-  //! time point we last required parity information during a get operation, can be used to enable / deable
+  //! time point we last required parity information during a get operation, can be used to enable / disable
   //! reading parities with the data
   std::chrono::system_clock::time_point parity_required;
 
-  //! cluster limits are constant over cluster lifetime
-  ClusterLimits clusterlimits;
+  //! time point the clusterio statistics have last been updated, used to compute per second values
+  std::chrono::system_clock::time_point statistics_timepoint; 
 
+  //! the io statistics at time point timep_statistics 
+  ClusterIo statistics_snapshot; 
+  
+  //! io statistics as per second value of cluster
+  ClusterIo clusterio;
+  
   //! size information of the cluster (total / free bytes)
   ClusterSize clustersize;
 
+  //! cluster limits are constant over cluster lifetime
+  ClusterLimits clusterlimits;
+  
   //! updating cluster size in the background
-  BackgroundOperationHandler clustersize_background;
+  BackgroundOperationHandler background;
 
-  //! concurrency control of clustersize and parity_required variables
+  //! concurrency control of cluster io, size and time_point variables
   std::mutex mutex;
 
   //! erasure coding
