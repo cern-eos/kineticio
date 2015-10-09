@@ -30,16 +30,16 @@ public:
   int repair(size_t maximum,bool restart=false);
 
   //! See documentation of public interface in AdminClusterInterface
-  int  reset(size_t maximum, bool restart=false);
+  int reset(size_t maximum, bool restart=false);
 
   //! See documentation of public interface in AdminClusterInterface
   std::vector<bool> status();
 
   //! Perfect forwarding is nice, and I am lazy. Look in KineticCluster.hh for the correct arguments
   template<typename... Args>
-  KineticAdminCluster(bool indicator_only, size_t numthreads, Args&& ... args) :
+  KineticAdminCluster(OperationTarget target, size_t numthreads, Args&& ... args) :
       KineticCluster(std::forward<Args>(args)...), 
-      indicator_keys(indicator_only), 
+      target(target), 
       threads(numthreads)
   {};
 
@@ -74,14 +74,17 @@ private:
   //! keeping track of the start key for continuing operations
   std::shared_ptr<const std::string> start_key;
   
-  //! if set, operations should be performed only on keys marked with indicator keys
-  bool indicator_keys;
+  //! the end key for continuing operations
+  std::shared_ptr<const std::string> end_key;
+  
+  //! the type of keys affected by operations
+  OperationTarget target;
+  
+  //! handle background operations 
+  std::unique_ptr<BackgroundOperationHandler> bg; 
   
   //! number of background io threads
   size_t threads;
- 
-  //! handle background operations 
-  std::unique_ptr<BackgroundOperationHandler> bg; 
   
   //--------------------------------------------------------------------------
   //! The main loop for count / scan / repair / reset operations.
@@ -114,6 +117,12 @@ private:
   //! either fine or nothing can be done due to unreachable drives.
   //--------------------------------------------------------------------------
   bool scanKey(const std::shared_ptr<const std::string>& key);
+  
+  //--------------------------------------------------------------------------
+  //! Initialize the start_key and end_key variables, depending
+  //! on the OperationTarget
+  //--------------------------------------------------------------------------  
+  void initKeyRange();
 };
 
 }

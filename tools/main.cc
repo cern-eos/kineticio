@@ -1,23 +1,19 @@
 #include <iostream>
 #include <sys/syslog.h>
 #include <unistd.h>
+#include "AdminClusterInterface.hh"
 #include "ClusterMap.hh"
 #include "KineticIoFactory.hh"
 
-using std::cout;
-using std::endl;
+typedef kio::AdminClusterInterface::OperationTarget OperationTarget;
 
 enum class Operation{
   STATUS, COUNT, SCAN, REPAIR, RESET, INVALID
 };
 
-enum class Target{
-  ALL, INDICATOR, INVALID
-};
-
 struct Configuration{
     Operation op;
-    Target target; 
+    OperationTarget target; 
     std::string id;
     int numthreads;
 };
@@ -32,8 +28,10 @@ int kinetic_help(){
   fprintf(stdout, "    repair: check all keys existing in the cluster, repair as required, display their status information. (Warning: Long Runtime) \n");
   fprintf(stdout, "    reset: force remove all keys on all drives associated with the cluster, you will loose ALL data! \n");
   fprintf(stdout, " -target: specify one of the following target ranges\n");
-  fprintf(stdout, "    all: perform operation on all keys of the cluster. \n");
-  fprintf(stdout, "    indicator: perform operation only on indicator keys (written automatically when encountering partial failures during a get operation). \n");
+  fprintf(stdout, "    all: perform operation on all keys of the cluster\n");
+  fprintf(stdout, "    file: perform operation on keys associated with files\n");
+  fprintf(stdout, "    attribute: perform operation on attribute keys only \n");
+  fprintf(stdout, "    indicator: perform operation only on keys with indicators (written automatically when encountering partial failures during a get/put/remove in normal operation)\n");
   fprintf(stdout, " -threads: (optional) specify the number of background io threads \n");
   return 0;
 }
@@ -41,10 +39,10 @@ int kinetic_help(){
 void printKeyCount(const kio::AdminClusterInterface::KeyCounts& kc)
 {
   fprintf(stdout, "Completed Operation. Scanned a total of %d keys\n\n", kc.total);
-  fprintf(stdout, "Stripes with inaccessible drives: %d\n", kc.incomplete);
-  fprintf(stdout, "Stripes requiring action: %d\n", kc.need_repair);
-  fprintf(stdout, "Stripes Repaired: %d\n", kc.repaired);
-  fprintf(stdout, "Stripes Removed: %d\n", kc.removed);
+  fprintf(stdout, "Keys with inaccessible drives: %d\n", kc.incomplete);
+  fprintf(stdout, "Keys requiring action: %d\n", kc.need_repair);
+  fprintf(stdout, "Keys Repaired: %d\n", kc.repaired);
+  fprintf(stdout, "Keys Removed: %d\n", kc.removed);
   fprintf(stdout, "Not repairable: %d\n", kc.unrepairable);
 }
 
@@ -57,22 +55,22 @@ bool mshouldLog(const char* func, int level){
 void mlog(const char* func, const char* file, int line, int level, const char* msg){
   switch(level){
     case LOG_DEBUG:
-      cout << "DEBUG:";
+      fprintf(stdout, "DEBUG:");
       break;
     case LOG_NOTICE:
-      cout << "NOTICE:";
+      fprintf(stdout, "NOTICE:");
       break;
     case LOG_WARNING:
-      cout << "WARNING:";
+      fprintf(stdout, "WARNING:");
       break;
   }
-  std::cout << " " << msg << endl;
+  fprintf(stdout, " %s\n", msg);
 }
 
 
 bool parseArguments(int argc, char** argv, Configuration& config) {
   config.op = Operation::INVALID;
-  config.target = Target::INVALID;
+  config.target = OperationTarget::INVALID;
   config.numthreads = 1;
 
   for(int i = 1; i < argc; i++){
@@ -94,13 +92,17 @@ bool parseArguments(int argc, char** argv, Configuration& config) {
     }
     else if(strcmp("-target",argv[i]) == 0){
       if(strcmp("all", argv[i+1]) == 0)
-        config.target = Target::ALL;
+        config.target = OperationTarget::ALL;
       else if(strcmp("indicator", argv[i+1]) == 0)
-        config.target= Target::INDICATOR;
+        config.target = OperationTarget::INDICATOR;
+      else if(strcmp("file", argv[i+1]) == 0)
+        config.target = OperationTarget::FILE;
+      else if(strcmp("attribute", argv[i+1]) == 0)
+        config.target = OperationTarget::ATTRIBUTE;
      }
   }
 
-  return config.id.length() && config.op != Operation::INVALID && config.target != Target::INVALID;
+  return config.id.length() && config.op != Operation::INVALID && config.target != OperationTarget::INVALID;
 }
 
 kio::AdminClusterInterface::KeyCounts operator+= (kio::AdminClusterInterface::KeyCounts& lhs, const kio::AdminClusterInterface::KeyCounts& rhs)
@@ -167,23 +169,22 @@ int main(int argc, char** argv)
 {
   Configuration config;
   if(!parseArguments(argc, argv, config)){
-    cout << "Incorrect arguments" << endl;
+    fprintf(stdout, "Incorrect arguments\n");
     kinetic_help();
     return EXIT_FAILURE;
   }
 
   try{
     kio::Factory::registerLogFunction(mlog, mshouldLog);
-    auto ac = kio::Factory::makeAdminCluster(config.id.c_str(), config.target == Target::INDICATOR, config.numthreads);
+    auto ac = kio::Factory::makeAdminCluster(config.id.c_str(), config.target, config.numthreads);
 
     switch(config.op){
       case Operation::STATUS: {
         sleep(1);
         auto v = ac->status();
-        cout << "Cluster Status: ";
-        for(auto it=v.cbegin(); it!=v.cend(); it++)
-          cout << *it;
-        cout << endl;
+        fprintf(stdout, "Cluster Status: \n");
+        for(int i=0; i<v.size(); i++) 
+          fprintf(stdout, "drive %d: %s\n",i,v[i]?"OK":"FAILED");
         break;
       }
       case Operation::COUNT: {
@@ -194,7 +195,7 @@ int main(int argc, char** argv)
         doOperation(ac, config);
     }
   }catch(std::exception& e){
-    cout << "Encountered Exception: " << e.what() << endl;
+    fprintf(stdout, "Encountered Exception: %s\n", e.what());
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

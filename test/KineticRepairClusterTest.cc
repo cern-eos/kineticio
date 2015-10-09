@@ -32,11 +32,9 @@ SCENARIO("Repair integration test.", "[Repair]")
     std::size_t nParity = 1;
     std::size_t blocksize = 1024*1024;
 
-    auto cluster = make_shared<KineticAdminCluster>(false, 1, nData, nParity, blocksize, info,
-                                               std::chrono::seconds(1),
-                                               std::chrono::seconds(1),
-                                               std::make_shared<ErasureCoding>(nData, nParity, 5),
-                                               listener
+    auto cluster = make_shared<KineticAdminCluster>(AdminClusterInterface::OperationTarget::FILE, 1, 
+            nData, nParity, blocksize, info, std::chrono::seconds(1), std::chrono::seconds(1),
+            std::make_shared<ErasureCoding>(nData, nParity, 5), listener
     );
 
     WHEN("Putting a key-value pair with one drive down") {
@@ -76,7 +74,8 @@ SCENARIO("Repair integration test.", "[Repair]")
 
       AND_WHEN("The drive comes up again."){
         c.start(0);
-        cluster->size();
+        // trigger a random operation so that the cluster connection will be re-established 
+        cluster->remove(std::make_shared<const string>(""), std::make_shared<const string>(""),true);
         // wait for connection to reconnect
         sleep(2);
 

@@ -9,13 +9,20 @@
 #include <vector>
 
 namespace kio {
-
+  
 //------------------------------------------------------------------------------
 //! Interface class for cluster status and key scan & repair.
 //------------------------------------------------------------------------------
 class AdminClusterInterface {
 
 public:
+  //----------------------------------------------------------------------------
+  //! Specify which types of keys should be targeted in an operation. 
+  //----------------------------------------------------------------------------
+  enum class OperationTarget{
+    ALL, FILE, ATTRIBUTE, INDICATOR, INVALID
+  };
+  
   //----------------------------------------------------------------------------
   //! Used to store statistics after a scan or repair operation.
   //----------------------------------------------------------------------------

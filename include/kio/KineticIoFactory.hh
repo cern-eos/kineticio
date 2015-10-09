@@ -14,7 +14,7 @@
 namespace kio{
   typedef std::function<void(const char* func, const char* file, int line, int level, const char* msg)> logfunc_t;
   typedef std::function<bool(const char* func, int level)> shouldlogfunc_t;
-
+  
   //----------------------------------------------------------------------------
   //! The only way for clients of the public library interface to construct
   //! FileIo and FileAttr objects. Returns unique_ptr as the caller will
@@ -44,11 +44,14 @@ namespace kio{
     //!
     //! @param cluster_id the id of the cluster
     //! @param numthreads the number of background IO threads for scan/repair
-    //! @param indicator_only if set, operations will only be performed on 
-    //!     keys indicated by indicator keys
+    //! @param target the type of keys that will be affected by admin operations
     //! @return unique pointer to constructed AdminCluster object.
     //--------------------------------------------------------------------------
-    static std::unique_ptr<AdminClusterInterface> makeAdminCluster(const char* cluster_id, bool indicator_only, size_t numthreads);
+    static std::unique_ptr<AdminClusterInterface> makeAdminCluster(
+          const char* cluster_id, 
+          AdminClusterInterface::OperationTarget target, 
+          size_t numthreads
+    );
 
     //--------------------------------------------------------------------------
     //! The client may register a log function that will be used for debug and
