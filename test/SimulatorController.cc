@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <signal.h>
+#include "Logging.hh"
 #include "SimulatorController.h"
 
 bool SimulatorController::start(int index)
@@ -29,7 +30,7 @@ bool SimulatorController::start(int index)
     if(pids.size()<index+1)
       pids.resize(index+1);
     pids[index] = pid;
-    printf("Starting Simulator on port %d with pid %d\n",8123+index,pid);
+    kio_debug("Starting Simulator on port ", 8123+index, "with pid ",pids[index]);
     usleep(1000 * 1000);
     return true;
   }
@@ -40,8 +41,7 @@ bool SimulatorController::stop(int index)
   if(pids.size()<=index || !pids[index])
     return false;
 
-  printf("killing Simulator on port %d with pid %d\n",8123+index,pids[index]);
-
+  kio_debug("Killing Simulator on port ", 8123+index, "with pid ",pids[index]);
   kill(pids[index], SIGTERM);
 
   pids[index]=0;

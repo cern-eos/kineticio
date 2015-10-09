@@ -1,4 +1,5 @@
 #include "FileAttr.hh"
+#include "Utility.hh"
 
 using std::string;
 using namespace kio;
@@ -21,7 +22,7 @@ bool FileAttr::Get(const char *name, char *content, size_t &size)
   std::shared_ptr<const string> version;
   std::shared_ptr<const string> value;
   auto status = cluster->get(
-      std::make_shared<const string>(path + "_attr_" + name),
+      utility::constructAttributeKey(path,name),
       false, version, value);
 
   /* Requested attribute doesn't exist or there was connection problem. */
@@ -50,7 +51,7 @@ bool FileAttr::Set(const char *name, const char *content, size_t size)
 
   auto empty = std::make_shared<const string>();
   auto status = cluster->put(
-      std::make_shared<const string>(path + "_attr_" + name),
+      utility::constructAttributeKey(path,name),
       empty,
       std::make_shared<const string>(content, size),
       true,

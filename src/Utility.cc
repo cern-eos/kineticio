@@ -96,3 +96,8 @@ std::shared_ptr<const std::string> utility::indicatorToKey(const std::string& in
 {
   return std::make_shared<const std::string>(indicator_key.substr(sizeof("-indicator"),std::string::npos));  
 }
+
+std::shared_ptr<const std::string> utility::constructAttributeKey(const std::string& key, const std::string& attribute_name)
+{
+  return std::make_shared<const std::string>("-attribute-"+ key + "-" + attribute_name);
+}

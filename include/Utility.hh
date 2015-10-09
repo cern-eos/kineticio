@@ -37,6 +37,15 @@ namespace kio { namespace utility {
   //! @return the cluster key for the requested chunk
   //--------------------------------------------------------------------------
   std::shared_ptr<const std::string> constructChunkKey(const std::string& base, int chunk_number);
+  
+  //--------------------------------------------------------------------------
+  //! Create the kinetic attribute key from the supplied path and chunk number.
+  //!
+  //! @param key the main key of the file 
+  //! @param attribute_name the name of the attribute 
+  //! @return the cluster key for the requested attribute 
+  //--------------------------------------------------------------------------
+  std::shared_ptr<const std::string> constructAttributeKey(const std::string& key, const std::string& attribute_name);
 
   //--------------------------------------------------------------------------
   //! Extract the cluster id from the supplied eos path.

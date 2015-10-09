@@ -157,6 +157,14 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
         REQUIRE(a->Get("name",read_buf,size) == true);
         REQUIRE(size == buf_size);
         REQUIRE(memcmp(write_buf,read_buf,buf_size) == 0);
+      
+        AND_THEN("attributes are not returned by by ftsRead"){
+            void * handle = fileio->ftsOpen(base_path);
+            REQUIRE(handle != NULL);
+            REQUIRE(fileio->ftsRead(handle) == path);
+            REQUIRE(fileio->ftsRead(handle) == "");
+            REQUIRE(fileio->ftsClose(handle) == 0);
+        }
       }
     }
 
