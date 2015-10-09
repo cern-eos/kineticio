@@ -10,6 +10,10 @@
 #include <sys/vfs.h>
 #include <sys/stat.h>
 
+#ifndef SFS_O_CREAT
+#define SFS_O_CREAT 0x100
+#endif 
+
 namespace kio {
 
 //------------------------------------------------------------------------------
@@ -21,7 +25,7 @@ public:
   //! Open file
   //!
   //! @param path file path
-  //! @param flags open flags
+  //! @param flags open flags, use SFS_O_CREAT (0x100) to signify create
   //! @param mode open mode
   //! @param opaque opaque information
   //! @param timeout timeout value

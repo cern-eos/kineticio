@@ -103,11 +103,11 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     std::string base_path("kinetic:Cluster2:");
     std::string path(base_path+"filename");
 
-    REQUIRE_NOTHROW(fileio->Open(path.c_str(), O_CREAT));
+    REQUIRE_NOTHROW(fileio->Open(path.c_str(), SFS_O_CREAT));
 
     THEN("Trying to create the same file again fails with EEXIST"){
       try{
-        fileio->Open(path.c_str(), O_CREAT);
+        fileio->Open(path.c_str(), SFS_O_CREAT);
       }catch(const LoggingException& le){
         REQUIRE(le.errnum() == EEXIST);
       }

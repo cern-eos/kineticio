@@ -1,5 +1,4 @@
-#include <fcntl.h>
-#include <Logging.hh>
+#include "Logging.hh"
 #include "FileIo.hh"
 #include "ClusterMap.hh"
 
@@ -32,7 +31,7 @@ void FileIo::Open(const std::string &p, int flags,
   auto c = ClusterMap::getInstance().getCluster(utility::extractClusterID(p));
 
   KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "");
-  if(flags & O_CREAT) {
+  if(flags & SFS_O_CREAT) {
     shared_ptr<const string> version;
     status = c->put(
         make_shared<string>(p),
