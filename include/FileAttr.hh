@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief EOS style attribute functionality.
 //------------------------------------------------------------------------------
-#ifndef __FILEATTR__HH__
-#define __FILEATTR__HH__
+#ifndef KINETICIO_FILEATTR_HH
+#define KINETICIO_FILEATTR_HH
 
 #include "ClusterInterface.hh"
 #include "FileAttrInterface.hh"

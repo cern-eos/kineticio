@@ -52,10 +52,10 @@ std::ostream& kio::utility::operator<<(std::ostream& os, const std::chrono::seco
 }
 
 
-std::shared_ptr<const std::string> utility::constructChunkKey(const std::string& base, int chunk_number)
+std::shared_ptr<const std::string> utility::constructBlockKey(const std::string& base, int block_number)
 {
   std::ostringstream ss;
-  ss << base << "_" << std::setw(10) << std::setfill('0') << chunk_number;
+  ss << base << "_" << std::setw(10) << std::setfill('0') << block_number;
   return std::make_shared<const std::string>(ss.str());
 }
 

@@ -3,14 +3,14 @@
 //! @author Paul Hermann Lensing
 //! @brief Class used for doing Kinetic IO operations
 //------------------------------------------------------------------------------
-#ifndef __KINETICFILEIO__HH__
-#define __KINETICFILEIO__HH__
+#ifndef KINETICIO_FILEIO_HH
+#define KINETICIO_FILEIO_HH
 
 /*----------------------------------------------------------------------------*/
 #include "FileIoInterface.hh"
 #include "ClusterInterface.hh"
-#include "ClusterChunkCache.hh"
-#include "ClusterChunk.hh"
+#include "DataCache.hh"
+#include "DataBlock.hh"
 #include <unordered_map>
 #include <chrono>
 #include <mutex>
@@ -24,7 +24,7 @@ namespace kio{
 //! except for using exceptions instead of return codes.
 //------------------------------------------------------------------------------
 class FileIo : public FileIoInterface {
-  friend class ClusterChunkCache;
+  friend class DataCache;
 public:
 //--------------------------------------------------------------------------
   //! Open file
@@ -149,52 +149,52 @@ private:
   int64_t ReadWrite (long long off, char* buffer, int length, rw mode, uint16_t timeout = 0);
 
 private:
-  class LastChunkNumber {
+  class LastBlockNumber {
 
   public:
      //--------------------------------------------------------------------------
-     //! Checks if the chunk number stored in last_chunk_number is still valid,
-     //! if not it will query the drive to obtain the up-to-date last chunk and
+     //! Checks if the block number stored in last_block_number is still valid,
+     //! if not it will query the drive to obtain the up-to-date last block and
      //! store it (so it can get requested with get() by the user).
      //-------------------------------------------------------------------------
      void verify();
 
      //-------------------------------------------------------------------------
-     //! Get the chunk number of the last chunk.
+     //! Get the block number of the last block.
      //!
-     //! @return currently set last chunk number
+     //! @return currently set last block number
      //-------------------------------------------------------------------------
      int get() const;
 
      //-------------------------------------------------------------------------
-     //! Set the supplied chunk number as last chunk.
+     //! Set the supplied block number as last block.
      //!
-     //! @param chunk_number the chunk number to be set
+     //! @param block_number the block number to be set
      //-------------------------------------------------------------------------
-     void set(int chunk_number);
+     void set(int block_number);
 
      //-------------------------------------------------------------------------
      //! Constructor
      //!
      //! @param parent reference to the enclosing KineticFileIo object
      //-------------------------------------------------------------------------
-     explicit LastChunkNumber(FileIo & parent);
+     explicit LastBlockNumber(FileIo & parent);
 
      //-------------------------------------------------------------------------
      //! Destructor.
      //-------------------------------------------------------------------------
-     ~LastChunkNumber();
+     ~LastBlockNumber();
 
   private:
       //! reference to the enclosing KineticFileIo object
       FileIo & parent;
 
-      //! currently set last chunk number
-      int last_chunk_number;
+      //! currently set last block number
+      int last_block_number;
 
-      //! time point it was verified that the last_chunk_number is correct
-      //! (another client might have created a later chunk)
-      std::chrono::system_clock::time_point last_chunk_number_timestamp;
+      //! time point it was verified that the last_block_number is correct
+      //! (another client might have created a later block)
+      std::chrono::system_clock::time_point last_block_number_timestamp;
   };
 
   /* protected instead of private to allow mocking in cache performance testing */
@@ -203,16 +203,16 @@ protected:
   std::shared_ptr<ClusterInterface> cluster;
 
   //! cache functionality
-  ClusterChunkCache& cache;
+  DataCache& cache;
 
-  //! keep track of the last chunk to answer stat requests reasonably
-  LastChunkNumber lastChunkNumber;
+  //! keep track of the last block to answer stat requests reasonably
+  LastBlockNumber lastBlockNumber;
 
   //! the full kinetic path of the form kinetic:clusterID:name
   std::string obj_path;
 
-  //! the base name for data chunks of this object
-  std::string chunk_basename;
+  //! the base name for data blocks of this object
+  std::string block_basename;
 };
 
 }

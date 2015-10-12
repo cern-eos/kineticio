@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief Utility functions for kineticio library.
 //------------------------------------------------------------------------------
-#ifndef __KINETICIO_UTILITY_HH__
-#define	__KINETICIO_UTILITY_HH__
+#ifndef KINETICIO_UTILITY_HH
+#define	KINETICIO_UTILITY_HH
 
 /*----------------------------------------------------------------------------*/
 #include <string>
@@ -30,16 +30,16 @@ namespace kio { namespace utility {
   std::shared_ptr<const std::string> indicatorToKey(const std::string& indicator_key); 
   
   //--------------------------------------------------------------------------
-  //! Create the kinetic chunk key from the supplied path and chunk number.
+  //! Create the kinetic block key from the supplied path and block number.
   //!
   //! @param path base path
-  //! @param chunk_number the chunk number
-  //! @return the cluster key for the requested chunk
+  //! @param block_number the block number
+  //! @return the cluster key for the requested block
   //--------------------------------------------------------------------------
-  std::shared_ptr<const std::string> constructChunkKey(const std::string& base, int chunk_number);
+  std::shared_ptr<const std::string> constructBlockKey(const std::string& base, int block_number);
   
   //--------------------------------------------------------------------------
-  //! Create the kinetic attribute key from the supplied path and chunk number.
+  //! Create the kinetic attribute key from the supplied path and name.
   //!
   //! @param key the main key of the file 
   //! @param attribute_name the name of the attribute 
@@ -148,5 +148,4 @@ namespace kio { namespace utility {
 extern "C" {
   uint32_t crc32c(uint32_t crc, const void* buf, size_t len);
 }
-#endif	/* __KINETICIO_UTILITY_HH__ */
-
+#endif

@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief epoll listener for asynchronous kinetic I/O
 //------------------------------------------------------------------------------
-#ifndef SOCKETLISTENER_HH
-#define	SOCKETLISTENER_HH
+#ifndef KINETICIO_SOCKETLISTENER_HH
+#define	KINETICIO_SOCKETLISTENER_HH
 
 /*----------------------------------------------------------------------------*/
 #include <thread>
@@ -69,5 +69,4 @@ private:
 
 }
 
-#endif	/* SOCKETLISTENER_HH */
-
+#endif

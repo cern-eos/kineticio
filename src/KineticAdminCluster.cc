@@ -43,7 +43,7 @@ bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key)
   }
   else if(target_version.frequency >=  nData || rmap[StatusCode::REMOTE_NOT_FOUND] >= nData) {
     kio_debug("Key \"", *key, "\" requires repair or removal.");
-    key_counts.need_repair++;
+    key_counts.need_action++;
     return true;
   }
 
@@ -144,7 +144,7 @@ void KineticAdminCluster::initKeyRange()
   }   
   
   bg.reset(new BackgroundOperationHandler(threads, threads));
-  key_counts.incomplete = key_counts.need_repair = key_counts.removed = key_counts.repaired
+  key_counts.incomplete = key_counts.need_action = key_counts.removed = key_counts.repaired
         = key_counts.total = key_counts.unrepairable = 0;
 }
 
@@ -204,6 +204,6 @@ AdminClusterInterface::KeyCounts KineticAdminCluster::getCounts()
   /* Re-initialize background operation handler to ensure that all possibly scheduled operations
    complete before returning key counts. */
   bg.reset(new BackgroundOperationHandler(threads, threads));
-  return KeyCounts{key_counts.total, key_counts.incomplete, key_counts.need_repair, 
+  return KeyCounts{key_counts.total, key_counts.incomplete, key_counts.need_action, 
           key_counts.repaired, key_counts.removed, key_counts.unrepairable};
 }

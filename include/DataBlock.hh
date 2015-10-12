@@ -1,10 +1,10 @@
 //------------------------------------------------------------------------------
-//! @file ClusterChunk.hh
+//! @file DataBlock.hh
 //! @author Paul Hermann Lensing
 //! @brief High(er) level API for Cluster keys.
 //------------------------------------------------------------------------------
-#ifndef CLUSTERCHUNK_HH_
-#define CLUSTERCHUNK_HH_
+#ifndef KINETICIO_DATABLOCK_HH
+#define KINETICIO_DATABLOCK_HH
 
 /*----------------------------------------------------------------------------*/
 #include <memory>
@@ -19,17 +19,17 @@ namespace kio {
 
 //------------------------------------------------------------------------------
 //! High(er) level API for cluster keys. Handles incremental updates and
-//! resolves concurrency on chunk-basis. For multi-chunk atomic writes the
-//! caller will have to do appropriate locking himself. Chunk size depends on
+//! resolves concurrency on block-basis. For multi-block atomic writes the
+//! caller will have to do appropriate locking himself. Block size depends on
 //! cluster configuration. Is threadsafe to enable background flushing.
 //------------------------------------------------------------------------------
-class ClusterChunk
+class DataBlock
 {
 public:
   //! Initialized to 1 second staleness
   static const std::chrono::milliseconds expiration_time;
 
-  //! Enum for different chunk modes
+  //! Enum for different initialization modes
   enum class Mode { STANDARD, CREATE };
 
 public:
@@ -40,7 +40,7 @@ public:
   //! returned.
   //!
   //! @param buffer output buffer
-  //! @param offset offset in the chunk to start reading
+  //! @param offset offset in the block to start reading
   //! @param length number of bytes to read
   //--------------------------------------------------------------------------
   void read(char* const buffer, off_t offset, size_t length);
@@ -51,7 +51,7 @@ public:
   //! be consecutive.
   //!
   //! @param buffer input buffer
-  //! @param offset offset in the chunk to start writing
+  //! @param offset offset in the block to start writing
   //! @param length number of bytes to write
   //--------------------------------------------------------------------------
   void write(const char* const buffer, off_t offset, size_t length);
@@ -59,7 +59,7 @@ public:
   //--------------------------------------------------------------------------
   //! Truncate in-memory only, never flushes to the backend storage.
   //!
-  //! @param offset the new target chunk size
+  //! @param offset the new size
   //--------------------------------------------------------------------------
   void truncate(off_t offset);
 
@@ -83,38 +83,38 @@ public:
   std::size_t capacity() const;
 
   //--------------------------------------------------------------------------
-  //! Test for your flushing needs. Chunk is considered dirty if it is either
-  //! freshly created or it has been written since its last flush.
+  //! Test for your flushing needs. Block is considered dirty if it is either
+  //! freshly created or it has been written to since its last flush.
   //!
   //! @return true if dirty, false otherwise.
   //--------------------------------------------------------------------------
   bool dirty() const;
 
   //--------------------------------------------------------------------------
-  //! Get the key set for this chunk.
+  //! Get the key set for this block.
   //--------------------------------------------------------------------------
   const std::shared_ptr<const std::string>& getKey();
 
   //--------------------------------------------------------------------------
   //! Constructor.
   //!
-  //! @param cluster the cluster that this chunk is (to be) stored on
-  //! @param key the name of the chunk
+  //! @param cluster the cluster that this block is (to be) stored on
+  //! @param key the name of the block
   //! @param mode if mode::create assume that the key does not yet exist
   //--------------------------------------------------------------------------
-  explicit ClusterChunk(std::shared_ptr<ClusterInterface> cluster,
+  explicit DataBlock(std::shared_ptr<ClusterInterface> cluster,
                         const std::shared_ptr<const std::string> key,
                         Mode mode = Mode::STANDARD);
 
   //--------------------------------------------------------------------------
   //! Destructor.
   //--------------------------------------------------------------------------
-  ~ClusterChunk();
+  ~DataBlock();
 
 private:
   //--------------------------------------------------------------------------
   //! Validate the in-memory version against the version stored in the cluster
-  //! assigned to this chunk.
+  //! assigned to this block.
   //!
   //! @return true if remote version could be verified to be equal, false
   //!         otherwise
@@ -128,14 +128,14 @@ private:
   void getRemoteValue();
 
 private:
-  //! setting the chunk mode can increase performance by preventing unnecessary
+  //! setting the block mode can increase performance by preventing unnecessary
   //! I/O in some cases.
   Mode mode;
 
-  //! cluster this chunk is (to be) stored on
+  //! cluster this block is (to be) stored on
   std::shared_ptr<ClusterInterface> cluster;
 
-  //! the key of the chunk
+  //! the key of the block
   const std::shared_ptr<const std::string> key;
 
   //! the latest known version of the key that is stored in the cluster
@@ -144,7 +144,7 @@ private:
   //! the actual data
   std::shared_ptr<std::string> value;
 
-  //! time the chunk was last verified to be up to date
+  //! time the block was last verified to be up to date
   std::chrono::system_clock::time_point timestamp;
 
   //! a list of bit-regions that have been changed since this data block has

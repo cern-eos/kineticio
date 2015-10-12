@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief Structure used to describe an asynchronous kinetic operation
 //------------------------------------------------------------------------------
-#ifndef KINETICASYNCOPERATION_HH
-#define  KINETICASYNCOPERATION_HH
+#ifndef  KINETICIO_ASYNCOPERATION_HH 
+#define  KINETICIO_ASYNCOPERATION_HH
 
 #include <kinetic/kinetic.h>
 #include <functional>

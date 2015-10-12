@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief Implemenatation class for cluster status and key scan & repair.
 //------------------------------------------------------------------------------
-#ifndef KINETICIO_KINETICREPAIRCLUSTER_HH
-#define KINETICIO_KINETICREPAIRCLUSTER_HH
+#ifndef KINETICIO_KINETICADMINCLUSTER_HH
+#define KINETICIO_KINETICADMINCLUSTER_HH
 
 #include "KineticCluster.hh"
 #include "AdminClusterInterface.hh"
@@ -61,11 +61,11 @@ private:
   struct KeyCountsInternal{
       std::atomic<int> total;
       std::atomic<int> incomplete;
-      std::atomic<int> need_repair;
+      std::atomic<int> need_action;
       std::atomic<int> repaired;
       std::atomic<int> removed;
       std::atomic<int> unrepairable;
-      KeyCountsInternal() : total(0), incomplete(0), need_repair(0), repaired(0), removed(0), unrepairable(0) {};
+      KeyCountsInternal() : total(0), incomplete(0), need_action(0), repaired(0), removed(0), unrepairable(0) {};
   };
   
   //! keeping track of key counts for continuing operations

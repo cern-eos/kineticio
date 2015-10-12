@@ -9,7 +9,7 @@ using std::make_shared;
 using namespace kinetic;
 using namespace kio;
 
-SCENARIO("Repair integration test.", "[Repair]")
+SCENARIO("Admin integration test.", "[Admin]")
 {
   auto& c = SimulatorController::getInstance();
   c.start(0);
@@ -18,7 +18,7 @@ SCENARIO("Repair integration test.", "[Repair]")
 
   SocketListener listener;
 
-  GIVEN ("A valid repair cluster") {
+  GIVEN ("A valid admin cluster") {
     REQUIRE(c.reset(0));
     REQUIRE(c.reset(1));
     REQUIRE(c.reset(2));
@@ -57,7 +57,7 @@ SCENARIO("Repair integration test.", "[Repair]")
         auto kc = cluster->getCounts();
         REQUIRE(kc.total == 1);
         REQUIRE(kc.incomplete == 1);
-        REQUIRE(kc.need_repair == 0);
+        REQUIRE(kc.need_action == 0);
         REQUIRE(kc.removed == 0);
         REQUIRE(kc.repaired == 0);
         REQUIRE(kc.unrepairable == 0);
@@ -84,7 +84,7 @@ SCENARIO("Repair integration test.", "[Repair]")
           auto kc = cluster->getCounts();
           REQUIRE(kc.total == 1);
           REQUIRE(kc.incomplete == 0);
-          REQUIRE(kc.need_repair == 1);
+          REQUIRE(kc.need_action == 1);
           REQUIRE(kc.removed == 0);
           REQUIRE(kc.repaired == 0);
           REQUIRE(kc.unrepairable == 0);

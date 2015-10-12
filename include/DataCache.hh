@@ -1,15 +1,15 @@
 //------------------------------------------------------------------------------
-//! @file ClusterChunk.hh
+//! @file DataCache.hh
 //! @author Paul Hermann Lensing
-//! @brief An fst-wide cache for cluster chunks. 
+//! @brief A library wide cache for data blocks. 
 //------------------------------------------------------------------------------
-#ifndef CLUSTERCHUNKCACHE_HH
-#define CLUSTERCHUNKCACHE_HH
+#ifndef KINETICIO_DATACACHE_HH
+#define KINETICIO_DATACACHE_HH
 
 /*----------------------------------------------------------------------------*/
 #include "SequencePatternRecognition.hh"
 #include "BackgroundOperationHandler.hh"
-#include "ClusterChunk.hh"
+#include "DataBlock.hh"
 #include <unordered_map>
 #include <condition_variable>
 #include <exception>
@@ -24,58 +24,58 @@ namespace kio {
 class FileIo;
 
 //----------------------------------------------------------------------------
-//! LRU cache for ClusterChunks. Threadsafe. Will create chunks
+//! LRU cache for Data. Threadsafe. Will create blocks
 //! that are not in cache automatically during get()
 //----------------------------------------------------------------------------
-class ClusterChunkCache {
+class DataCache {
 
 public:
   //--------------------------------------------------------------------------
-  //! Return the cluster chunk associated with the supplied owner and chunk
+  //! Return the data block associated with the supplied owner and block
   //! number. Throws on error. ALSO throws, if a background flush has failed
   //! for the owner.
   //!
-  //! @param owner a pointer to the kio::FileIo object the chunk belongs to
-  //! @param chunk_number specifies which chunk of the file is requested,
-  //! @param mode argument to pass to a chunk if it has to be created
-  //! @return the chunk on success, throws on error
+  //! @param owner a pointer to the kio::FileIo object the block belongs to
+  //! @param blocknumber specifies which block of the file is requested,
+  //! @param mode argument to pass to a block if it has to be created
+  //! @return the block on success, throws on error
   //--------------------------------------------------------------------------
   enum class RequestMode {
     READAHEAD, STANDARD
   };
 
-  std::shared_ptr<kio::ClusterChunk> get(
+  std::shared_ptr<kio::DataBlock> get(
       kio::FileIo* owner,
-      int chunknumber,
-      ClusterChunk::Mode cm,
+      int blocknumber,
+      DataBlock::Mode cm,
       RequestMode rm = RequestMode::STANDARD
   );
 
   //--------------------------------------------------------------------------
-  //! Flushes all dirty chunks associated with the owner.
+  //! Flushes all dirty data associated with the owner.
   //!
-  //! @param owner a pointer to the kio::FileIo object the chunks belong to
+  //! @param owner a pointer to the kio::FileIo object the data belongs to
   //--------------------------------------------------------------------------
   void flush(kio::FileIo* owner);
 
   //--------------------------------------------------------------------------
-  //! Drop the owner from the cache, optionally also drop associated chunks
-  //! (dirty chunks will not be flushed in this case).
+  //! Drop the owner from the cache, optionally also drop associated blocks
+  //! (dirty blocks will not be flushed in this case).
   //!
-  //! @param owner a pointer to the kio::FileIo object the chunks belong to
+  //! @param owner a pointer to the kio::FileIo object the blocks belong to
   //--------------------------------------------------------------------------
   void drop(kio::FileIo* owner);
 
   //--------------------------------------------------------------------------
-  //! Flushes the supplied chunk. If the number of current background threads
-  //! does not exceed thread_capacity, the chunk will be flushed in the
+  //! Flushes the supplied data. If the number of current background threads
+  //! does not exceed thread_capacity, the data will be flushed in the
   //! background. Otherwise, it will flush in the calling thread to prevent
   //! unlimited thread creation.
   //!
-  //! @param owner a pointer to the kio::FileIo object the chunk belongs to
-  //! @param chunk the chunk to flush
+  //! @param owner a pointer to the kio::FileIo object the data belongs to
+  //! @param data the data to flush
   //--------------------------------------------------------------------------
-  void async_flush(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk);
+  void async_flush(kio::FileIo* owner, std::shared_ptr<kio::DataBlock> data);
 
   //--------------------------------------------------------------------------
   //! The configuration of an existing ClusterChunkCache object can be changed
@@ -98,17 +98,17 @@ public:
   //! @param bg_queue_depth maximum number of functions queued for background
   //!   execution
   //--------------------------------------------------------------------------
-  explicit ClusterChunkCache(size_t preferred_size, size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_window_size);
+  explicit DataCache(size_t preferred_size, size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_window_size);
 
   //--------------------------------------------------------------------------
   //! No copy constructor.
   //--------------------------------------------------------------------------
-  ClusterChunkCache(ClusterChunkCache&) = delete;
+  DataCache(DataCache&) = delete;
 
   //--------------------------------------------------------------------------
   //! No copy assignment.
   //--------------------------------------------------------------------------
-  void operator=(ClusterChunkCache&) = delete;
+  void operator=(DataCache&) = delete;
 
 private:
   //! preferred size of the cache (soft cap), atomic so it may be changed during runtime
@@ -120,7 +120,7 @@ private:
   //! current size of the cache
   std::atomic<size_t> current_size;
 
-  //! the maximum number of chunks to prefetch 
+  //! the maximum number of blocks to prefetch 
   int readahead_window_size;
   
   //! the number of tail items to examine to keep current_size <= target_size
@@ -131,10 +131,10 @@ private:
 
   struct CacheItem {
     std::set<kio::FileIo*> owners;
-    std::shared_ptr<kio::ClusterChunk> chunk;
+    std::shared_ptr<kio::DataBlock> data;
   };
 
-  //! A linked list of cluster chunks stored in LRU order
+  //! A linked list of data blocks stored in LRU order
   std::list<CacheItem> cache;
 
   //! the lookup table
@@ -145,7 +145,7 @@ private:
   struct cache_iterator_compare {
     bool operator()(const cache_iterator& lhs, const cache_iterator& rhs) const
     {
-      return lhs->chunk < rhs->chunk;
+      return lhs->data < rhs->data;
     }
   };
 
@@ -189,24 +189,24 @@ private:
   void throttle();
 
   //--------------------------------------------------------------------------
-  //! Attempt to read the requested chunk number for the owner in a background
+  //! Attempt to read the requested block number for the owner in a background
   //! thread. If this is not possible due to the number of active background
   //! threads already reaching thread_capacity just skip the readahead request.
   //! Errors during readahead will be swallowed, error handling can safely occur
-  //! during the following regular read of the chunk.
+  //! during the following regular read of the data.
   //!
-  //! @param owner a pointer to the kio::FileIo object the chunk belongs to
-  //! @param chunknumber the chunk number to read in
+  //! @param owner a pointer to the kio::FileIo object the data belongs to
+  //! @param blocknumber the data block number to read in
   //--------------------------------------------------------------------------
-  void readahead(kio::FileIo* owner, int chunknumber);
+  void readahead(kio::FileIo* owner, int blocknumber);
 
   //--------------------------------------------------------------------------
   //! Flush functionality
   //!
-  //! @param owner a pointer to the kio::FileIo object the chunk belongs to
-  //! @param chunk the chunk to flush to the backend
+  //! @param owner a pointer to the kio::FileIo object the data belongs to
+  //! @param data the data to flush to the backend
   //--------------------------------------------------------------------------
-  void do_flush(kio::FileIo* owner, std::shared_ptr<kio::ClusterChunk> chunk);
+  void do_flush(kio::FileIo* owner, std::shared_ptr<kio::DataBlock> data);
 
   //--------------------------------------------------------------------------
   //! Remove an item from the cache as well as the lookup table and from

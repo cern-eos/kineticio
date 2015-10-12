@@ -1,5 +1,11 @@
-#ifndef OPERATIONCALLBACKS_HH
-#define	OPERATIONCALLBACKS_HH
+//------------------------------------------------------------------------------
+//! @file KineticCallbacks.hh
+//! @author Paul Hermann Lensing
+//! @brief Provide callback & synchronization functionality for asynchronous 
+//!        kinetic operations.
+//------------------------------------------------------------------------------
+#ifndef KINETICIO_OPERATIONCALLBACKS_HH
+#define	KINETICIO_OPERATIONCALLBACKS_HH
 
 #include <kinetic/kinetic.h>
 #include <condition_variable>

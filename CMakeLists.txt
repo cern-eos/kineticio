@@ -53,12 +53,12 @@ include_directories(
     ${ISAL_INCLUDE_DIRS}
 )
 set(kineticio_SRC
-    src/ClusterChunkCache.cc
-    src/ClusterChunk.cc
-    src/ClusterMap.cc
     src/FileIo.cc
     src/FileAttr.cc
     src/Factory.cc
+    src/DataBlock.cc
+    src/DataCache.cc
+    src/ClusterMap.cc
     src/KineticAutoConnection.cc
     src/KineticAsyncOperation.cc
     src/KineticCallbacks.cc
@@ -116,7 +116,7 @@ if(DEBUG)
     add_executable(kinetic-test
         ${kineticio_SRC}
         test/TestMain.cc
-        test/ClusterChunkTest.cc
+        test/DataBlockTest.cc
         test/FileIoTest.cc
         test/ClusterMapTest.cc
         test/KineticClusterTest.cc
@@ -127,8 +127,8 @@ if(DEBUG)
         test/SimulatorController.cc
         test/LRUCacheTest.cc
         test/LoggingTest.cc
-        test/KineticRepairClusterTest.cc
-        test/ClusterChunkCacheTest.cc
+        test/KineticAdminClusterTest.cc
+        test/DataCacheTest.cc
     )
     target_link_libraries(kinetic-test
         ${Z_LIBRARIES}

@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief A (very) simple general purpose LRU cache.
 //------------------------------------------------------------------------------
-#ifndef LRUCACHE_HH
-#define LRUCACHE_HH
+#ifndef KINETICIO_LRUCACHE_HH
+#define KINETICIO_LRUCACHE_HH
 
 /*----------------------------------------------------------------------------*/
 #include <unordered_map>
@@ -104,5 +104,5 @@ private:
 }
 
 
-#endif	/* LRUCACHE_HH */
+#endif
 

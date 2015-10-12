@@ -6,7 +6,6 @@ using std::shared_ptr;
 using std::unique_ptr;
 using std::string;
 using std::make_shared;
-using std::chrono::system_clock;
 using kinetic::KineticStatus;
 using kinetic::StatusCode;
 
@@ -14,7 +13,7 @@ using namespace kio;
 
 
 FileIo::FileIo() :
-    cluster(), cache(ClusterMap::getInstance().getCache()), lastChunkNumber(*this)
+    cluster(), cache(ClusterMap::getInstance().getCache()), lastBlockNumber(*this)
 {
 }
 
@@ -41,7 +40,7 @@ void FileIo::Open(const std::string &p, int flags,
         version);
 
     if (status.ok())
-      lastChunkNumber.set(0);
+      lastBlockNumber.set(0);
     else if (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH)
       throw kio_exception(EEXIST, "File ", p, "openend with O_CREAT flag set already exists.");
   }
@@ -64,7 +63,7 @@ void FileIo::Open(const std::string &p, int flags,
   /* Setting cluster & path variables. */
   cluster = c;
   obj_path = p;
-  chunk_basename = obj_path.substr(obj_path.find_last_of(':') + 1, obj_path.length());
+  block_basename = obj_path.substr(obj_path.find_last_of(':') + 1, obj_path.length());
 
 }
 
@@ -78,7 +77,7 @@ void FileIo::Close(uint16_t timeout)
   cache.drop(this);
   cluster.reset();
   obj_path.clear();
-  chunk_basename.clear();
+  block_basename.clear();
 }
 
 
@@ -88,43 +87,43 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
   if (!cluster)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
 
-  const size_t chunk_capacity = cluster->limits().max_value_size;
+  const size_t block_capacity = cluster->limits().max_value_size;
   size_t length_todo = length;
   off_t off_done = 0;
 
   while (length_todo) {
-    int chunk_number = static_cast<int>((off + off_done) / chunk_capacity);
-    off_t chunk_offset = (off + off_done) - chunk_number * chunk_capacity;
-    size_t chunk_length = std::min(length_todo, chunk_capacity - chunk_offset);
+    int block_number = static_cast<int>((off + off_done) / block_capacity);
+    off_t block_offset = (off + off_done) - block_number * block_capacity;
+    size_t block_length = std::min(length_todo, block_capacity - block_offset);
 
-    /* Increase last chunk number if we write past currently known file size...*/
-    ClusterChunk::Mode cm = ClusterChunk::Mode::STANDARD;
-    if (mode == rw::WRITE && chunk_number > lastChunkNumber.get()) {
-      lastChunkNumber.set(chunk_number);
-      cm = ClusterChunk::Mode::CREATE;
+    /* Increase last block number if we write past currently known file size...*/
+    DataBlock::Mode cm = DataBlock::Mode::STANDARD;
+    if (mode == rw::WRITE && block_number > lastBlockNumber.get()) {
+      lastBlockNumber.set(block_number);
+      cm = DataBlock::Mode::CREATE;
     }
-    auto chunk = cache.get(this, chunk_number, cm);
+    auto data = cache.get(this, block_number, cm);
 
     if (mode == rw::WRITE) {
-      chunk->write(buffer + off_done, chunk_offset, chunk_length);
+      data->write(buffer + off_done, block_offset, block_length);
 
-      /* Flush chunk in background if writing to chunk capacity.*/
-      if (chunk_offset + chunk_length == chunk_capacity)
-        cache.async_flush(this, chunk);
+      /* Flush data in background if writing to block capacity.*/
+      if (block_offset + block_length == block_capacity)
+        cache.async_flush(this, data);
     }
     else if (mode == rw::READ) {
-      chunk->read(buffer + off_done, chunk_offset, chunk_length);
+      data->read(buffer + off_done, block_offset, block_length);
 
-      /* If we are reading the last chunk (or past it) */
-      if (chunk_number >= lastChunkNumber.get()) {
+      /* If we are reading the last block (or past it) */
+      if (block_number >= lastBlockNumber.get()) {
         /* make sure length doesn't indicate that we read past filesize. */
-        if (chunk->size() > chunk_offset)
-          length_todo -= std::min(chunk_length, chunk->size() - chunk_offset);
+        if (data->size() > block_offset)
+          length_todo -= std::min(block_length, data->size() - block_offset);
         break;
       }
     }
-    length_todo -= chunk_length;
-    off_done += chunk_length;
+    length_todo -= block_length;
+    off_done += block_length;
   }
 
   return length - length_todo;
@@ -148,29 +147,29 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
   if (!cluster)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
 
-  const size_t chunk_capacity = cluster->limits().max_value_size;
-  int chunk_number = offset / chunk_capacity;
-  int chunk_offset = offset - chunk_number * chunk_capacity;
+  const size_t block_capacity = cluster->limits().max_value_size;
+  int block_number = offset / block_capacity;
+  int block_offset = offset - block_number * block_capacity;
 
   if(offset>0){
-    /* Step 1) truncate the chunk containing the offset. */
-    cache.get(this, chunk_number, ClusterChunk::Mode::STANDARD)->truncate(chunk_offset);
+    /* Step 1) truncate the block containing the offset. */
+    cache.get(this, block_number, DataBlock::Mode::STANDARD)->truncate(block_offset);
 
-    /* Step 2) Ensure we don't have chunks past chunk_number in the cache. Since
+    /* Step 2) Ensure we don't have data past block_number in the cache. Since
      * truncate isn't super common, go the easy way and just sync+drop the entire
-     * cache... this will also sync the just truncated chunk.  */
+     * cache for this object... this will also sync the just truncated data.  */
     cache.flush(this);
   }
   cache.drop(this);
 
-  /* Step 3) Delete all chunks past chunk_number. When truncating to size 0,
-   * (and only then) also delete the first chunk. */
+  /* Step 3) Delete all blocks past block_number. When truncating to size 0,
+   * (and only then) also delete the first block. */
   std::unique_ptr<std::vector<string>> keys;
   const size_t max_keys_requested = 100;
   do {
     KineticStatus status = cluster->range(
-        utility::constructChunkKey(chunk_basename, offset ? chunk_number + 1 : 0),
-        utility::constructChunkKey(chunk_basename, std::numeric_limits<int>::max()),
+        utility::constructBlockKey(block_basename, offset ? block_number + 1 : 0),
+        utility::constructBlockKey(block_basename, std::numeric_limits<int>::max()),
         max_keys_requested, keys);
     if (!status.ok())
       throw kio_exception(EIO, "KeyRange request unexpectedly failed for object ",  obj_path,  ": ", status);
@@ -179,12 +178,12 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
       status = cluster->remove(make_shared<string>(*iter),
                                make_shared<string>(""), true);
       if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-        throw kio_exception(EIO, "Deleting chunk ", *iter, " failed: ", status);
+        throw kio_exception(EIO, "Deleting block ", *iter, " failed: ", status);
     }
   } while (keys->size() == max_keys_requested);
 
-  /* Set last chunk number */
-  lastChunkNumber.set(chunk_number);
+  /* Set last block number */
+  lastBlockNumber.set(block_number);
 }
 
 void FileIo::Remove(uint16_t timeout)
@@ -209,13 +208,13 @@ void FileIo::Stat(struct stat *buf, uint16_t timeout)
   if (!cluster)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
 
-  lastChunkNumber.verify();
-  std::shared_ptr<ClusterChunk> last_chunk = cache.get(this, lastChunkNumber.get(), ClusterChunk::Mode::STANDARD);
+  lastBlockNumber.verify();
+  std::shared_ptr<DataBlock> last_block = cache.get(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD);
 
   memset(buf, 0, sizeof(struct stat));
   buf->st_blksize = cluster->limits().max_value_size;
-  buf->st_blocks = lastChunkNumber.get() + 1;
-  buf->st_size = lastChunkNumber.get() * buf->st_blksize + last_chunk->size();
+  buf->st_blocks = lastBlockNumber.get() + 1;
+  buf->st_size = lastBlockNumber.get() * buf->st_blksize + last_block->size();
 }
 
 
@@ -300,34 +299,32 @@ int FileIo::ftsClose(void *fts_handle)
   return -1;
 }
 
-FileIo::LastChunkNumber::LastChunkNumber(FileIo &parent) :
-    parent(parent), last_chunk_number(0), last_chunk_number_timestamp() { }
+FileIo::LastBlockNumber::LastBlockNumber(FileIo &parent) :
+    parent(parent), last_block_number(0), last_block_number_timestamp() { }
 
-FileIo::LastChunkNumber::~LastChunkNumber() { }
+FileIo::LastBlockNumber::~LastBlockNumber() { }
 
-int FileIo::LastChunkNumber::get() const
+int FileIo::LastBlockNumber::get() const
 {
-  return last_chunk_number;
+  return last_block_number;
 }
 
-void FileIo::LastChunkNumber::set(int chunk_number)
+void FileIo::LastBlockNumber::set(int block_number)
 {
-  last_chunk_number = chunk_number;
-  last_chunk_number_timestamp = system_clock::now();
+  last_block_number = block_number;
+  last_block_number_timestamp = std::chrono::system_clock::now();
 }
 
-void FileIo::LastChunkNumber::verify()
+void FileIo::LastBlockNumber::verify()
 {
-  /* chunk number verification independent of STANDARD expiration verification
-   * in KinetiChunk class. validate last_chunk_number (another client might have
-   * created new chunks we know nothing about, or truncated the file. */
-  if (std::chrono::duration_cast<std::chrono::milliseconds>(
-      system_clock::now() - last_chunk_number_timestamp)
-      < ClusterChunk::expiration_time
-      )
+  using namespace std::chrono;
+  /* block number verification independent of  expiration verification
+   * in KinetiChunk class. validate last_block_number (another client might have
+   * created new blocks we know nothing about, or truncated the file. */
+  if (duration_cast<milliseconds>(system_clock::now() - last_block_number_timestamp) < DataBlock::expiration_time)
     return;
 
-  /* Technically, we could start at chunk 0 to catch all cases... but that the
+  /* Technically, we could start at block 0 to catch all cases... but that the
    * file is truncated by another client while opened here is highly unlikely.
    * And for big files this would mean unnecessary GetKeyRange requests for the
    * regular case.  */
@@ -336,17 +333,17 @@ void FileIo::LastChunkNumber::verify()
   do {
     KineticStatus status = parent.cluster->range(
         keys ? make_shared<const string>(keys->back()) :
-               utility::constructChunkKey(parent.chunk_basename, last_chunk_number),
-        utility::constructChunkKey(parent.chunk_basename,std::numeric_limits<int>::max()),
+               utility::constructBlockKey(parent.block_basename, last_block_number),
+        utility::constructBlockKey(parent.block_basename,std::numeric_limits<int>::max()),
         max_keys_requested,
         keys);
 
     if (!status.ok())
-      throw kio_exception(EIO, "KeyRange request unexpectedly failed for chunks with base name: ",
-                          parent.chunk_basename, ": ", status);
+      throw kio_exception(EIO, "KeyRange request unexpectedly failed for blocks with base name: ",
+                          parent.block_basename, ": ", status);
   } while (keys->size() == max_keys_requested);
 
-  /* Success: get chunk number from last key.*/
+  /* Success: get block number from last key.*/
   if (keys->size() > 0) {
     std::string key = keys->back();
     std::string number = key.substr(key.find_last_of('_') + 1, key.length());
@@ -355,13 +352,13 @@ void FileIo::LastChunkNumber::verify()
   }
 
   /* No keys found. the file might have been truncated, retry but start the
-   * search from chunk 0 this time. */
-  if (last_chunk_number > 0) {
-    last_chunk_number = 0;
+   * search from block 0 this time. */
+  if (last_block_number > 0) {
+    last_block_number = 0;
     return verify();
   }
 
-  /* No chunk keys found. Ensure that the key has not been removed by testing for
+  /* No block keys found. Ensure that the key has not been removed by testing for
      the existence of the metadata key. */
   shared_ptr<const string> version;
   shared_ptr<const string> value;

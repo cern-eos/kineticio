@@ -1,4 +1,4 @@
-#include "ClusterChunk.hh"
+#include "DataBlock.hh"
 #include "Utility.hh"
 #include "Logging.hh"
 
@@ -11,10 +11,10 @@ using kinetic::KineticStatus;
 using kinetic::StatusCode;
 using namespace kio;
 
-const std::chrono::milliseconds ClusterChunk::expiration_time(1000);
+const std::chrono::milliseconds DataBlock::expiration_time(1000);
 
 
-ClusterChunk::ClusterChunk(std::shared_ptr<ClusterInterface> c,
+DataBlock::DataBlock(std::shared_ptr<ClusterInterface> c,
                            const std::shared_ptr<const std::string> k, Mode m) :
     mode(m), cluster(c), key(k), version(), value(make_shared<string>()),
     timestamp(), updates(), mutex()
@@ -22,19 +22,19 @@ ClusterChunk::ClusterChunk(std::shared_ptr<ClusterInterface> c,
   if (!cluster) throw std::invalid_argument("no cluster supplied");
 }
 
-ClusterChunk::~ClusterChunk()
+DataBlock::~DataBlock()
 {
   // take the mutex in order to prevent object deconsturction while flush
   // operation is executed by non-owning thread.
   std::lock_guard<std::mutex> lock(mutex);
 }
 
-const std::shared_ptr<const std::string>& ClusterChunk::getKey()
+const std::shared_ptr<const std::string>& DataBlock::getKey()
 {
   return key;
 }
 
-bool ClusterChunk::validateVersion()
+bool DataBlock::validateVersion()
 {
   /* See if check is unnecessary based on expiration. */
   using std::chrono::duration_cast;
@@ -42,7 +42,7 @@ bool ClusterChunk::validateVersion()
   if (duration_cast<milliseconds>(system_clock::now() - timestamp) < expiration_time)
     return true;
 
-  /*If we are reading for the first time from a chunk opened in STANDARD mode,
+  /*If we are reading for the first time from a block opened in STANDARD mode,
     skip version validation and jump straight to the get operation. */
   if (!version && mode == Mode::STANDARD)
     return false;
@@ -64,7 +64,7 @@ bool ClusterChunk::validateVersion()
   return false;
 }
 
-void ClusterChunk::getRemoteValue()
+void DataBlock::getRemoteValue()
 {
   auto remote_value = make_shared<const string>("");
   auto status = cluster->get(key, false, version, remote_value);
@@ -95,7 +95,7 @@ void ClusterChunk::getRemoteValue()
   value = merged_value;
 }
 
-void ClusterChunk::read(char *const buffer, off_t offset, size_t length)
+void DataBlock::read(char *const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -118,7 +118,7 @@ void ClusterChunk::read(char *const buffer, off_t offset, size_t length)
   }
 }
 
-void ClusterChunk::write(const char *const buffer, off_t offset, size_t length)
+void DataBlock::write(const char *const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -135,7 +135,7 @@ void ClusterChunk::write(const char *const buffer, off_t offset, size_t length)
   updates.push_back(std::pair<off_t, size_t>(offset, length));
 }
 
-void ClusterChunk::truncate(off_t offset)
+void DataBlock::truncate(off_t offset)
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -147,7 +147,7 @@ void ClusterChunk::truncate(off_t offset)
   updates.push_back(std::pair<off_t, size_t>(offset, 0));
 }
 
-void ClusterChunk::flush()
+void DataBlock::flush()
 {
   std::lock_guard<std::mutex> lock(mutex);
 
@@ -166,13 +166,13 @@ void ClusterChunk::flush()
   timestamp = system_clock::now();
 }
 
-bool ClusterChunk::dirty() const
+bool DataBlock::dirty() const
 {
   std::lock_guard<std::mutex> lock(mutex);
   if (!updates.empty())
     return true;
 
-  /* If we opened in create mode, we assume the chunk doesn't exist yet, it
+  /* If we opened in create mode, we assume this key doesn't exist yet, it
      is dirty even if we have written nothing to it. If we opened in STANDARD
      mode we assume it does already exist... we just haven't used it. */
   if (!version && mode == Mode::CREATE)
@@ -180,12 +180,12 @@ bool ClusterChunk::dirty() const
   return false;
 }
 
-size_t ClusterChunk::capacity() const
+size_t DataBlock::capacity() const
 {
   return cluster->limits().max_value_size;
 }
 
-size_t ClusterChunk::size()
+size_t DataBlock::size()
 {
   std::lock_guard<std::mutex> lock(mutex);
 

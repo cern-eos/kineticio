@@ -67,7 +67,7 @@ void ClusterMap::loadConfiguration()
     ecCache->setCapacity(configuration.num_erasure_codings);
 
   if(!dataCache)
-    dataCache.reset(new ClusterChunkCache(
+    dataCache.reset(new DataCache(
         configuration.stripecache_target, configuration.stripecache_capacity,
         configuration.background_io_threads, configuration.background_io_queue_capacity,
         configuration.readahead_window_size
@@ -82,7 +82,7 @@ void ClusterMap::loadConfiguration()
     listener.reset(new SocketListener());
 }
 
-ClusterChunkCache& ClusterMap::getCache()
+DataCache& ClusterMap::getCache()
 {
   return *dataCache;
 }

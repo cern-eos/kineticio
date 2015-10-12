@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief Predict future of a sequence based on recognizing simple patterns
 //------------------------------------------------------------------------------
-#ifndef SEQUENCEPATTERNRECOGNITION_HH
-#define	SEQUENCEPATTERNRECOGNITION_HH
+#ifndef KINETICIO_SEQUENCEPATTERNRECOGNITION_HH
+#define	KINETICIO_SEQUENCEPATTERNRECOGNITION_HH
 
 /*----------------------------------------------------------------------------*/
 #include <list>
@@ -66,5 +66,4 @@ private:
 
 }
 
-#endif	/* SEQUENCEPATTERNRECOGNITION_HH */
-
+#endif

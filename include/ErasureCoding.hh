@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief Class for computing parities and recovering data
 //------------------------------------------------------------------------------
-#ifndef ERASURECODING_HH
-#define  ERASURECODING_HH
+#ifndef KINETICIO_ERASURECODING_HH
+#define KINETICIO_ERASURECODING_HH
 
 #include <memory>
 #include <vector>

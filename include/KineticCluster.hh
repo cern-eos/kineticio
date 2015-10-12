@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief General purpose implementation of cluster interface for Kinetic.
 //------------------------------------------------------------------------------
-#ifndef KINETICCLUSTER_HH
-#define	KINETICCLUSTER_HH
+#ifndef KINETICIO_KINETICCLUSTER_HH
+#define	KINETICIO_KINETICCLUSTER_HH
 
 #include "ClusterInterface.hh"
 #include "KineticAutoConnection.hh"
@@ -216,4 +216,4 @@ protected:
 
 }
 
-#endif	/* KINETICCLUSTER_HH */
+#endif

@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief Interface to a cluster...
 //------------------------------------------------------------------------------
-#ifndef CLUSTERINTERFACE_HH
-#define	CLUSTERINTERFACE_HH
+#ifndef KINETICIO_CLUSTERINTERFACE_HH
+#define	KINETICIO_CLUSTERINTERFACE_HH
 
 #include <vector>
 #include <string>

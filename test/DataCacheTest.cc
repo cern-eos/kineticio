@@ -1,6 +1,6 @@
 #include "catch.hpp"
 #include "FileIo.hh"
-#include "ClusterChunkCache.hh"
+#include "DataCache.hh"
 #include <kio/FileIoInterface.hh>
 #include "ClusterInterface.hh"
 #include "Utility.hh"
@@ -80,7 +80,7 @@ public:
 
   MockFileIo(std::string path, std::shared_ptr<kio::ClusterInterface> c){
     cluster = c; 
-    chunk_basename = path; 
+    block_basename = path; 
     }
   ~MockFileIo (){};
 
@@ -89,7 +89,7 @@ public:
 SCENARIO("Cache Performance Test.", "[Cache]"){ 
     
     GIVEN("A Cache Object and a mocked FileIo object"){
-        ClusterChunkCache ccc(1024*10000, 1024*20000, 20, 20, 0);
+        DataCache ccc(1024*10000, 1024*20000, 20, 20, 0);
         std::shared_ptr<ClusterInterface> cluster(new MockCluster());
         MockFileIo fio("thepath",cluster);
 
@@ -98,11 +98,11 @@ SCENARIO("Cache Performance Test.", "[Cache]"){
 
             auto tstart = system_clock::now();
             for(int i=0; i<num_items; i++){
-                ccc.get((FileIo*)&fio, i, ClusterChunk::Mode::STANDARD);
+                ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
             }
             auto tend = system_clock::now();
 
-            printf("%ld items per second\n", (num_items * 1000) / duration_cast<milliseconds>(tend-tstart).count());
+            printf("Cache get() performance: %ld items per second\n", (num_items * 1000) / duration_cast<milliseconds>(tend-tstart).count());
       }
     }
 }

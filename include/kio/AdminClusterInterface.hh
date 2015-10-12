@@ -31,13 +31,13 @@ public:
     int total;
     //! #keys where one or more drives the key stripe is stored on are not reachable
     int incomplete;
-    //! #keys that are known to require repair (disregarding non reachable drives)
-    int need_repair;
+    //! #keys that are known to require action (disregarding non reachable drives)
+    int need_action;
     //! #keys that had one or more subchunks repaired
     int repaired;
     //! #keys that had to be removed (e.g. because a drive was not reachable during a previous remove operation)
     int removed;
-    //! #keys were repair was detected to be necessary but failed
+    //! #keys were repair / remove was detected to be necessary but failed
     int unrepairable;
   };
   

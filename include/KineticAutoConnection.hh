@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief Wrapping kinetic connection, primarily to supply automatic reconnect
 //------------------------------------------------------------------------------
-#ifndef KINETICAUTOCONNECTION_HH
-#define	KINETICAUTOCONNECTION_HH
+#ifndef KINETICIO_AUTOCONNECTION_HH
+#define	KINETICIO_AUTOCONNECTION_HH
 
 #include <kinetic/kinetic.h>
 #include <utility>
@@ -94,5 +94,5 @@ private:
 
 }
 
-#endif	/* KINETICAUTOCONNECTION_HH */
+#endif	
 

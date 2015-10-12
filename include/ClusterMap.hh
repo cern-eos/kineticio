@@ -3,8 +3,8 @@
 //! @author Paul Hermann Lensing
 //! @brief Providing access to cluster instances and the data io cache.
 //------------------------------------------------------------------------------
-#ifndef KINETICDRIVEMAP_HH
-#define KINETICDRIVEMAP_HH
+#ifndef KINETICIO_CLUSTERMAP_HH
+#define KINETICIO_CLUSTERMAP_HH
 
 /*----------------------------------------------------------------------------*/
 #include <condition_variable>
@@ -17,7 +17,7 @@
 #include "ErasureCoding.hh"
 #include "LRUCache.hh"
 #include "SocketListener.hh"
-#include "ClusterChunkCache.hh"
+#include "DataCache.hh"
 #include "KineticAdminCluster.hh"
 /*----------------------------------------------------------------------------*/
 
@@ -56,7 +56,7 @@ public:
   //!
   //! @return a reference to the data cache
   //--------------------------------------------------------------------------
-  ClusterChunkCache& getCache();
+  DataCache& getCache();
 
   //--------------------------------------------------------------------------
   //! (Re)load the json configuration files and reconfigure the ClusterMap
@@ -140,7 +140,7 @@ private:
     std::unique_ptr<LRUCache<std::string, std::shared_ptr<ErasureCoding>>> ecCache;
 
     //! the data cache shared among cluster instances
-    std::unique_ptr<ClusterChunkCache> dataCache;
+    std::unique_ptr<DataCache> dataCache;
 
     //! epoll listener loop shared among all connections
     std::unique_ptr<SocketListener> listener;

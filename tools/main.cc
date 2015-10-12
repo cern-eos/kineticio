@@ -40,7 +40,7 @@ void printKeyCount(const kio::AdminClusterInterface::KeyCounts& kc)
 {
   fprintf(stdout, "Completed Operation. Scanned a total of %d keys\n\n", kc.total);
   fprintf(stdout, "Keys with inaccessible drives: %d\n", kc.incomplete);
-  fprintf(stdout, "Keys requiring action: %d\n", kc.need_repair);
+  fprintf(stdout, "Keys requiring action: %d\n", kc.need_action);
   fprintf(stdout, "Keys Repaired: %d\n", kc.repaired);
   fprintf(stdout, "Keys Removed: %d\n", kc.removed);
   fprintf(stdout, "Not repairable: %d\n", kc.unrepairable);
@@ -109,7 +109,7 @@ kio::AdminClusterInterface::KeyCounts operator+= (kio::AdminClusterInterface::Ke
 {
   lhs.total+=rhs.total;
   lhs.incomplete+=rhs.incomplete;
-  lhs.need_repair+=rhs.need_repair;
+  lhs.need_action+=rhs.need_action;
   lhs.removed+=rhs.removed;
   lhs.repaired+=rhs.repaired;
   lhs.unrepairable+=rhs.unrepairable;
