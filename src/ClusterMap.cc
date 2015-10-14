@@ -45,10 +45,10 @@ void ClusterMap::loadConfiguration()
   if (!cluster)
     throw kio_exception(EINVAL,"KINETIC_CLUSTER_DEFINITION not set.");
 
-  /* get file contents */
-  std::string location_data = readfile(location);
-  std::string security_data = readfile(security);
-  std::string cluster_data = readfile(cluster);
+  /* If the environment variables contain the json content, use them directly, otherwise get file contents */
+  std::string location_data = location[0] == '{' ? location : readfile(location);
+  std::string security_data = security[0] == '{' ? security : readfile(security);
+  std::string cluster_data = cluster[0] == '{' ? cluster : readfile(cluster);
 
   std::lock_guard<std::mutex> lock(mutex);
   clustermap.clear();
