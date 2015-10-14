@@ -89,11 +89,27 @@ void DataCache::flush(kio::FileIo* owner)
 
 DataCache::cache_iterator DataCache::remove_item(const cache_iterator& it)
 {
+  kio_debug("Removing data key ", *it->data->getKey(), " from cache.");
   for(auto o = it->owners.cbegin(); o!= it->owners.cend(); o++)
     owner_tables[*o].erase(it);
   current_size -= it->data->capacity();
   lookup.erase(*it->data->getKey());
   return cache.erase(it);
+}
+
+void DataCache::cache_to_target_size()
+{
+    /* Attempt to free items from the tail of the cache if size > target_size. Don't access list::size() every time, 
+       as it has linear runtime with gcc */
+    if(!tail_items && current_size > target_size)            
+        tail_items = cache.size() * 0.25; 
+    int checked_items = 0;
+    if(current_size > target_size)
+       kio_debug("Cache current size is ", current_size, " bytes, target size is ", target_size, " bytes. Shrinking cache.");
+    for (auto it = --cache.end(); current_size > target_size && it != cache.begin() && checked_items<tail_items; it--, checked_items++) {
+      if (!it->data->dirty())
+        it = remove_item(it);
+    }
 }
 
 void DataCache::throttle()
@@ -106,18 +122,8 @@ void DataCache::throttle()
       std::lock_guard<std::mutex> ratelimit_lock(cache_cleanup_mutex);
       if(duration_cast<milliseconds>(system_clock::now() - cache_cleanup_timestamp) > ratelimit){
         cache_cleanup_timestamp = system_clock::now();
-
         std::lock_guard<std::mutex> cachelock(cache_mutex);
-        
-        /* Attempt to free items from the tail of the cache if size > target_size. Don't access list::size() every time, 
-           as it has linear runtime with gcc */
-        if(!tail_items && current_size > target_size)            
-            tail_items = cache.size() * 0.25; 
-        int checked_items = 0;
-        for (auto it = --cache.end(); current_size > target_size && it != cache.begin() && checked_items<tail_items; it--, checked_items++) {
-          if (!it->data->dirty())
-            it = remove_item(it);
-        }
+        cache_to_target_size();      
       }
     }
 
@@ -151,6 +157,11 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
 
   std::lock_guard<std::mutex> cachelock(cache_mutex);
   auto key = utility::constructBlockKey(owner->block_basename, blocknumber);
+  
+  if(rm == RequestMode::READAHEAD)
+    kio_debug("Pre-fetching data key ", *key);
+  else 
+    kio_debug("Requesting data key ", *key);
 
   /* If the requested block is already cached, we can return it without IO. */
   if (lookup.count(*key)) {
@@ -163,15 +174,8 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
     return cache.front().data;
   }
   
-  /* Attempt to free items from the tail of the cache if size > target_size. Don't access list::size() every time, 
-          as it has linear runtime with gcc */
-  if(!tail_items && current_size > target_size)         
-    tail_items = cache.size() * 0.25; 
-  int checked_items = 0;
-  for (auto it = --cache.end(); current_size > target_size && it != cache.begin() && checked_items<tail_items; it--, checked_items++) {
-    if (!it->data->dirty())
-      it = remove_item(it);
-  }
+  /* Attempt to shrink cache size to target size by releasing non-dirty items only*/ 
+  cache_to_target_size();   
 
   /* If cache size would exceed capacity, we have to try flushing dirty blocks manually. */
   if (capacity < current_size + owner->cluster->limits().max_value_size) {
@@ -199,6 +203,8 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
 
   /* set iterator in owner_tables */
   owner_tables[owner].insert(cache.begin());
+  
+  kio_debug("Adding data key ", *key, " to the cache.");
   return data;
 }
 
