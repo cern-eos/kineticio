@@ -117,7 +117,7 @@ void DataCache::cache_to_target_size()
         it = remove_item(it);
     }
     
-    write_pressure = count_dirty / num_items;
+    write_pressure = (count_dirty*100) / num_items;
 }
 
 
