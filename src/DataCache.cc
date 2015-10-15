@@ -145,6 +145,13 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
       throw e;
     }
   }
+  
+  auto key = utility::constructBlockKey(owner->block_basename, blocknumber);
+  
+  if(rm == RequestMode::READAHEAD)
+    kio_debug("Pre-fetching data key ", *key, "for owner ", owner);
+  else 
+    kio_debug("Requesting data key ", *key);
 
   /* If we are called by a client of the cache */
   if(rm == RequestMode::STANDARD){
@@ -156,13 +163,6 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
   }
 
   std::lock_guard<std::mutex> cachelock(cache_mutex);
-  auto key = utility::constructBlockKey(owner->block_basename, blocknumber);
-  
-  if(rm == RequestMode::READAHEAD)
-    kio_debug("Pre-fetching data key ", *key);
-  else 
-    kio_debug("Requesting data key ", *key);
-
   /* If the requested block is already cached, we can return it without IO. */
   if (lookup.count(*key)) {
     /* Splicing the element into the front of the list will keep iterators valid. */
@@ -247,12 +247,12 @@ void DataCache::readahead(kio::FileIo* owner, int blocknumber)
   std::list<int> prediction;
   { std::lock_guard<std::mutex> readaheadlock(readahead_mutex);
     if(!prefetch.count(owner))
-      prefetch[owner] = SequencePatternRecognition(readahead_window_size);
+      prefetch[owner] = PrefetchOracle(readahead_window_size);
     auto& sequence = prefetch[owner];
     sequence.add(blocknumber);
     /* Don't do readahead if cache is already under pressure. */
     if (cache_pressure() < 0.1)
-      prediction = sequence.predict(SequencePatternRecognition::PredictionType::CONTINUE);
+      prediction = sequence.predict(PrefetchOracle::PredictionType::CONTINUE);
   }
   for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
     auto data = get(owner, *it, DataBlock::Mode::STANDARD, RequestMode::READAHEAD);

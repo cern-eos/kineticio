@@ -66,7 +66,7 @@ set(kineticio_SRC
     src/KineticAdminCluster.cc
     src/SocketListener.cc
     src/ErasureCoding.cc
-    src/SequencePatternRecognition.cc
+    src/PrefetchOracle.cc
     src/BackgroundOperationHandler.cc
     src/Utility.cc
     src/outside/crc32c.c
@@ -123,7 +123,7 @@ if(DEBUG)
         test/SocketListenerTest.cc
         test/ErasureCodingTest.cc
         test/UtilityTest.cc
-        test/SequencePatternRecognitionTest.cc
+        test/PrefetchOracleTest.cc
         test/SimulatorController.cc
         test/LRUCacheTest.cc
         test/LoggingTest.cc

@@ -1,64 +1,74 @@
 #include "catch.hpp"
-#include "SequencePatternRecognition.hh"
+#include "PrefetchOracle.hh"
 
 using namespace kio; 
 
 
-SCENARIO("SequencePatternRecognition Test", "[Pattern]"){
+SCENARIO("PrefetchOracle Test", "[Prefetch]"){
 
   GIVEN ("An empty SPR object. "){
-    SequencePatternRecognition spr(10);
+    PrefetchOracle spr(10);
 
-    WHEN("we let it stay empty"){
+    WHEN("if it has less than 3 elements"){
       THEN("it can't make any predictions"){
-        auto p = spr.predict();
-        REQUIRE(p.empty());
+        REQUIRE(spr.predict().empty());
+        spr.add(0);
+        REQUIRE(spr.predict().empty());
+        spr.add(1);
+        REQUIRE(spr.predict().empty());
+      }
+    }
+    
+    WHEN("three elements are added"){
+      spr.add(0);
+      spr.add(2);
+      spr.add(4);
+      THEN("it can make a prediction"){
+        REQUIRE(spr.predict().front() == 6);
       }
     }
 
     WHEN("a sequential rising sequence is added"){
-      for(int i=0; i<10; i++)
+      for(int i=0; i<20; i++)
         spr.add(i);
 
-      THEN("prediction returns max-1 elements"){
+      THEN("prediction returns max elements"){
         auto p = spr.predict();
-        REQUIRE(p.size() == 9);
+        REQUIRE(p.size() == 10);
 
-        auto expected = 10;
+        auto expected = 20;
         for(auto it = p.begin(); it != p.end(); it++)
           REQUIRE(*it == expected++);
 
         AND_THEN("Prediction result is not affected by adding the same number repeatedly"){
           for(int i=0; i<10; i++)
-            spr.add(9);
+            spr.add(19);
           auto p2 = spr.predict();
           REQUIRE(p2.size() == p.size());
           REQUIRE(p2 == p);
         }
         
         AND_THEN("predicting again with CONTINUE set returns 0 elements"){
-          REQUIRE(spr.predict(SequencePatternRecognition::PredictionType::CONTINUE).empty());
+          REQUIRE(spr.predict(PrefetchOracle::PredictionType::CONTINUE).empty());
         }
         AND_THEN("Adding more elements to the sequence will result in prediction with CONTINUE set"){
-          spr.add(10);
-          auto p2 = spr.predict(SequencePatternRecognition::PredictionType::CONTINUE);
+          spr.add(20);
+          auto p2 = spr.predict(PrefetchOracle::PredictionType::CONTINUE);
           REQUIRE(p2.size() == 1);
           REQUIRE(p2.front() == p.back()+1);
         }
       }
     }
 
-    WHEN("only part of the sequence is sequential rising"){
-
-      for(int i=100; i>90; i--)
-        spr.add(i);
+    WHEN("We throw in outliers"){
+      
+      spr.add(59);
       for(int i=5; i<10; i++)
         spr.add(i);
+      spr.add(99);
 
-      THEN("prediction is sequence_length-1 elements"){
+      THEN("we can still predict"){
         auto p = spr.predict();
-        REQUIRE(p.size() == 4);
-
         auto expected = 10;
         for(auto it = p.begin(); it != p.end(); it++)
           REQUIRE(*it == expected++);
@@ -71,7 +81,7 @@ SCENARIO("SequencePatternRecognition Test", "[Pattern]"){
 
       THEN("prediction takes gaps into account"){
         auto p = spr.predict();
-        REQUIRE(p.size() == 9);
+        REQUIRE(p.size() == 8);
 
         auto expected = 100;
         for(auto it = p.begin(); it != p.end(); it++){

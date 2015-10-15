@@ -7,7 +7,7 @@
 #define KINETICIO_DATACACHE_HH
 
 /*----------------------------------------------------------------------------*/
-#include "SequencePatternRecognition.hh"
+#include "PrefetchOracle.hh"
 #include "BackgroundOperationHandler.hh"
 #include "DataBlock.hh"
 #include <unordered_map>
@@ -157,7 +157,7 @@ private:
   std::unordered_map<const kio::FileIo*, std::exception> exceptions;
 
   //! Track per FileIo access patterns and attempt to pre-fetch intelligently
-  std::unordered_map<const kio::FileIo*, SequencePatternRecognition> prefetch;
+  std::unordered_map<const kio::FileIo*, PrefetchOracle> prefetch;
 
   //! Ratelimit attempts to shrink the current cache size by removing clean items from the tail
   std::chrono::system_clock::time_point cache_cleanup_timestamp;
