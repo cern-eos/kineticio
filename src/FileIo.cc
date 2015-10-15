@@ -19,7 +19,8 @@ FileIo::FileIo() :
 
 FileIo::~FileIo()
 {
-  cache.drop(this);
+  /* If fileIo object is destroyed without closing properly, throw cache data out the window. */
+  cache.drop(this, true);
 }
 
 /* All necessary checks have been done in the 993 line long
@@ -160,7 +161,7 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
      * cache for this object... this will also sync the just truncated data.  */
     cache.flush(this);
   }
-  cache.drop(this);
+  cache.drop(this, true);
 
   /* Step 3) Delete all blocks past block_number. When truncating to size 0,
    * (and only then) also delete the first block. */

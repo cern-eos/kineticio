@@ -62,9 +62,10 @@ public:
   //! Drop the owner from the cache, optionally also drop associated blocks
   //! (dirty blocks will not be flushed in this case).
   //!
+  //! @param force, if set to true will throw away all blocks associated with the owner
   //! @param owner a pointer to the kio::FileIo object the blocks belong to
   //--------------------------------------------------------------------------
-  void drop(kio::FileIo* owner);
+  void drop(kio::FileIo* owner, bool force=false);
 
   //--------------------------------------------------------------------------
   //! Flushes the supplied data. If the number of current background threads
@@ -119,19 +120,20 @@ private:
 
   //! current size of the cache
   std::atomic<size_t> current_size;
+  
+  //! percentage of unflushed data keys in the cache tail
+  std::atomic<double> write_pressure; 
 
   //! the maximum number of blocks to prefetch 
   int readahead_window_size;
   
-  //! the number of tail items to examine to keep current_size <= target_size
-  int tail_items; 
-
   //! handle background readahead and flush requests
   BackgroundOperationHandler bg;
 
   struct CacheItem {
     std::set<kio::FileIo*> owners;
     std::shared_ptr<kio::DataBlock> data;
+    std::chrono::system_clock::time_point last_access;
   };
 
   //! A linked list of data blocks stored in LRU order
@@ -175,14 +177,6 @@ private:
   std::mutex cache_mutex;
 
 private:
-  //--------------------------------------------------------------------------
-  //! Return a value between [0...1] showing the current cache pressure. This
-  //! can be used to throttle workload to guard against cache thrashing.
-  //!
-  //! @return value between 0 and 1 signifying cache pressure.
-  //--------------------------------------------------------------------------
-  double cache_pressure();
-
   //--------------------------------------------------------------------------
   //! Block in case the cache is under pressure.
   //--------------------------------------------------------------------------

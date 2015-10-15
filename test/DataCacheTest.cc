@@ -5,6 +5,7 @@
 #include "ClusterInterface.hh"
 #include "Utility.hh"
 #include <chrono>
+#include <unistd.h>
 
 
 using namespace kio;
@@ -34,8 +35,8 @@ public:
     std::shared_ptr<const std::string>& version,
     std::shared_ptr<const std::string>& value)
   {
-      version = utility::uuidGenerateEncodeSize(1024);
-      value = std::make_shared<const string>('x',1024);
+      version = utility::uuidGenerateEncodeSize(128);
+      value = std::make_shared<const string>('x',128);
       return KineticStatus(StatusCode::OK, "");
   };
 
@@ -46,7 +47,7 @@ public:
     bool force,
     std::shared_ptr<const std::string>& version_out)
   {
-    version_out = utility::uuidGenerateEncodeSize(1024);
+    version_out = utility::uuidGenerateEncodeSize(128);
     return KineticStatus(StatusCode::OK, "");
   };
 
@@ -67,7 +68,7 @@ public:
     return KineticStatus(StatusCode::OK, ""); 
   };
 
-  MockCluster() : _limits{1024,1024,1024}, _size{1024,1024} { }
+  MockCluster() : _limits{128,128,128}, _size{128,128} { }
   ~MockCluster(){};
   
 private:
@@ -89,21 +90,49 @@ public:
 SCENARIO("Cache Performance Test.", "[Cache]"){ 
     
     GIVEN("A Cache Object and a mocked FileIo object"){
-        DataCache ccc(1024*10000, 1024*20000, 20, 20, 0);
+      
+      THEN("go ~"){
+      for(int i=1; i<10000; i*=10){
+      
+        size_t target_size = 100*i;
+        size_t capacity = 110*i; 
+
+        DataCache ccc(target_size*128, capacity*128, 20, 20, 0);
         std::shared_ptr<ClusterInterface> cluster(new MockCluster());
         MockFileIo fio("thepath",cluster);
 
-        THEN("We can exercise the cache"){
-            int num_items = 100000;
+        printf("Cache get() performance for a cache with target_size==%lu and capacity==%lu items \n",target_size, capacity);             
 
-            auto tstart = system_clock::now();
-            for(int i=0; i<num_items; i++){
-                ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
-            }
-            auto tend = system_clock::now();
+        auto tstart = system_clock::now();
+        for(int i=0; i<target_size; i++)
+            ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
+        auto tend = system_clock::now();
 
-            printf("Cache get() performance: %ld items per second\n", (num_items * 1000) / duration_cast<milliseconds>(tend-tstart).count());
+        printf("%ld items per second up to target size\n", (target_size * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
+
+        tstart = system_clock::now();
+        for(int i=target_size; i<capacity; i++)
+          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
+        tend = system_clock::now();
+        printf("%ld items per second target_size to capacity \n", ((capacity-target_size) * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
+
+        tstart = system_clock::now();
+        for(int i=capacity; i<2*capacity; i++)
+          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
+        tend = system_clock::now();
+        printf("%ld items per second above capacity \n", (capacity * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
+
+        printf("Waiting for cache items to time out so they qualify for removal\n");
+        sleep(6);
+
+        tstart = system_clock::now();
+        for(int i=2*capacity; i<3*capacity; i++)
+          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
+        tend = system_clock::now();
+        printf("%ld items per second above capacity after timeout \n\n", (capacity * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
       }
+      }
+      
     }
 }
 
