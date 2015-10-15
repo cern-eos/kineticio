@@ -121,8 +121,8 @@ private:
   //! current size of the cache
   std::atomic<size_t> current_size;
   
-  //! percentage of unflushed data keys in the cache tail
-  std::atomic<double> write_pressure; 
+  //! percentage of dirty data keys in the cache tail
+  std::atomic<int> write_pressure; 
 
   //! the maximum number of blocks to prefetch 
   int readahead_window_size;

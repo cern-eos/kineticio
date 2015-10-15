@@ -117,7 +117,7 @@ void DataCache::cache_to_target_size()
         it = remove_item(it);
     }
     
-    write_pressure = count_dirty / static_cast<double>(num_items);
+    write_pressure = count_dirty / num_items;
 }
 
 
@@ -126,7 +126,7 @@ void DataCache::throttle()
   using namespace std::chrono;
   static const milliseconds ratelimit(50);
 
-  for(auto wait_pressure = 0.01; wait_pressure<write_pressure; wait_pressure += 0.01) 
+  for(auto wait_pressure = 1; wait_pressure < write_pressure; wait_pressure++) 
   {
     {
       std::lock_guard<std::mutex> ratelimit_lock(cache_cleanup_mutex);
