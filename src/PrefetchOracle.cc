@@ -17,12 +17,16 @@ static bool _contains(const std::deque<int> &container, int number)
 }
 
 PrefetchOracle::PrefetchOracle(std::size_t max)
-    : sequence_capacity(max+2) { }
+    : max_prediction(max) 
+{
+  /* Use max+2 for sequence capacity with a minimum of 10 */
+  sequence_capacity = max_prediction > 8 ? max_prediction+2 : 10;
+}
 
 PrefetchOracle::~PrefetchOracle() { }
 
 void PrefetchOracle::add(int number)
-{
+{  
   if (!_contains(sequence, number)) {
     sequence.push_front(number);
     if (sequence.size() > sequence_capacity)
@@ -71,7 +75,7 @@ std::list<int> PrefetchOracle::predict(PredictionType type)
     if(p>0 && prediction.size() < max_preciction_size)
       prediction.push_back(p);
   }
-
+  
   /* if type == continue, don't predict things that already have been predicted */
   if (type == PredictionType::CONTINUE) {
     prediction.remove_if(

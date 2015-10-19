@@ -56,6 +56,8 @@ public:
   ~PrefetchOracle();
 
 private:
+  //! maximum size of prediction
+  std::size_t max_prediction;
   //! maximum size of sequence
   std::size_t sequence_capacity;
   //! sequence to base predictions on
