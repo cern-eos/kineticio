@@ -68,11 +68,10 @@ std::list<int> PrefetchOracle::predict(PredictionType type)
     return prediction;  
   
   /* build prediction list */
-  auto max_preciction_size = sequence.size()-2; 
   for (int i = 1; i < distance->second.size() + 1; i++){
     int p = distance->second.front() + i * distance->first; 
     /* never predict negative block numbers */
-    if(p>0 && prediction.size() < max_preciction_size)
+    if(p>0 && prediction.size() < max_prediction)
       prediction.push_back(p);
   }
   
