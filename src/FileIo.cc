@@ -43,7 +43,7 @@ void FileIo::Open(const std::string &p, int flags,
     if (status.ok())
       lastBlockNumber.set(0);
     else if (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH)
-      throw kio_exception(EEXIST, "File ", p, "openend with O_CREAT flag set already exists.");
+      throw kio_exception(EEXIST, "File ", p, " already exists (O_CREAT flag set).");
   }
   else {
     shared_ptr<const string> version;
@@ -55,7 +55,7 @@ void FileIo::Open(const std::string &p, int flags,
         value
     );
     if(status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
-      throw kio_exception(ENOENT, "File ", p, "does not exist and connot be openend without O_CREAT flag.");
+      throw kio_exception(ENOENT, "File ", p, " does not exist and cannot be opened without O_CREAT flag.");
   }
 
   if(!status.ok())
@@ -65,7 +65,6 @@ void FileIo::Open(const std::string &p, int flags,
   cluster = c;
   obj_path = p;
   block_basename = obj_path.substr(obj_path.find_last_of(':') + 1, obj_path.length());
-
 }
 
 
@@ -115,8 +114,14 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
     else if (mode == rw::READ) {
       data->read(buffer + off_done, block_offset, block_length);
 
-      /* If we are reading the last block (or past it) */
-      if (block_number >= lastBlockNumber.get()) {
+      /* If it looks like we are reading the last block (or past it) */
+      if (block_number >= lastBlockNumber.get()) {     
+        
+        /* First verify that the stored last block number is still up to date. */
+        lastBlockNumber.verify();
+        if(block_number < lastBlockNumber.get()) 
+          continue;     
+        
         /* make sure length doesn't indicate that we read past filesize. */
         if (data->size() > block_offset)
           length_todo -= std::min(block_length, data->size() - block_offset);

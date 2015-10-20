@@ -19,7 +19,7 @@ struct Configuration{
 };
 
 int kinetic_help(){
-  fprintf(stdout, " Usage: -id clusterid -op status|count|scan|repair|reset -target all|indicator [-threads numthreads]\n"); 
+  fprintf(stdout, " Usage: -id clusterid -op status|count|scan|repair|reset -target attribute|file|indicator|all [-threads numthreads]\n"); 
   fprintf(stdout, " -id: specify the cluster identifier \n");
   fprintf(stdout, " -op: specify one of the following operations to execute\n");
   fprintf(stdout, "    status: print status of connections of the cluster. \n");
@@ -27,7 +27,7 @@ int kinetic_help(){
   fprintf(stdout, "    scan: check all keys existing in the cluster and display their status information (Warning: Long Runtime) \n");
   fprintf(stdout, "    repair: check all keys existing in the cluster, repair as required, display their status information. (Warning: Long Runtime) \n");
   fprintf(stdout, "    reset: force remove all keys on all drives associated with the cluster, you will loose ALL data! \n");
-  fprintf(stdout, " -target: specify one of the following target ranges\n");
+  fprintf(stdout, " -target: specify one of the following target ranges, required for any operation except status \n");
   fprintf(stdout, "    all: perform operation on all keys of the cluster\n");
   fprintf(stdout, "    file: perform operation on keys associated with files\n");
   fprintf(stdout, "    attribute: perform operation on attribute keys only \n");
@@ -103,17 +103,6 @@ bool parseArguments(int argc, char** argv, Configuration& config) {
   }
 
   return config.id.length() && config.op != Operation::INVALID && config.target != OperationTarget::INVALID;
-}
-
-kio::AdminClusterInterface::KeyCounts operator+= (kio::AdminClusterInterface::KeyCounts& lhs, const kio::AdminClusterInterface::KeyCounts& rhs)
-{
-  lhs.total+=rhs.total;
-  lhs.incomplete+=rhs.incomplete;
-  lhs.need_action+=rhs.need_action;
-  lhs.removed+=rhs.removed;
-  lhs.repaired+=rhs.repaired;
-  lhs.unrepairable+=rhs.unrepairable;
-  return lhs;
 }
 
 int countkeys(std::unique_ptr<kio::AdminClusterInterface>& ac){
