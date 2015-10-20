@@ -1,15 +1,29 @@
 cmake_minimum_required(VERSION 2.8.6)
 project(kineticio CXX C)
+include(ExternalProject)
+
+################################################################################
+# Options
+option(BUILD_TEST "Build test executables." off)
+option(LINK_STATIC "Link non-standard libraries statically" off)
+message(STATUS "Set Options: BUILD_TEST=${BUILD_TEST} LINK_STATIC=${LINK_STATIC}")
 
 ################################################################################
 # Dependencies
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-find_package(kinetic-c++ REQUIRED)
 find_package(jsonc REQUIRED)
 find_package(uuid REQUIRED)
-find_package(isal REQUIRED)
 find_package(Threads REQUIRED)
+if (LINK_STATIC)
+  find_package(OpenSSL REQUIRED)
+  find_package(Protobuf REQUIRED)
+  find_library(LIBUNWIND "unwind")
+else()
+  find_package(kinetic-c++ REQUIRED)
+  find_package(isal REQUIRED)
+endif()
+
 
 ################################################################################
 # Force /usr/ installation prefix, same as EOS
@@ -35,14 +49,49 @@ endif (CMAKE_COMPILER_IS_GNUCXX)
 
 ################################################################################
 # Set CXX flags
-if(DEBUG)
-    message("Building DEBUG configuration, switch with -DDEBUG=false argument")
-    set(CMAKE_CXX_FLAGS "--std=c++0x -g")
-else()
-    message("Building RELEASE configuration, switch with -DDEBUG=true argument")
-    set(CMAKE_CXX_FLAGS "--std=c++0x -O2")
-endif(DEBUG)
-message("CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "--std=c++0x -g")
+message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+
+
+################################################################################
+# Compile dependencies if LINK_STATIC is set 
+if(LINK_STATIC)
+  ExternalProject_add(
+    kinetic_cpp_client
+    PREFIX "vendor"
+    GIT_REPOSITORY "https://github.com/plensing/kinetic-cpp-client"
+    GIT_TAG ""
+    CMAKE_ARGS -DBUILD_STATIC=on
+    BUILD_IN_SOURCE 1
+    INSTALL_COMMAND ""
+  )
+  set(KINETIC-C++_INCLUDE_DIRS "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/include")
+  set(KINETIC-C++_LIBRARIES 
+    "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/libkinetic_client.a"
+    "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/vendor/lib/libglog.a"
+    "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/vendor/lib/libgflags.a"
+    ${OPENSSL_LIBRARIES}
+    ${PROTOBUF_LIBRARIES}
+  )        
+  if(LIBUNWIND)
+      set(KINETIC-C++_LIBRARIES 
+          ${KINETIC-C++_LIBRARIES} 
+          ${LIBUNWIND}
+      )
+  endif()
+
+  ExternalProject_add(
+    isal
+    PREFIX "vendor"
+    URL "https://01.org/sites/default/files/downloads/intelr-storage-acceleration-library-open-source-version/isa-l-2.14.0.tar.gz"
+    URL_MD5 ""
+    CONFIGURE_COMMAND ../isal/configure --prefix=${kineticio_BINARY_DIR}/vendor --enable-static --with-pic
+  )
+  set(ISAL_INCLUDE_DIRS "${kineticio_BINARY_DIR}/vendor/lib/include")
+  set(ISAL_LIBRARIES "${kineticio_BINARY_DIR}/vendor/lib/libisal.a")
+
+endif()
+
 
 include_directories(
     include/kio
@@ -79,27 +128,27 @@ set(kineticio_LIB
     ${KINETIC-C++_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT}
 )
-add_library(kineticio SHARED
-    ${kineticio_SRC}
-)
-target_link_libraries(kineticio
-    ${kineticio_LIB}
-)
+add_library(kineticio SHARED ${kineticio_SRC})
+target_link_libraries(kineticio ${kineticio_LIB})
+
+add_executable(replay ${kineticio_SRC} tools/replay.cc)
+target_link_libraries(replay ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
+
+add_executable(admin ${kineticio_SRC} tools/admin.cc)
+target_link_libraries(admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
+
+if(LINK_STATIC)
+  add_dependencies(kineticio kinetic_cpp_client)
+  add_dependencies(replay kinetic_cpp_client)
+  add_dependencies(admin kinetic_cpp_client)
+endif()
+
 install(TARGETS kineticio LIBRARY DESTINATION lib64)
 install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
 
 
-add_executable(cluster-admin
-    ${kineticio_SRC}
-    tools/main.cc
-)
-target_link_libraries(cluster-admin
-        ${kineticio_LIB}
-        ${CMAKE_THREAD_LIBS_INIT}
-)
 
-if(DEBUG)
-    include(ExternalProject)
+if(BUILD_TEST)
     ExternalProject_add(catch
        PREFIX catch
        DOWNLOAD_COMMAND wget -q https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp -O catch.hpp
@@ -135,5 +184,5 @@ if(DEBUG)
         ${kineticio_LIB}
     )
     add_dependencies(kinetic-test catch)
-endif(DEBUG)
+endif(BUILD_TEST)
 
