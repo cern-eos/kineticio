@@ -94,7 +94,7 @@ DataCache::cache_iterator DataCache::remove_item(const cache_iterator& it)
   return cache.erase(it);
 }
 
-void DataCache::cache_to_target_size()
+void DataCache::try_shrink()
 {
     using namespace std::chrono;
     if(current_size < target_size){
@@ -108,7 +108,7 @@ void DataCache::cache_to_target_size()
     auto count_dirty = 0; 
         
     kio_debug("Cache current size is ", current_size, " bytes, target size is ", target_size, " bytes. Shrinking cache.");
-    for (auto it = --cache.end(); current_size > target_size && num_items > count_items && it != cache.begin(); it--,count_items++) {
+    for (auto it = --cache.end(); num_items > count_items && it != cache.begin(); it--, count_items++) {
       if(it->data->dirty()){
         count_dirty++;
         continue;
@@ -128,12 +128,13 @@ void DataCache::throttle()
 
   for(auto wait_pressure = 1; wait_pressure < write_pressure; wait_pressure++) 
   {
+    kio_debug("Throttling...");
     {
       std::lock_guard<std::mutex> ratelimit_lock(cache_cleanup_mutex);
       if(duration_cast<milliseconds>(system_clock::now() - cache_cleanup_timestamp) > ratelimit){
         cache_cleanup_timestamp = system_clock::now();
         std::lock_guard<std::mutex> cachelock(cache_mutex);
-        cache_to_target_size();      
+        try_shrink();      
       }
     }
     /* Sleep 100 ms to give dirty data a chance to flush before retrying */
@@ -154,11 +155,6 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
   
   auto key = utility::constructBlockKey(owner->block_basename, blocknumber);
   
-  if(rm == RequestMode::READAHEAD)
-    kio_debug("Pre-fetching data key ", *key, " for owner ", owner);
-  else 
-    kio_debug("Requesting data key ", *key, " for owner ", owner);
-
   /* If we are called by a client of the cache */
   if(rm == RequestMode::STANDARD){
     /* Register requested block with readahead logic unless we are opening the block for create */
@@ -171,6 +167,8 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
   std::lock_guard<std::mutex> cachelock(cache_mutex);
   /* If the requested block is already cached, we can return it without IO. */
   if (lookup.count(*key)) {
+    kio_debug("Serving data key ", *key, " for owner ", owner, " from cache.");
+    
     /* Splicing the element into the front of the list will keep iterators valid. */
     cache.splice(cache.begin(), cache, lookup[*key]);
 
@@ -182,7 +180,7 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
   }
   
   /* Attempt to shrink cache size to target size by releasing non-dirty items only*/ 
-  cache_to_target_size();   
+  try_shrink();   
 
   /* If cache size would exceed capacity, we have to try flushing dirty blocks manually. */
   if (capacity < current_size + owner->cluster->limits().max_value_size) {
@@ -243,19 +241,23 @@ void do_readahead(std::shared_ptr<kio::DataBlock> data)
 
 void DataCache::readahead(kio::FileIo* owner, int blocknumber)
 {
-  std::list<int> prediction;
+  PrefetchOracle* oracle; 
   { std::lock_guard<std::mutex> readaheadlock(readahead_mutex);
     if(!prefetch.count(owner))
       prefetch[owner] = PrefetchOracle(readahead_window_size);
-    auto& sequence = prefetch[owner];
-    sequence.add(blocknumber);
-    /* Don't do readahead if cache is full to the brim */
-    if (current_size < target_size + owner->cluster->limits().max_value_size)
-      prediction = sequence.predict(PrefetchOracle::PredictionType::CONTINUE);
+    oracle = &prefetch[owner];
+    oracle->add(blocknumber);
   }
-  for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
-    auto data = get(owner, *it, DataBlock::Mode::STANDARD, RequestMode::READAHEAD);
-    bg.try_run(std::bind(do_readahead, data));
+  
+  /* Only do readahead if cache isn't bursting already. */
+  if (current_size < target_size + 0.5*(capacity-target_size)){
+    auto prediction = oracle->predict(PrefetchOracle::PredictionType::CONTINUE);
+    for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
+      auto data = get(owner, *it, DataBlock::Mode::STANDARD, RequestMode::READAHEAD);
+      auto scheduled = bg.try_run(std::bind(do_readahead, data));
+      if(scheduled)
+        kio_debug("Readahead of key ", *data->getKey(), " scheduled for owner ", owner);
+    }
   }
 }
 

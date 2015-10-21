@@ -76,12 +76,12 @@ SCENARIO("PrefetchOracle Test", "[Prefetch]"){
     }
 
     WHEN("sequence is skipping regularly"){
-      for(int i=200; i>100; i-=10)
+      for(int i=400; i>100; i-=10)
         spr.add(i);
 
       THEN("prediction takes gaps into account"){
         auto p = spr.predict();
-        REQUIRE(p.size() == 8);
+        REQUIRE(p.size() == 10);
 
         auto expected = 100;
         for(auto it = p.begin(); it != p.end(); it++){

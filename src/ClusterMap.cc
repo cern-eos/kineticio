@@ -47,9 +47,9 @@ void ClusterMap::loadConfiguration()
     throw kio_exception(EINVAL,"KINETIC_CLUSTER_DEFINITION not set.");
 
   /* If the environment variables contain the json content, use them directly, otherwise get file contents */
-  std::string location_data = location[0] == '/' ? readfile(location) : location ;
-  std::string security_data = security[0] == '/' ? readfile(security) : security ;
-  std::string cluster_data = cluster[0] == '/' ? readfile(cluster) : cluster ;
+  std::string location_data = location[0] == '/' || location[0] == '.' ? readfile(location) : location ;
+  std::string security_data = security[0] == '/' || security[0] == '.' ? readfile(security) : security ;
+  std::string cluster_data = cluster[0] == '/' || cluster[0] == '.' ? readfile(cluster) : cluster ;
 
   std::lock_guard<std::mutex> lock(mutex);
   clustermap.clear();
@@ -85,6 +85,8 @@ void ClusterMap::loadConfiguration()
 
 DataCache& ClusterMap::getCache()
 {
+  if(!dataCache)
+    throw kio_exception(EINVAL,"ClusterMap not initialized correctly.");
   return *dataCache;
 }
 

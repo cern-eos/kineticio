@@ -211,7 +211,7 @@ private:
   //!--------------------------------------------------------------------------
   cache_iterator remove_item(const cache_iterator& it);
   
-  void cache_to_target_size(); 
+  void try_shrink(); 
 };
 
 
