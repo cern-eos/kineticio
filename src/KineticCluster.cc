@@ -479,9 +479,10 @@ void KineticCluster::updateStatistics()
     }
     const auto& log = std::static_pointer_cast<GetLogCallback>(o->callback)->getLog();
     
+    uint64_t bytes_used = log->capacity.nominal_capacity_in_bytes * log->capacity.portion_full;
     size.bytes_total += log->capacity.nominal_capacity_in_bytes;
-    size.bytes_free += log->capacity.nominal_capacity_in_bytes - (log->capacity.nominal_capacity_in_bytes * log->capacity.portion_full);
-  
+    size.bytes_free  += log->capacity.nominal_capacity_in_bytes - bytes_used; 
+    
     for(auto it = log->operation_statistics.cbegin(); it != log->operation_statistics.cend(); it++){
       if(it->name == "GET_RESPONSE"){
         io.read_ops += it->count;
