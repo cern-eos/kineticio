@@ -2,6 +2,7 @@
 #include "FileIo.hh"
 #include "Utility.hh"
 #include "Logging.hh"
+#include "KineticCluster.hh"
 #include <thread>
 #include <unistd.h>
 
@@ -65,7 +66,7 @@ void DataCache::flush(kio::FileIo* owner)
       exceptions.erase(owner);
   }
 
-  /* build a vector of bocks, so we can flush without holding cache_mutex */
+  /* build a vector of blocks, so we can flush without holding cache_mutex */
   std::vector<std::shared_ptr<kio::DataBlock> > blocks;
   { std::lock_guard<std::mutex> lock(cache_mutex);
     if (owner_tables.count(owner)) {
@@ -84,24 +85,14 @@ void DataCache::flush(kio::FileIo* owner)
   }
 }
 
-DataCache::cache_iterator DataCache::remove_item(const cache_iterator& it)
-{
-  kio_debug("Removing data key ", *it->data->getKey(), " from cache.");
-  for(auto o = it->owners.cbegin(); o!= it->owners.cend(); o++)
-    owner_tables[*o].erase(it);
-  current_size -= it->data->capacity();
-  lookup.erase(*it->data->getKey());
-  return cache.erase(it);
-}
-
 void DataCache::try_shrink()
 {
-    using namespace std::chrono;
     if(current_size < target_size){
       write_pressure = 0;
       return; 
     }
 
+    using namespace std::chrono;
     auto expired = system_clock::now() - seconds(5);
     auto num_items = (current_size / cache.back().data->capacity()) * 0.1;
     auto count_items = 0; 
@@ -119,7 +110,6 @@ void DataCache::try_shrink()
     
     write_pressure = (count_dirty*100) / num_items;
 }
-
 
 void DataCache::throttle()
 {
@@ -142,6 +132,17 @@ void DataCache::throttle()
   }
 }
 
+DataCache::cache_iterator DataCache::remove_item(const cache_iterator& it)
+{
+  kio_debug("Removing cache key ", it->data->getIdentity(), " from cache.");
+  for(auto o = it->owners.cbegin(); o!= it->owners.cend(); o++)
+    owner_tables[*o].erase(it);
+   
+  lookup.erase(it->data->getIdentity());
+  current_size -= it->data->capacity();
+  return cache.erase(it);
+}
+
 std::shared_ptr<kio::DataBlock> DataCache::get(
     kio::FileIo* owner, int blocknumber, DataBlock::Mode mode, RequestMode rm)
 {
@@ -153,11 +154,15 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
     }
   }
   
-  auto key = utility::constructBlockKey(owner->block_basename, blocknumber);
+  auto block_key = utility::constructBlockKey(owner->block_basename, blocknumber);
+  
+  /* We cannot use the block key directly for cache lookups, as reloading configuration will create 
+     different cluster objects and we have to avoid FileIo objects being associated with multiple clusters */
+  std::string cache_key = owner->cluster->id() + *block_key;
   
   /* If we are called by a client of the cache */
   if(rm == RequestMode::STANDARD){
-    /* Register requested block with readahead logic unless we are opening the block for create */
+    /* Register requested block with pre-fetch logic unless we are opening the block for create */
     if (mode != DataBlock::Mode::CREATE)
       readahead(owner, blocknumber);
     /* Throttle this request as indicated by cache pressure */
@@ -166,15 +171,17 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
 
   std::lock_guard<std::mutex> cachelock(cache_mutex);
   /* If the requested block is already cached, we can return it without IO. */
-  if (lookup.count(*key)) {
-    kio_debug("Serving data key ", *key, " for owner ", owner, " from cache.");
+  if (lookup.count(cache_key)) {
+    kio_debug("Serving data key ", *block_key, " for owner ", owner, " from cache.");
     
     /* Splicing the element into the front of the list will keep iterators valid. */
-    cache.splice(cache.begin(), cache, lookup[*key]);
+    cache.splice(cache.begin(), cache, lookup[cache_key]);
 
     /* set owner<->cache_item relationship. Since we have std::sets there's no need to test for existence */
     owner_tables[owner].insert(cache.begin());
     cache.front().owners.insert(owner);
+    
+    /* Update access timestamp */
     cache.front().last_access = std::chrono::system_clock::now();
     return cache.front().data;
   }
@@ -197,20 +204,18 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
     remove_item(it);
   }
 
-  auto data = std::make_shared<DataBlock>(
-      owner->cluster,
-      utility::constructBlockKey(owner->block_basename, blocknumber),
-      mode
+  cache.push_front(
+    CacheItem{ std::set<kio:: FileIo*>{owner}, 
+               std::make_shared<DataBlock>(owner->cluster, block_key, mode), 
+               std::chrono::system_clock::now()
+    }
   );
-  cache.push_front(CacheItem{std::set<kio:: FileIo*>{owner},data, std::chrono::system_clock::now()});
-  lookup[*key] = cache.begin();
-  current_size += data->capacity();
-
-  /* set iterator in owner_tables */
+  current_size += cache.front().data->capacity();
+  lookup[cache_key] = cache.begin();
   owner_tables[owner].insert(cache.begin());
   
-  kio_debug("Adding data key ", *key, " to the cache for owner ", owner);
-  return data;
+  kio_debug("Added data key ", *block_key, " to the cache for owner ", owner);
+  return cache.front().data;;
 }
 
 void DataCache::do_flush(kio::FileIo* owner, std::shared_ptr<kio::DataBlock> data)
@@ -256,7 +261,7 @@ void DataCache::readahead(kio::FileIo* owner, int blocknumber)
       auto data = get(owner, *it, DataBlock::Mode::STANDARD, RequestMode::READAHEAD);
       auto scheduled = bg.try_run(std::bind(do_readahead, data));
       if(scheduled)
-        kio_debug("Readahead of key ", *data->getKey(), " scheduled for owner ", owner);
+        kio_debug("Readahead of data block with identity ", data->getIdentity(), " scheduled for owner ", owner);
     }
   }
 }

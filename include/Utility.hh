@@ -54,6 +54,13 @@ namespace kio { namespace utility {
   //! @return the extracted cluster id
   //--------------------------------------------------------------------------
   std::string extractClusterID(const std::string& path);
+  
+  //--------------------------------------------------------------------------
+  //! Constructs a uuid string
+  //!
+  //! @return a uuid string
+  //--------------------------------------------------------------------------
+  std::string uuidGenerateString();
 
   //--------------------------------------------------------------------------
   //! Constructs a uuid string containing the supplied size attribute.

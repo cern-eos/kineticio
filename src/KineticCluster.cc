@@ -18,7 +18,7 @@ KineticCluster::KineticCluster(
     std::chrono::seconds op_timeout,
     std::shared_ptr<ErasureCoding> ec,
     SocketListener& listener
-) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout),
+) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout), clusteridentifier(utility::uuidGenerateString()),
      statistics_snapshot{0,0,0,0,0}, clusterio{0,0,0,0,0}, clustersize{1,0}, background(1,1), erasure(ec)
 {
   if (nData + nParity > info.size()) {
@@ -513,6 +513,11 @@ void KineticCluster::updateStatistics()
 const ClusterLimits& KineticCluster::limits() const
 {
   return clusterlimits;
+}
+
+const std::string& KineticCluster::id() const
+{
+  return clusteridentifier;
 }
 
 ClusterSize KineticCluster::size()

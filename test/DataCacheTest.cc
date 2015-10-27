@@ -14,6 +14,11 @@ using namespace std::chrono;
 
 class MockCluster : public ClusterInterface {
 public:  
+  const std::string& id() const
+  {
+    return _id;
+  }
+  
   const ClusterLimits& limits() const
   {
       return _limits; 
@@ -28,7 +33,7 @@ public:
   {
     return {0,0,0,0,0};
   }
-
+  
   kinetic::KineticStatus get(
     const std::shared_ptr<const std::string>& key,
     bool skip_value,
@@ -74,6 +79,7 @@ public:
 private:
     kio::ClusterLimits _limits;
     kio::ClusterSize _size;
+    std::string _id;
 };
 
 class MockFileIo : public kio::FileIo {
@@ -92,7 +98,7 @@ SCENARIO("Cache Performance Test.", "[Cache]"){
     GIVEN("A Cache Object and a mocked FileIo object"){
       
       THEN("go ~"){
-      for(int i=1; i<10000; i*=10){
+      for(int i=100; i<1000; i*=3){
       
         size_t target_size = 100*i;
         size_t capacity = 110*i; 

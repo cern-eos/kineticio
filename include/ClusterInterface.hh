@@ -55,35 +55,6 @@ struct ClusterIo{
 //------------------------------------------------------------------------------
 class ClusterInterface{
 public:
-
-  //----------------------------------------------------------------------------
-  //! Obtain maximum key / version / value sizes.
-  //! These limits may drastically differ from standard Kinetic drive limits.
-  //! For example, a value might be split and written to multiple drives. Or
-  //! some of the key-space might be reserved for cluster internal metadata.
-  //! Limits remain constant during the cluster lifetime.
-  //!
-  //! @return cluster limits
-  //----------------------------------------------------------------------------
-  virtual const ClusterLimits& limits() const = 0;
-
-  //----------------------------------------------------------------------------
-  //! Check the maximum size of the Cluster. Function will not block but
-  //! might return outdated values.
-  //!
-  //! @return cluster size
-  //----------------------------------------------------------------------------
-  virtual ClusterSize size() = 0;
-  
-  //----------------------------------------------------------------------------
-  //! Report usage as ops / bandwidth per second. Equivalent to size(), the 
-  //! function will update values asynchronously and might return outdated 
-  //! values. 
-  //!
-  //! @return cluster io statistics
-  //----------------------------------------------------------------------------
-  virtual ClusterIo iostats() = 0;
-
   //----------------------------------------------------------------------------
   //! Get the value and version associated with the supplied key.
   //
@@ -149,6 +120,42 @@ public:
     int maxRequested,
     std::unique_ptr< std::vector<std::string> >& keys) = 0;
 
+  //----------------------------------------------------------------------------
+  //! Obtain unique id for cluster instance. 
+  //! 
+  //! @return the cluster id 
+  //----------------------------------------------------------------------------
+  virtual const std::string& id() const = 0;
+  
+  //----------------------------------------------------------------------------
+  //! Obtain maximum key / version / value sizes.
+  //! These limits may drastically differ from standard Kinetic drive limits.
+  //! For example, a value might be split and written to multiple drives. Or
+  //! some of the key-space might be reserved for cluster internal metadata.
+  //! Limits remain constant during the cluster lifetime.
+  //!
+  //! @return cluster limits
+  //----------------------------------------------------------------------------
+  virtual const ClusterLimits& limits() const = 0;
+
+  //----------------------------------------------------------------------------
+  //! Check the maximum size of the Cluster. Function will not block but
+  //! might return outdated values.
+  //!
+  //! @return cluster size
+  //----------------------------------------------------------------------------
+  virtual ClusterSize size() = 0;
+  
+  //----------------------------------------------------------------------------
+  //! Report usage as ops / bandwidth per second. Equivalent to size(), the 
+  //! function will update values asynchronously and might return outdated 
+  //! values. 
+  //!
+  //! @return cluster io statistics
+  //----------------------------------------------------------------------------
+  virtual ClusterIo iostats() = 0;
+  
+  
   //----------------------------------------------------------------------------
   //! Destructor.
   //----------------------------------------------------------------------------

@@ -25,6 +25,8 @@ namespace kio{
 class KineticCluster : public ClusterInterface {
 public:
   //! See documentation in superclass.
+  const std::string& id() const; 
+  //! See documentation in superclass.
   const ClusterLimits& limits() const;
   //! See documentation in superclass.
   ClusterSize size();
@@ -182,6 +184,9 @@ protected:
   //! timeout of asynchronous operations
   const std::chrono::seconds operation_timeout;
   
+  //! cluster id 
+  const std::string clusteridentifier; 
+  
   //! all connections associated with this cluster
   std::vector< std::unique_ptr<KineticAutoConnection> > connections;
 
@@ -203,7 +208,7 @@ protected:
 
   //! cluster limits are constant over cluster lifetime
   ClusterLimits clusterlimits;
-  
+   
   //! updating cluster size in the background
   BackgroundOperationHandler background;
 

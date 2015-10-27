@@ -66,17 +66,18 @@ std::string utility::extractClusterID(const std::string& path)
   return path.substr(id_start, id_end-id_start);
 }
 
-std::shared_ptr<const std::string> utility::uuidGenerateEncodeSize(std::size_t size)
+std::string utility::uuidGenerateString()
 {
   uuid_t uuid;
   uuid_generate(uuid);
+  return std::string(reinterpret_cast<const char *>(uuid), sizeof(uuid_t));
+}
 
+std::shared_ptr<const std::string> utility::uuidGenerateEncodeSize(std::size_t size)
+{
   std::ostringstream ss;
   ss << std::setw(10) << std::setfill('0') << size;
-
-  return std::make_shared<const std::string>(
-      ss.str() + std::string(reinterpret_cast<const char *>(uuid), sizeof(uuid_t))
-   );
+  return std::make_shared<const std::string>(ss.str() + uuidGenerateString());
 }
 
 std::size_t utility::uuidDecodeSize(const std::shared_ptr<const std::string>& uuid)

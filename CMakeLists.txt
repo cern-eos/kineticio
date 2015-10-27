@@ -131,9 +131,6 @@ set(kineticio_LIB
 add_library(kineticio SHARED ${kineticio_SRC})
 target_link_libraries(kineticio ${kineticio_LIB})
 
-add_executable(replay ${kineticio_SRC} tools/replay.cc)
-target_link_libraries(replay ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
-
 add_executable(admin ${kineticio_SRC} tools/admin.cc)
 target_link_libraries(admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
 
@@ -145,7 +142,6 @@ endif()
 
 install(TARGETS kineticio LIBRARY DESTINATION lib64)
 install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
-
 
 
 if(BUILD_TEST)
@@ -184,5 +180,9 @@ if(BUILD_TEST)
         ${kineticio_LIB}
     )
     add_dependencies(kinetic-test catch)
+
+    add_executable(replay ${kineticio_SRC} test/replay.cc)
+    target_link_libraries(replay ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
+
 endif(BUILD_TEST)
 

@@ -25,6 +25,7 @@ namespace kio {
 //------------------------------------------------------------------------------
 class DataBlock
 {
+  friend class DataCache;
 public:
   //! Initialized to 1 second staleness
   static const std::chrono::milliseconds expiration_time;
@@ -91,9 +92,13 @@ public:
   bool dirty() const;
 
   //--------------------------------------------------------------------------
-  //! Get the key set for this block.
+  //! The identity string of a block combines the set cluster and key to form
+  //! an identifier. As this identifier depends on the cluster object it will 
+  //! not be consistent for multiple cluster objects of the same cluster. 
+  //! 
+  //! @return identity string 
   //--------------------------------------------------------------------------
-  const std::shared_ptr<const std::string>& getKey();
+  std::string getIdentity();
 
   //--------------------------------------------------------------------------
   //! Constructor.

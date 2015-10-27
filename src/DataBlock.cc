@@ -29,9 +29,9 @@ DataBlock::~DataBlock()
   std::lock_guard<std::mutex> lock(mutex);
 }
 
-const std::shared_ptr<const std::string>& DataBlock::getKey()
+std::string DataBlock::getIdentity()
 {
-  return key;
+  return cluster->id() + *key;
 }
 
 bool DataBlock::validateVersion()
