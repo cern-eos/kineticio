@@ -161,10 +161,7 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
   std::string cache_key = owner->cluster->id() + *block_key;
   
   /* If we are called by a client of the cache */
-  if(rm == RequestMode::STANDARD){
-    /* Register requested block with pre-fetch logic unless we are opening the block for create */
-    if (mode != DataBlock::Mode::CREATE)
-      readahead(owner, blocknumber);
+  if(rm != RequestMode::READAHEAD){
     /* Throttle this request as indicated by cache pressure */
     throttle();
   }
@@ -185,6 +182,10 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
     cache.front().last_access = std::chrono::system_clock::now();
     return cache.front().data;
   }
+  
+  /* Register requested block with pre-fetch logic unless we are opening the block for create */
+  if (rm != RequestMode::READAHEAD && mode != DataBlock::Mode::CREATE)
+    readahead(owner, blocknumber);
   
   /* Attempt to shrink cache size to target size by releasing non-dirty items only*/ 
   try_shrink();   
