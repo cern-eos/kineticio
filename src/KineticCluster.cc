@@ -232,6 +232,8 @@ KineticStatus KineticCluster::get(
       /* Put down an indicator if there is anything wrong with this stripe. */  
       if(it->second < nData+nParity && getParities)
         putIndicatorKey(key, ops);
+      
+      kio_debug("Get", skip_value ? "Version" : "Data", " request for key ", *key, " completed with status: ", it->first);
       return KineticStatus(it->first, "");
     }
   }
@@ -360,6 +362,8 @@ KineticStatus KineticCluster::put(
       }
       if(it->second < nData+nParity)
         putIndicatorKey(key, ops);
+      
+      kio_debug("Put request for key ", *key, " completed with status: ", it->first);
       return KineticStatus(it->first, "");
     }
   }
@@ -404,6 +408,8 @@ KineticStatus KineticCluster::remove(
     if (it->second >= nData){
       if(it->second < nData+nParity)
         putIndicatorKey(key, ops);
+      
+      kio_debug("Remove request for key ", *key, " completed with status: ", it->first);
       return KineticStatus(it->first, "");
     }
   }
@@ -439,6 +445,7 @@ KineticStatus KineticCluster::range(
 
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
     if (it->second > connections.size() - nData - nParity) {
+      kio_debug("Range request from key ", *start_key, " to ", *end_key," completed with status: ", it->first);
       return KineticStatus(it->first, "");
     }
   }
