@@ -143,8 +143,7 @@ DataCache::cache_iterator DataCache::remove_item(const cache_iterator& it)
   return cache.erase(it);
 }
 
-std::shared_ptr<kio::DataBlock> DataCache::get(
-    kio::FileIo* owner, int blocknumber, DataBlock::Mode mode, RequestMode rm)
+std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumber, DataBlock::Mode mode, bool prefetch)
 {
   { std::lock_guard<std::mutex> exeptionlock(exception_mutex);
     if (exceptions.count(owner)) {
@@ -153,18 +152,18 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
       throw e;
     }
   }
-  
-  auto block_key = utility::constructBlockKey(owner->block_basename, blocknumber);
-  
+
+  /* Throttle this request as indicated by cache pressure */
+  throttle();
+   
   /* We cannot use the block key directly for cache lookups, as reloading configuration will create 
      different cluster objects and we have to avoid FileIo objects being associated with multiple clusters */
+  auto block_key = utility::constructBlockKey(owner->block_basename, blocknumber);
   std::string cache_key = owner->cluster->id() + *block_key;
   
-  /* If we are called by a client of the cache */
-  if(rm != RequestMode::READAHEAD){
-    /* Throttle this request as indicated by cache pressure */
-    throttle();
-  }
+  /* Register requested block with read-ahead logic if requested. */
+  if (prefetch)
+    readahead(owner, blocknumber);
 
   std::lock_guard<std::mutex> cachelock(cache_mutex);
   /* If the requested block is already cached, we can return it without IO. */
@@ -183,10 +182,7 @@ std::shared_ptr<kio::DataBlock> DataCache::get(
     return cache.front().data;
   }
   
-  /* Register requested block with pre-fetch logic unless we are opening the block for create */
-  if (rm != RequestMode::READAHEAD && mode != DataBlock::Mode::CREATE)
-    readahead(owner, blocknumber);
-  
+ 
   /* Attempt to shrink cache size to target size by releasing non-dirty items only*/ 
   try_shrink();   
 
@@ -259,7 +255,7 @@ void DataCache::readahead(kio::FileIo* owner, int blocknumber)
   if (current_size < target_size + 0.5*(capacity-target_size)){
     auto prediction = oracle->predict(PrefetchOracle::PredictionType::CONTINUE);
     for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
-      auto data = get(owner, *it, DataBlock::Mode::STANDARD, RequestMode::READAHEAD);
+      auto data = get(owner, *it, DataBlock::Mode::STANDARD, false);
       auto scheduled = bg.try_run(std::bind(do_readahead, data));
       if(scheduled)
         kio_debug("Readahead of data block with identity ", data->getIdentity(), " scheduled for owner ", owner);

@@ -111,20 +111,20 @@ SCENARIO("Cache Performance Test.", "[Cache]"){
 
         auto tstart = system_clock::now();
         for(int i=0; i<target_size; i++)
-            ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
+            ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD, false);
         auto tend = system_clock::now();
 
         printf("%ld items per second up to target size\n", (target_size * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
 
         tstart = system_clock::now();
         for(int i=target_size; i<capacity; i++)
-          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
+          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD, false);
         tend = system_clock::now();
         printf("%ld items per second target_size to capacity \n", ((capacity-target_size) * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
 
         tstart = system_clock::now();
         for(int i=capacity; i<2*capacity; i++)
-          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
+          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD, false);
         tend = system_clock::now();
         printf("%ld items per second above capacity \n", (capacity * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
 
@@ -133,7 +133,7 @@ SCENARIO("Cache Performance Test.", "[Cache]"){
 
         tstart = system_clock::now();
         for(int i=2*capacity; i<3*capacity; i++)
-          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
+          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD, false);
         tend = system_clock::now();
         printf("%ld items per second above capacity after timeout \n\n", (capacity * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
       }

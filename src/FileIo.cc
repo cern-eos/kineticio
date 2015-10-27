@@ -102,7 +102,12 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
       lastBlockNumber.set(block_number);
       cm = DataBlock::Mode::CREATE;
     }
-    auto data = cache.get(this, block_number, cm);
+    
+    /* Enable potential prefetch if we are accessing file anywhere but the end. */
+    auto prefetch = block_number < lastBlockNumber.get() ? true: false; 
+    
+    /* Get the data block */
+    auto data = cache.get(this, block_number, cm, prefetch);
 
     if (mode == rw::WRITE) {
       data->write(buffer + off_done, block_offset, block_length);
@@ -159,7 +164,7 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
 
   if(offset>0){
     /* Step 1) truncate the block containing the offset. */
-    cache.get(this, block_number, DataBlock::Mode::STANDARD)->truncate(block_offset);
+    cache.get(this, block_number, DataBlock::Mode::STANDARD, false)->truncate(block_offset);
 
     /* Step 2) Ensure we don't have data past block_number in the cache. Since
      * truncate isn't super common, go the easy way and just sync+drop the entire
@@ -215,7 +220,7 @@ void FileIo::Stat(struct stat *buf, uint16_t timeout)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
 
   lastBlockNumber.verify();
-  std::shared_ptr<DataBlock> last_block = cache.get(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD);
+  std::shared_ptr<DataBlock> last_block = cache.get(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD, false);
 
   memset(buf, 0, sizeof(struct stat));
   buf->st_blksize = cluster->limits().max_value_size;
@@ -317,7 +322,7 @@ int FileIo::LastBlockNumber::get() const
 
 void FileIo::LastBlockNumber::set(int block_number)
 {
-  last_block_number = block_number;
+  last_block_number = block_number; 
   last_block_number_timestamp = std::chrono::system_clock::now();
 }
 

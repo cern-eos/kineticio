@@ -38,17 +38,14 @@ public:
   //! @param owner a pointer to the kio::FileIo object the block belongs to
   //! @param blocknumber specifies which block of the file is requested,
   //! @param mode argument to pass to a block if it has to be created
+  //! @param prefetch should prefetch be enabled or disabled for this request
   //! @return the block on success, throws on error
   //--------------------------------------------------------------------------
-  enum class RequestMode {
-    READAHEAD, STANDARD
-  };
-
   std::shared_ptr<kio::DataBlock> get(
       kio::FileIo* owner,
       int blocknumber,
       DataBlock::Mode cm,
-      RequestMode rm = RequestMode::STANDARD
+      bool prefetch
   );
 
   //--------------------------------------------------------------------------
