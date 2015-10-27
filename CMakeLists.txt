@@ -136,7 +136,6 @@ target_link_libraries(admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
 
 if(LINK_STATIC)
   add_dependencies(kineticio kinetic_cpp_client)
-  add_dependencies(replay kinetic_cpp_client)
   add_dependencies(admin kinetic_cpp_client)
 endif()
 
@@ -183,6 +182,8 @@ if(BUILD_TEST)
 
     add_executable(replay ${kineticio_SRC} test/replay.cc)
     target_link_libraries(replay ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
-
+  if(LINK_STATIC)
+    add_dependencies(replay kinetic_cpp_client)
+  endif()
 endif(BUILD_TEST)
 
