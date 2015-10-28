@@ -87,49 +87,16 @@ void DataCache::flush(kio::FileIo* owner)
 
 void DataCache::try_shrink()
 {
-    if(current_size < target_size){
-      write_pressure = 0;
-      return; 
-    }
-
     using namespace std::chrono;
     auto expired = system_clock::now() - seconds(5);
     auto num_items = (current_size / cache.back().data->capacity()) * 0.1;
     auto count_items = 0; 
-    auto count_dirty = 0; 
         
     kio_debug("Cache current size is ", current_size, " bytes, target size is ", target_size, " bytes. Shrinking cache.");
     for (auto it = --cache.end(); num_items > count_items && it != cache.begin(); it--, count_items++) {
-      if(it->data->dirty()){
-        count_dirty++;
-        continue;
-      }
-      if (it->owners.empty() || it->last_access < expired)
+      if (!it->data->dirty() && (it->owners.empty() || it->last_access < expired))
         it = remove_item(it);
     }
-    
-    write_pressure = (count_dirty*100) / num_items;
-}
-
-void DataCache::throttle()
-{
-  using namespace std::chrono;
-  static const milliseconds ratelimit(50);
-
-  for(auto wait_pressure = 1; wait_pressure < write_pressure; wait_pressure++) 
-  {
-    kio_debug("Throttling...");
-    {
-      std::lock_guard<std::mutex> ratelimit_lock(cache_cleanup_mutex);
-      if(duration_cast<milliseconds>(system_clock::now() - cache_cleanup_timestamp) > ratelimit){
-        cache_cleanup_timestamp = system_clock::now();
-        std::lock_guard<std::mutex> cachelock(cache_mutex);
-        try_shrink();      
-      }
-    }
-    /* Sleep 100 ms to give dirty data a chance to flush before retrying */
-    usleep(1000 * 100);
-  }
 }
 
 DataCache::cache_iterator DataCache::remove_item(const cache_iterator& it)
@@ -152,14 +119,11 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
       throw e;
     }
   }
-
-  /* Throttle this request as indicated by cache pressure */
-  throttle();
    
-  /* We cannot use the block key directly for cache lookups, as reloading configuration will create 
+  /* We cannot use the block key directly for cache lookups, as reloading the configuration will create 
      different cluster objects and we have to avoid FileIo objects being associated with multiple clusters */
   auto block_key = utility::constructBlockKey(owner->block_basename, blocknumber);
-  std::string cache_key = owner->cluster->id() + *block_key;
+  std::string cache_key = *block_key + owner->cluster->id();
   
   /* Register requested block with read-ahead logic if requested. */
   if (prefetch)
@@ -182,12 +146,12 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
     return cache.front().data;
   }
   
- 
   /* Attempt to shrink cache size to target size by releasing non-dirty items only*/ 
-  try_shrink();   
+  if(current_size > target_size)
+    try_shrink();   
 
-  /* If cache size would exceed capacity, we have to try flushing dirty blocks manually. */
-  if (capacity < current_size + owner->cluster->limits().max_value_size) {
+  /* If cache size would exceed capacity, we have to force remove the last block. */
+  if (capacity < current_size) {
     kio_notice("Cache capacity reached.");
     auto& it = --cache.end();
     if (it->data->dirty()) {
@@ -200,7 +164,9 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
     }
     remove_item(it);
   }
-
+  
+  kio_debug("Adding data key ", *block_key, " to the cache for owner ", owner);
+  
   cache.push_front(
     CacheItem{ std::set<kio:: FileIo*>{owner}, 
                std::make_shared<DataBlock>(owner->cluster, block_key, mode), 
@@ -210,8 +176,6 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
   current_size += cache.front().data->capacity();
   lookup[cache_key] = cache.begin();
   owner_tables[owner].insert(cache.begin());
-  
-  kio_debug("Added data key ", *block_key, " to the cache for owner ", owner);
   return cache.front().data;;
 }
 
@@ -252,7 +216,7 @@ void DataCache::readahead(kio::FileIo* owner, int blocknumber)
   }
   
   /* Only do readahead if cache isn't bursting already. */
-  if (current_size < target_size + 0.5*(capacity-target_size)){
+  if (current_size < target_size + 0.3*(capacity-target_size)){
     auto prediction = oracle->predict(PrefetchOracle::PredictionType::CONTINUE);
     for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
       auto data = get(owner, *it, DataBlock::Mode::STANDARD, false);

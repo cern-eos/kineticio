@@ -118,9 +118,6 @@ private:
   //! current size of the cache
   std::atomic<size_t> current_size;
   
-  //! percentage of dirty data keys in the cache tail
-  std::atomic<int> write_pressure; 
-
   //! the maximum number of blocks to prefetch 
   int readahead_window_size;
   
@@ -158,12 +155,6 @@ private:
   //! Track per FileIo access patterns and attempt to pre-fetch intelligently
   std::unordered_map<const kio::FileIo*, PrefetchOracle> prefetch;
 
-  //! Ratelimit attempts to shrink the current cache size by removing clean items from the tail
-  std::chrono::system_clock::time_point cache_cleanup_timestamp;
-
-  //! Thread safety when accessing cache_cleanup_timestamp
-  std::mutex cache_cleanup_mutex;
-
   //! Thread safety when accessing exception map
   std::mutex exception_mutex;
 
@@ -174,11 +165,6 @@ private:
   std::mutex cache_mutex;
 
 private:
-  //--------------------------------------------------------------------------
-  //! Block in case the cache is under pressure.
-  //--------------------------------------------------------------------------
-  void throttle();
-
   //--------------------------------------------------------------------------
   //! Attempt to read the requested block number for the owner in a background
   //! thread. If this is not possible due to the number of active background
@@ -208,6 +194,10 @@ private:
   //!--------------------------------------------------------------------------
   cache_iterator remove_item(const cache_iterator& it);
   
+  //--------------------------------------------------------------------------
+  //! Attempt to shrink the cache by discarding unused items from the 
+  //! cache tail. 
+  //--------------------------------------------------------------------------
   void try_shrink(); 
 };
 

@@ -31,7 +31,7 @@ DataBlock::~DataBlock()
 
 std::string DataBlock::getIdentity()
 {
-  return cluster->id() + *key;
+  return *key + cluster->id();
 }
 
 bool DataBlock::validateVersion()
