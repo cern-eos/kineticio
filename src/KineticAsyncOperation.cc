@@ -66,10 +66,7 @@ unique_ptr<CallbackSynchronization> asyncops::fillPut(
     );
 
     /* Construct record structure. */
-    shared_ptr<KineticRecord> record(
-        new KineticRecord(v, version_new, tag,
-                          com::seagate::kinetic::client::proto::Command_Algorithm_CRC32)
-    );
+    auto record = std::make_shared<KineticRecord>(v, version_new, tag, com::seagate::kinetic::client::proto::Command_Algorithm_CRC32);
 
     auto cb = std::make_shared<PutCallback>(*sync);
     ops[i].callback = cb;

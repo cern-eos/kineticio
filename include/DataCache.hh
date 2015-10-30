@@ -79,24 +79,22 @@ public:
   //! The configuration of an existing ClusterChunkCache object can be changed
   //! during runtime.
   //!
-  //! @param preferred_size size in bytes the cache should ideally not exceed
   //! @param capacity absolute maximum size of the cache in bytes
   //! @param bg_threads number of threads to spawn for background IO
   //! @param bg_queue_depth maximum number of functions queued for background
   //!   execution
   //--------------------------------------------------------------------------
-  void changeConfiguration(size_t preferred_size, size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_size);
+  void changeConfiguration(size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_size);
 
   //--------------------------------------------------------------------------
   //! Constructor.
   //!
-  //! @param preferred_size size in bytes the cache should ideally not exceed
   //! @param capacity absolute maximum size of the cache in bytes
   //! @param bg_threads number of threads to spawn for background IO
   //! @param bg_queue_depth maximum number of functions queued for background
   //!   execution
   //--------------------------------------------------------------------------
-  explicit DataCache(size_t preferred_size, size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_window_size);
+  explicit DataCache(size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_window_size);
 
   //--------------------------------------------------------------------------
   //! No copy constructor.
@@ -109,17 +107,17 @@ public:
   void operator=(DataCache&) = delete;
 
 private:
-  //! preferred size of the cache (soft cap), atomic so it may be changed during runtime
-  std::atomic<size_t> target_size;
-
   //! maximum size of the cache (hard cap), atomic so it may be changed during runtime
   std::atomic<size_t> capacity;
 
   //! current size of the cache
   std::atomic<size_t> current_size;
-  
+    
   //! the maximum number of blocks to prefetch 
-  int readahead_window_size;
+  std::atomic<size_t> readahead_window_size;
+  
+  //! current size of the unused items list
+  size_t unused_size;
   
   //! handle background readahead and flush requests
   BackgroundOperationHandler bg;
@@ -133,6 +131,9 @@ private:
   //! A linked list of data blocks stored in LRU order
   std::list<CacheItem> cache;
 
+  // List of items that are no longer used but kept around for future re-use to avoid memory allocation. 
+  std::list<CacheItem> unused_items; 
+  
   //! the lookup table
   typedef std::list<CacheItem>::iterator cache_iterator;
   std::unordered_map<std::string, cache_iterator> lookup;

@@ -9,23 +9,15 @@
 using namespace kio;
 
 
-DataCache::DataCache(size_t preferred_size, size_t capacity, size_t bg_threads,
-                                     size_t bg_queue_depth, size_t readahead_size) :
-    target_size(preferred_size), capacity(capacity), current_size(0), bg(bg_threads, bg_queue_depth),
+DataCache::DataCache(size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_size) :
+    capacity(capacity), current_size(0), unused_size(0), bg(bg_threads, bg_queue_depth),
     readahead_window_size(readahead_size)
 {
-  if (capacity < target_size) throw std::logic_error("cache target size may not exceed capacity");
-  if (bg_threads < 0) throw std::logic_error("number of background threads cannot be negative.");
 }
 
-void DataCache::changeConfiguration(size_t preferred_size, size_t cap, size_t bg_threads,
-                                            size_t bg_queue_depth, size_t readahead_size)
+void DataCache::changeConfiguration(size_t cap, size_t bg_threads, size_t bg_queue_depth, size_t readahead_size)
 {
-  {
-    std::lock_guard<std::mutex> lock(readahead_mutex);  
-    readahead_window_size = readahead_size;
-  }
-  target_size = preferred_size;
+  readahead_window_size = readahead_size;
   capacity = cap;
   bg.changeConfiguration(bg_threads, bg_queue_depth);
 }
@@ -85,29 +77,65 @@ void DataCache::flush(kio::FileIo* owner)
   }
 }
 
-void DataCache::try_shrink()
-{
-    using namespace std::chrono;
-    auto expired = system_clock::now() - seconds(5);
-    auto num_items = (current_size / cache.back().data->capacity()) * 0.1;
-    auto count_items = 0; 
-        
-    kio_debug("Cache current size is ", current_size, " bytes, target size is ", target_size, " bytes. Shrinking cache.");
-    for (auto it = --cache.end(); num_items > count_items && it != cache.begin(); it--, count_items++) {
-      if (!it->data->dirty() && (it->owners.empty() || it->last_access < expired))
-        it = remove_item(it);
-    }
-}
-
 DataCache::cache_iterator DataCache::remove_item(const cache_iterator& it)
 {
-  kio_debug("Removing cache key ", it->data->getIdentity(), " from cache.");
   for(auto o = it->owners.cbegin(); o!= it->owners.cend(); o++)
     owner_tables[*o].erase(it);
    
   lookup.erase(it->data->getIdentity());
   current_size -= it->data->capacity();
-  return cache.erase(it);
+
+  /* We don't want to keep too many unused cache items around... */
+  if(unused_size > 0.1 * capacity){
+    kio_debug("Deleting cache key ", it->data->getIdentity(), " from cache.");
+    return cache.erase(it);
+  }
+    
+  kio_debug("Transferring cache key ", it->data->getIdentity(), " from cache to unused items pool.");  
+  auto next_it = std::next(it);
+  unused_size += it->data->capacity();
+  unused_items.splice(unused_items.begin(), cache, it);
+  return next_it; 
+}
+
+void DataCache::try_shrink()
+{
+  using namespace std::chrono;
+  auto expired = system_clock::now() - seconds(5);
+  auto num_items = (current_size / cache.back().data->capacity()) * 0.1;
+  auto count_items = 0; 
+
+  kio_debug("Cache current size is ", current_size, " bytes. Shrinking cache.");
+  for (auto it = --cache.end(); num_items > count_items && it != cache.begin(); it--, count_items++) {
+    if ((it->owners.empty() || it->last_access < expired) && !it->data->dirty() && it->data.unique())
+      it = remove_item(it);
+  }
+
+  /* If cache size exceeds capacity, we have to force remove data keys. */
+  if(capacity < current_size) {
+    kio_notice("Cache capacity reached.");
+
+    for (auto it = --cache.end(); capacity < current_size && it != cache.begin(); it--){
+      if(it->data.unique() && !it->data->dirty())
+        remove_item(it);
+    }
+    
+    /* Second try.. can't find an ideal candidate, we will flush. */
+    for (auto it = --cache.end(); capacity < current_size && it != cache.begin(); it--){
+      if(it->data.unique()){
+        if (it->data->dirty()) {
+          try {
+            it->data->flush();
+          }
+          catch (const std::exception& e) {
+            kio_warning("Failed flushing cache item ", it->data->getIdentity(), "  Reason: ", e.what());
+            continue;
+          }
+        }
+        remove_item(it);
+      }
+    }  
+  }
 }
 
 std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumber, DataBlock::Mode mode, bool prefetch)
@@ -146,36 +174,33 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
     return cache.front().data;
   }
   
-  /* Attempt to shrink cache size to target size by releasing non-dirty items only*/ 
-  if(current_size > target_size)
+  /* Attempt to shrink cache size by releasing unused items */ 
+  if(current_size > capacity * 0.7)
     try_shrink();   
-
-  /* If cache size would exceed capacity, we have to force remove the last block. */
-  if (capacity < current_size) {
-    kio_notice("Cache capacity reached.");
-    auto& it = --cache.end();
-    if (it->data->dirty()) {
-      try {
-        it->data->flush();
+  
+  /* Re-use an existing data key object if possible, if none exists create a new one. */
+  if(unused_items.begin() != unused_items.end()){
+    auto it = unused_items.begin();
+    unused_size -= it->data->capacity();
+    it->owners.clear();
+    it->owners.insert(owner);
+    it->data->reassign(owner->cluster, block_key, mode);
+    it->last_access = std::chrono::system_clock::now();
+    cache.splice(cache.begin(), unused_items, it);  
+    
+  }else{
+    cache.push_front(
+      CacheItem{ std::set<kio:: FileIo*>{owner}, 
+                 std::make_shared<DataBlock>(owner->cluster, block_key, mode), 
+                 std::chrono::system_clock::now()
       }
-      catch (const std::exception& e) {
-        throw kio_exception(EIO, "Failed freeing cache space: ", e.what());
-      }
-    }
-    remove_item(it);
+    );
   }
-  
-  kio_debug("Adding data key ", *block_key, " to the cache for owner ", owner);
-  
-  cache.push_front(
-    CacheItem{ std::set<kio:: FileIo*>{owner}, 
-               std::make_shared<DataBlock>(owner->cluster, block_key, mode), 
-               std::chrono::system_clock::now()
-    }
-  );
   current_size += cache.front().data->capacity();
   lookup[cache_key] = cache.begin();
   owner_tables[owner].insert(cache.begin());
+
+  kio_debug("Added data key ", *block_key, " to the cache for owner ", owner);
   return cache.front().data;;
 }
 
@@ -210,14 +235,22 @@ void DataCache::readahead(kio::FileIo* owner, int blocknumber)
   PrefetchOracle* oracle; 
   { std::lock_guard<std::mutex> readaheadlock(readahead_mutex);
     if(!prefetch.count(owner))
-      prefetch[owner] = PrefetchOracle(readahead_window_size);
+      prefetch.insert(std::make_pair(owner, PrefetchOracle(readahead_window_size)));
     oracle = &prefetch[owner];
     oracle->add(blocknumber);
   }
   
-  /* Only do readahead if cache isn't bursting already. */
-  if (current_size < target_size + 0.3*(capacity-target_size)){
-    auto prediction = oracle->predict(PrefetchOracle::PredictionType::CONTINUE);
+  /* Adjust readahead to cache utilization. Full force to 0.75 usage, decreasing until 0.95, then disabled. */
+  size_t readahead_length = readahead_window_size;
+  auto cache_utilization = static_cast<double>(current_size) / capacity; 
+
+  if(cache_utilization > 0.95)
+    readahead_length = 0;
+  else if(cache_utilization > 0.75)
+    readahead_length *= ((1.0 - cache_utilization) / 0.25);
+  
+  if (readahead_length){
+    auto prediction = oracle->predict(readahead_length, PrefetchOracle::PredictionType::CONTINUE);
     for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
       auto data = get(owner, *it, DataBlock::Mode::STANDARD, false);
       auto scheduled = bg.try_run(std::bind(do_readahead, data));

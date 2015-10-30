@@ -37,7 +37,7 @@ void parseArguments(int argc, char** argv, Configuration& config) {
       config.write = true;
   }
   
-  printf("Configuration:\n");
+  printf("Configuration: -path <kinetic path> -pattern <file> read write \n");
   printf("Kinetic Path (has to be in form kinetic:cluster:filename): %s\n",config.kineticfile.c_str());
   printf("Pattern File (comma seperated offset+length values): %s\n",config.patternfile.c_str());
   printf("Read: %d, Write: %d\n",config.read,config.write);
@@ -78,14 +78,16 @@ int main(int argc, char** argv)
     if(length > buffer.size())
       buffer.resize(length);
 
-    if(config.read){
-      int bytes = fio->Read(offset, buffer.data(), length);
-      printf("read %d bytes. Requested (offset,length) : (%ld,%ld)\n", bytes, offset, length);
-    }
     if(config.write){
       int bytes = fio->Write(offset, buffer.data(), length);
       printf("written %d bytes. Requested (offset,length) : (%ld,%ld)\n", bytes, offset, length);
     }
+    
+    if(config.read){
+      int bytes = fio->Read(offset, buffer.data(), length);
+      printf("read %d bytes. Requested (offset,length) : (%ld,%ld)\n", bytes, offset, length);
+    }
+
   }  
   fio->Close();
   

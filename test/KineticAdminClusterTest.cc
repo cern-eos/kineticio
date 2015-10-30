@@ -34,7 +34,7 @@ SCENARIO("Admin integration test.", "[Admin]")
 
     auto cluster = make_shared<KineticAdminCluster>(AdminClusterInterface::OperationTarget::FILE, 1, 
             nData, nParity, blocksize, info, std::chrono::seconds(1), std::chrono::seconds(1),
-            std::make_shared<ErasureCoding>(nData, nParity, 5), listener
+            std::make_shared<ErasureCoding>(nData, nParity), listener
     );
 
     WHEN("Putting a key-value pair with one drive down") {

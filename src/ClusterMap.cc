@@ -54,27 +54,21 @@ void ClusterMap::loadConfiguration()
   std::lock_guard<std::mutex> lock(mutex);
   clustermap.clear();
   drivemap.clear();
+  ecCache.clear();
 
   /* parse files */
   parseJson(location_data, filetype::location);
   parseJson(security_data, filetype::security);
   parseJson(cluster_data, filetype::cluster);
 
-  if(!ecCache)
-    ecCache.reset(new LRUCache<std::string, std::shared_ptr<ErasureCoding>>(
-        configuration.num_erasure_codings
-    ));
-  else
-    ecCache->setCapacity(configuration.num_erasure_codings);
-
   if(!dataCache)
     dataCache.reset(new DataCache(
-        configuration.stripecache_target, configuration.stripecache_capacity,
+        configuration.stripecache_capacity,
         configuration.background_io_threads, configuration.background_io_queue_capacity,
         configuration.readahead_window_size
     ));
   else
-    dataCache->changeConfiguration(configuration.stripecache_target, configuration.stripecache_capacity,
+    dataCache->changeConfiguration(configuration.stripecache_capacity,
                                    configuration.background_io_threads, configuration.background_io_queue_capacity,
                                    configuration.readahead_window_size
     );
@@ -101,12 +95,12 @@ void ClusterMap::fillArgs(const KineticClusterInfo &ki,
   }
 
   auto ectype = utility::Convert::toString(ki.numData, "-", ki.numParity);
-  try{
-    ec = ecCache->get(ectype);
+  if(ecCache.count(ectype)){
+    ec = ecCache.at(ectype);
   }
-  catch(const std::out_of_range& e){
-    ec = std::make_shared<ErasureCoding>(ki.numData, ki.numParity, configuration.num_erasure_coding_tables);
-    ecCache->add(ectype, ec);
+  else{
+    ec = std::make_shared<ErasureCoding>(ki.numData, ki.numParity);
+    ecCache.insert(std::make_pair(ectype, ec));
   }
 }
 
@@ -245,17 +239,12 @@ void ClusterMap::parseClusterInformation(struct json_object* cluster)
 
 void ClusterMap::parseConfiguration(struct json_object* config)
 {
-  configuration.stripecache_target = loadJsonIntEntry(config, "cacheTargetSizeMB");
-  configuration.stripecache_target *= 1024*1024;
-
   configuration.stripecache_capacity = loadJsonIntEntry(config, "cacheCapacityMB");
   configuration.stripecache_capacity *= 1024*1024;
 
   configuration.readahead_window_size = loadJsonIntEntry(config, "maxReadaheadWindow");
   configuration.background_io_threads = loadJsonIntEntry(config, "maxBackgroundIoThreads");
   configuration.background_io_queue_capacity = loadJsonIntEntry(config, "maxBackgroundIoQueue");
-  configuration.num_erasure_codings = loadJsonIntEntry(config, "erasureCodings");
-  configuration.num_erasure_coding_tables = loadJsonIntEntry(config, "erasureDecodingTables");
 }
 
 

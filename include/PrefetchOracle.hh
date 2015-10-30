@@ -36,12 +36,14 @@ public:
   //! See if sequence has an obvious pattern, predict up to capacity steps 
   //! in the future. 
   //!
+  //! @param length the prediction length requested, cannot be larger than 
+  //!   max_prediction
   //! @param type if type is CONTINUE, only values that have not been returned
-  //!   by previous prediction requests will be considered.
+  //!   by previous prediction requests will be returned.
   //! @return a list of predicted future requests. Can be empty if no prediction 
   //!   could be made.
   //----------------------------------------------------------------------------
-  std::list<int> predict(PredictionType type = PredictionType::COMPLETE);
+  std::list<int> predict(std::size_t length, PredictionType type = PredictionType::COMPLETE);
 
   //----------------------------------------------------------------------------
   //! Constructor
@@ -57,9 +59,9 @@ public:
 
 private:
   //! maximum size of prediction
-  std::size_t max_prediction;
+  const std::size_t max_prediction;
   //! maximum size of sequence
-  std::size_t sequence_capacity;
+  const std::size_t sequence_capacity;
   //! sequence to base predictions on
   std::deque<int> sequence;
   //! numbers returned in past prediction

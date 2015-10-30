@@ -14,8 +14,7 @@ using namespace kio;
 const std::chrono::milliseconds DataBlock::expiration_time(1000);
 
 
-DataBlock::DataBlock(std::shared_ptr<ClusterInterface> c,
-                           const std::shared_ptr<const std::string> k, Mode m) :
+DataBlock::DataBlock(std::shared_ptr<ClusterInterface> c, const std::shared_ptr<const std::string> k, Mode m) :
     mode(m), cluster(c), key(k), version(), value(make_shared<string>()), value_size(0),
     timestamp(), updates(), mutex()
 {
@@ -27,6 +26,19 @@ DataBlock::~DataBlock()
   // take the mutex in order to prevent object deconsturction while flush
   // operation is executed by non-owning thread.
   std::lock_guard<std::mutex> lock(mutex);
+}
+
+void DataBlock::reassign(std::shared_ptr<ClusterInterface> c, std::shared_ptr<const std::string> k, Mode m)
+{
+  if (!cluster) throw std::invalid_argument("no cluster supplied");
+ 
+  key = k;
+  mode = m;
+  cluster = c; 
+  value_size = 0;
+  version.reset();
+  updates.clear();
+  timestamp = system_clock::time_point();
 }
 
 std::string DataBlock::getIdentity()
@@ -76,21 +88,25 @@ void DataBlock::getRemoteValue()
   if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
     version.reset();
 
-  /* Merge all updates done on the local data copy (value) into the freshly read-in data copy. */
   auto merged_value = make_shared<string>(*remote_value);
-  if(!updates.empty())
-    merged_value->resize(std::max(remote_value->size(), value_size));
+  value_size = merged_value->size();
+
+  /* Merge all updates done on the local data copy (value) into the freshly read-in data copy. */
+  if(!updates.empty() && merged_value->size() < capacity())
+    merged_value->resize(capacity());
 
   for (auto iter = updates.begin(); iter != updates.end(); ++iter) {
     auto update = *iter;
-    if (update.second)
-      merged_value->replace(update.first, update.second, *value, update.first, update.second);
-    else
-      merged_value->resize(update.first);
+    if(!update.second){
+      value_size = update.first;
+    }
+    else{
+      value_size = std::max(update.first + update.second, value_size); 
+      merged_value->replace(update.first, update.second, *value, update.first, update.second);  
+    }
   }
   value = merged_value;
-  value_size = merged_value->size();
-
+  
   /* We read in the current value from the drive. Remember the time. */
   timestamp = system_clock::now();
 }

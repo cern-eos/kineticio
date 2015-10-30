@@ -9,9 +9,16 @@ using namespace kio;
 BackgroundOperationHandler::BackgroundOperationHandler(int worker_threads, int queue_depth) :
    queue_capacity(queue_depth), thread_capacity(worker_threads), numthreads(0), shutdown(false)
 {
-  if(queue_depth)
-  for(int i=0; i<worker_threads; i++)
-    std::thread(&BackgroundOperationHandler::worker_thread, this).detach();
+  if(worker_threads<0 || queue_depth<0)
+    throw std::logic_error("Negative values for queue size or worker threads make no sense.");
+
+  if(queue_depth){
+    if(worker_threads==0)
+      throw std::logic_error("Queue without worker threads! Set queue size to 0 if you want to disable background operations.");
+
+    for(int i=0; i<worker_threads; i++)
+      std::thread(&BackgroundOperationHandler::worker_thread, this).detach();
+  }
 }
 
 BackgroundOperationHandler::~BackgroundOperationHandler()

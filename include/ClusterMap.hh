@@ -15,7 +15,6 @@
 #include <json-c/json.h>
 #include "ClusterInterface.hh"
 #include "ErasureCoding.hh"
-#include "LRUCache.hh"
 #include "SocketListener.hh"
 #include "DataCache.hh"
 #include "KineticAdminCluster.hh"
@@ -88,20 +87,14 @@ private:
     //! Configuration of library wide parameters.
     //--------------------------------------------------------------------------
     struct Configuration{
-        //! the preferred size in bytes of the data cache
-        size_t stripecache_target;
-        //! the absolut maximum size of the data cache in bytes
+        //! the maximum size of the data cache in bytes
         size_t stripecache_capacity;
         //! the maximum number of keys prefetched by readahead algorithm
         size_t readahead_window_size;
-        //! the number of threads used for bg io in the data cache
+        //! the number of threads used for bg io in the data cache, can be 0
         int background_io_threads;
-        //! the maximum number of operations queued for bg io
+        //! the maximum number of operations queued for bg io, can be 0 
         int background_io_queue_capacity;
-        //! the number of erasure coding instances that may be cached
-        int num_erasure_codings;
-        //! the number of coding tables each erasure coding instance may cache
-        int num_erasure_coding_tables;
     };
 
     //! storing the library wide configuration parameters
@@ -137,7 +130,7 @@ private:
     //! ErasureCcoding instances of the same type (nData,nParity) can be shared
     //! among multiple cluster instances, no need to duplicate decoding tables
     //! in memory.
-    std::unique_ptr<LRUCache<std::string, std::shared_ptr<ErasureCoding>>> ecCache;
+    std::unordered_map<std::string, std::shared_ptr<ErasureCoding>> ecCache;
 
     //! the data cache shared among cluster instances
     std::unique_ptr<DataCache> dataCache;

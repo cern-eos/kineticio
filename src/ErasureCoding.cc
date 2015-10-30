@@ -26,14 +26,12 @@ static int gf_gen_decode_matrix(
   int r;
   unsigned char *invert_matrix, *backup, *b, s;
   int incr = 0;
-
-  std::vector<unsigned char> bv(m * k);
-  b = bv.data();
-  std::vector<unsigned char> backupv(m * k);
-  backup = backupv.data();
-  std::vector<unsigned char> invert_matrixv(m * k);
-  invert_matrix = invert_matrixv.data();
-
+  
+  std::vector<unsigned char> memory(m*k*3);
+  b = &memory[0]; 
+  backup = &memory[m*k];
+  invert_matrix = &memory[2*m*k];
+  
   // Construct matrix b by removing error rows
   for (i = 0, r = 0; i < k; i++, r++) {
     while (src_in_err[r])
@@ -86,9 +84,8 @@ static int gf_gen_decode_matrix(
   return 0;
 }
 
-ErasureCoding::ErasureCoding(std::size_t data, std::size_t parity, std::size_t codingTables) :
-    nData(data), nParity(parity),
-    encode_matrix((nData + nParity) * nData), cache(codingTables)
+ErasureCoding::ErasureCoding(std::size_t data, std::size_t parity) :
+    nData(data), nParity(parity), encode_matrix((nData + nParity) * nData)
 {
   // k = data
   // m = data + parity
@@ -139,11 +136,10 @@ ErasureCoding::CodingTable& ErasureCoding::getCodingTable(
 )
 {
   std::lock_guard<std::mutex> lock(mutex);
-  /* Check if decode matrix is already cached. */
-  try {
-    return cache.get(pattern);
-  }catch(std::out_of_range e){
-
+  
+  /* If decode matrix is not already cached we have to construct it. */
+  if(!cache.count(pattern)){
+    
     /* Expand pattern */
     int nerrs = 0, nsrcerrs = 0;
     unsigned char err_indx_list[nParity];
@@ -178,9 +174,9 @@ ErasureCoding::CodingTable& ErasureCoding::getCodingTable(
 
     /* Compute Tables. */
     ec_init_tables(nData, nerrs, decode_matrix.data(), dd.table.data());
-    cache.add(pattern, dd);
+    cache.insert(std::make_pair(pattern,dd));
   }
-  return cache.get(pattern);
+  return cache.at(pattern);
 }
 
 void ErasureCoding::compute(std::vector<std::shared_ptr<const std::string> > &stripe)

@@ -98,29 +98,27 @@ SCENARIO("Cache Performance Test.", "[Cache]"){
     GIVEN("A Cache Object and a mocked FileIo object"){
       
       THEN("go ~"){
-      for(int i=100; i<1000; i*=3){
+      for(int capacity = 1000; capacity < 100000; capacity*=5){
       
-        size_t target_size = 100*i;
-        size_t capacity = 110*i; 
-
-        DataCache ccc(target_size*128, capacity*128, 20, 20, 0);
+        DataCache ccc(capacity*128, 20, 20, 0);
         std::shared_ptr<ClusterInterface> cluster(new MockCluster());
         MockFileIo fio("thepath",cluster);
 
-        printf("Cache get() performance for a cache with target_size==%lu and capacity==%lu items \n",target_size, capacity);             
+        printf("Cache get() performance for a cache with capacity of %d items \n", capacity);             
 
+        int break_point = capacity*0.7;
         auto tstart = system_clock::now();
-        for(int i=0; i<target_size; i++)
+        for(int i=0; i<break_point; i++)
             ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD, false);
         auto tend = system_clock::now();
 
-        printf("%ld items per second up to target size\n", (target_size * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
+        printf("%ld items per second up to 70 percent capacity\n", (capacity * 700) / (duration_cast<milliseconds>(tend-tstart).count()+1));
 
         tstart = system_clock::now();
-        for(int i=target_size; i<capacity; i++)
+        for(int i=break_point; i<capacity; i++)
           ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD, false);
         tend = system_clock::now();
-        printf("%ld items per second target_size to capacity \n", ((capacity-target_size) * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
+        printf("%ld items per second up to capacity \n", (capacity * 300) / (duration_cast<milliseconds>(tend-tstart).count()+1));
 
         tstart = system_clock::now();
         for(int i=capacity; i<2*capacity; i++)

@@ -123,13 +123,13 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
       close(fd);
       abuf[10]=0;
 
-      THEN("We can write it to the filio object."){
+      THEN("We can write it to the filio object & read it straight away."){
           REQUIRE(fileio->Write(0,abuf,size) == size);
           REQUIRE(fileio->Read(0,bbuf,size) == size);
           REQUIRE(memcmp(abuf,bbuf,size) == 0);
           fileio->Close();
 
-          AND_THEN("We can read it in again."){
+          AND_THEN("We can read it in again after reopening the object."){
             REQUIRE_NOTHROW(fileio->Open(path.c_str(), 0));
             REQUIRE(fileio->Read(0,bbuf,size) == size);
             REQUIRE(memcmp(abuf,bbuf,size) == 0);

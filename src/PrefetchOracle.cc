@@ -1,7 +1,7 @@
 #include "PrefetchOracle.hh"
 #include <functional>
 #include <unordered_map>
-
+#include "Logging.hh"
 
 using namespace kio;
 
@@ -17,10 +17,8 @@ static bool _contains(const std::deque<int> &container, int number)
 }
 
 PrefetchOracle::PrefetchOracle(std::size_t max)
-    : max_prediction(max) 
+    : max_prediction(max), sequence_capacity(max_prediction > 8 ? max_prediction+2 : 10)
 {
-  /* Use max+2 for sequence capacity with a minimum of 10 */
-  sequence_capacity = max_prediction > 8 ? max_prediction+2 : 10;
 }
 
 PrefetchOracle::~PrefetchOracle() { }
@@ -34,8 +32,13 @@ void PrefetchOracle::add(int number)
   }
 }
 
-std::list<int> PrefetchOracle::predict(PredictionType type)
+std::list<int> PrefetchOracle::predict(size_t length, PredictionType type)
 {
+  if(length > max_prediction){
+    kio_warning("Requested prediction length ", length, " is larger than maximum prediction size of ", max_prediction);
+    length = max_prediction;
+  }
+  
   std::list<int> prediction;
   
   /* Can't make predictions without history. */
@@ -71,7 +74,7 @@ std::list<int> PrefetchOracle::predict(PredictionType type)
   for (int i = 1; i < distance->second.size() + 1; i++){
     int p = distance->second.front() + i * distance->first; 
     /* never predict negative block numbers */
-    if(p>0 && prediction.size() < max_prediction)
+    if(p>0 && prediction.size() < length)
       prediction.push_back(p);
   }
   

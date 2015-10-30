@@ -169,7 +169,6 @@ if(BUILD_TEST)
         test/UtilityTest.cc
         test/PrefetchOracleTest.cc
         test/SimulatorController.cc
-        test/LRUCacheTest.cc
         test/LoggingTest.cc
         test/KineticAdminClusterTest.cc
         test/DataCacheTest.cc

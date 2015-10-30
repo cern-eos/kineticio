@@ -99,6 +99,21 @@ public:
   //! @return identity string 
   //--------------------------------------------------------------------------
   std::string getIdentity();
+  
+  //--------------------------------------------------------------------------
+  //! Assign a new key-cluster combination to this data key, mainly to allow
+  //! re-using existing objects to avoid unnecessary memory allocation. 
+  //! This function is NOT threadsafe! No re-assigning of data key objects 
+  //! while they are used. 
+  //!
+  //! @param cluster the cluster that this block is (to be) stored on
+  //! @param key the name of the block
+  //! @param mode if mode::create assume that the key does not yet exist
+  //--------------------------------------------------------------------------
+  void reassign(std::shared_ptr<ClusterInterface> cluster,
+                std::shared_ptr<const std::string> key,
+                Mode mode = Mode::STANDARD
+  );
 
   //--------------------------------------------------------------------------
   //! Constructor.
@@ -108,8 +123,9 @@ public:
   //! @param mode if mode::create assume that the key does not yet exist
   //--------------------------------------------------------------------------
   explicit DataBlock(std::shared_ptr<ClusterInterface> cluster,
-                        const std::shared_ptr<const std::string> key,
-                        Mode mode = Mode::STANDARD);
+                     std::shared_ptr<const std::string> key,
+                     Mode mode = Mode::STANDARD
+  );
 
   //--------------------------------------------------------------------------
   //! Destructor.
@@ -141,7 +157,7 @@ private:
   std::shared_ptr<ClusterInterface> cluster;
 
   //! the key of the block
-  const std::shared_ptr<const std::string> key;
+  std::shared_ptr<const std::string> key;
 
   //! the latest known version of the key that is stored in the cluster
   std::shared_ptr<const std::string> version;
