@@ -148,6 +148,9 @@ private:
 
   //! the actual data
   std::shared_ptr<std::string> value;
+  
+  //! keeping track of the value size, since value may be pre-allocated to maximum size for efficiency
+  std::size_t value_size;
 
   //! time the block was last verified to be up to date
   std::chrono::system_clock::time_point timestamp;

@@ -16,7 +16,7 @@ const std::chrono::milliseconds DataBlock::expiration_time(1000);
 
 DataBlock::DataBlock(std::shared_ptr<ClusterInterface> c,
                            const std::shared_ptr<const std::string> k, Mode m) :
-    mode(m), cluster(c), key(k), version(), value(make_shared<string>()),
+    mode(m), cluster(c), key(k), version(), value(make_shared<string>()), value_size(0),
     timestamp(), updates(), mutex()
 {
   if (!cluster) throw std::invalid_argument("no cluster supplied");
@@ -55,8 +55,8 @@ bool DataBlock::validateVersion()
   /*If no version is set, the entry has never been flushed. In this case,
     not finding an entry with that key in the cluster is expected. */
   if ((!version && status.statusCode() == StatusCode::REMOTE_NOT_FOUND) ||
-      (status.ok() && remote_version && version && *version == *remote_version)
-      ) {
+      (status.ok() && remote_version && version && *version == *remote_version)) 
+  {
     /* In memory version equals remote version. Remember the time. */
     timestamp = system_clock::now();
     return true;
@@ -66,24 +66,20 @@ bool DataBlock::validateVersion()
 
 void DataBlock::getRemoteValue()
 {
-  auto remote_value = make_shared<const string>("");
+  auto remote_value = make_shared<const string>();
   auto status = cluster->get(key, false, version, remote_value);
 
   if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
     throw kio_exception(EIO, "Attempting to read key '",  *key,  "' from cluster returned error ", status);
 
-  /* We read in the current value from the drive. Remember the time. */
-  timestamp = system_clock::now();
-
   /* If remote is not available, reset version. */
   if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
     version.reset();
 
-  /* Merge all updates done on the local data copy (data) into the freshly
-     read-in data copy. */
+  /* Merge all updates done on the local data copy (value) into the freshly read-in data copy. */
   auto merged_value = make_shared<string>(*remote_value);
   if(!updates.empty())
-    merged_value->resize(std::max(remote_value->size(), value->size()));
+    merged_value->resize(std::max(remote_value->size(), value_size));
 
   for (auto iter = updates.begin(); iter != updates.end(); ++iter) {
     auto update = *iter;
@@ -93,6 +89,10 @@ void DataBlock::getRemoteValue()
       merged_value->resize(update.first);
   }
   value = merged_value;
+  value_size = merged_value->size();
+
+  /* We read in the current value from the drive. Remember the time. */
+  timestamp = system_clock::now();
 }
 
 void DataBlock::read(char *const buffer, off_t offset, size_t length)
@@ -109,11 +109,11 @@ void DataBlock::read(char *const buffer, off_t offset, size_t length)
     getRemoteValue();
 
   /* return 0s if client reads non-existing data (e.g. file with holes) */
-  if (offset + length > value->size())
+  if (offset + length > value_size)
     memset(buffer, 0, length);
 
-  if (value->size() > (size_t) offset) {
-    size_t copy_length = std::min(length, (size_t) (value->size() - offset));
+  if (value_size > (size_t) offset) {
+    size_t copy_length = std::min(length, (size_t) (value_size - offset));
     value->copy(buffer, copy_length, offset);
   }
 }
@@ -128,7 +128,14 @@ void DataBlock::write(const char *const buffer, off_t offset, size_t length)
     throw std::invalid_argument("attempting to write past cluster limits");
 
   /* Set new entry size. */
-  value->resize(std::max((size_t) offset + length, value->size()));
+  value_size = std::max((size_t) offset + length, value_size);
+  
+  /* Ensure that the value string is big enough to store the write request. If necessary,
+   * we will allocate straight to capacity size to prevent multiple resize operations making
+   * a mess of heap allocation (that's why we are storing value_size separately in the first
+   * place. */
+  if(value->size() < value_size)
+    value->resize(capacity());
 
   /* Copy data and remember write access. */
   value->replace(offset, length, buffer, length);
@@ -143,13 +150,16 @@ void DataBlock::truncate(off_t offset)
   if (offset > cluster->limits().max_value_size)
     throw std::invalid_argument("attempting to truncate past cluster limits");
 
-  value->resize(offset);
+  value_size = offset;
   updates.push_back(std::pair<off_t, size_t>(offset, 0));
 }
 
 void DataBlock::flush()
 {
   std::lock_guard<std::mutex> lock(mutex);
+  
+  if(value_size != value->size())
+    value->resize(value_size);
 
   auto status = cluster->put(key, version, value, false, version);
   while (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH) {
@@ -193,5 +203,5 @@ size_t DataBlock::size()
   if (!validateVersion())
     getRemoteValue();
 
-  return value->size();
+  return value_size;
 }
