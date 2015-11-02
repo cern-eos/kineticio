@@ -27,6 +27,11 @@ KineticAutoConnection::~KineticAutoConnection()
   }
 }
 
+const std::string& KineticAutoConnection::getName()
+{
+  return logstring;
+}
+
 void KineticAutoConnection::setError()
 {
   std::lock_guard<std::mutex> lock(mutex);
@@ -46,14 +51,12 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
     return connection;
 
   /* Rate limit connection attempts. */
-  using std::chrono::system_clock;
-  using std::chrono::duration_cast;
-  using std::chrono::seconds;
+  using namespace std::chrono;
   auto duration = duration_cast<seconds>(system_clock::now() - timestamp);
   if (duration > ratelimit) {
     if(bg.try_run(std::bind(&KineticAutoConnection::connect, this)))
-      kio_debug("Attempting background reconnect. Last reconnect attempt hast been ",
-               duration," ago. ratelimit is ", ratelimit);
+      kio_debug("Attempting background reconnect. Last reconnect attempt has been ",
+               duration," seconds ago. ratelimit is ", ratelimit, " seconds ", logstring);
   }
   throw kio_exception(ENXIO, "No valid connection ", logstring);
 }

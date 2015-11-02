@@ -41,6 +41,11 @@ public:
   std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> get();
 
   //--------------------------------------------------------------------------
+  //! Return human readable name of the auto connection. 
+  //--------------------------------------------------------------------------
+  const std::string& getName();
+  
+  //--------------------------------------------------------------------------
   //! Constructor.
   //!
   //! @param options host / port / key of target kinetic drive

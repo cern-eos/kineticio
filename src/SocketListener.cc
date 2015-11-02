@@ -27,9 +27,9 @@ void epoll_listen(int epoll_fd, bool *shutdown)
       if(con)
       try {
         if (!con->get()->Run(&a, &a, &fd))
-          throw std::runtime_error("Connection::Run(...) return false in epoll_listen");
+          throw std::runtime_error("Connection::Run(...) returned false");
       } catch (const std::exception &e) {
-        kio_warning(e.what());
+        kio_warning(e.what(), " for ", con->getName());
         con->setError();
       }
     }
@@ -72,11 +72,12 @@ void SocketListener::subscribe(int fd, kio::KineticAutoConnection *connection)
   /* Add the descriptor into the monitoring list. We can do it even if another
     thread is waiting in epoll_wait - the descriptor will be properly added */
   if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) != 0)
-    throw kio_exception(errno, "epoll_ctl add failed");
+    throw kio_exception(errno, "epoll_ctl add failed for fd ", fd, connection->getName());
 }
 
 void SocketListener::unsubscribe(int fd)
 {
   struct epoll_event ev;
-  epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, &ev);
+  if(epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, &ev))
+    kio_warning("epoll_ctl del failed for fd ", fd);
 }

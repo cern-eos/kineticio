@@ -569,6 +569,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
     CallbackSynchronization& sync
 )
 {
+  kio_debug("Start execution for callback ", ops.front().callback.get());
   auto need_retry = false;
   auto rounds_left = 2;
   do {
@@ -587,14 +588,14 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         fd_set a;
         int fd;
         if (!con->Run(&a, &a, &fd)) {
-          throw std::runtime_error("Connection::Run(...) returned false in KineticCluster::execute.");
+          throw std::runtime_error("Connection::Run(...) returned false");
         }
       }
       catch (const std::exception& e) {
         auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
         ops[i].callback->OnResult(status);
         ops[i].connection->setError();
-        kio_notice("Failed executing async operation ", i, " of ", ops.size(), " ", status);
+        kio_notice("Failed executing async operation on connection ", ops[i].connection->getName(), " : ", status);
       }
     }
 
@@ -606,13 +607,18 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
     for (int i = 0; i < ops.size(); i++) {
       /* timeout any unfinished request*/
       if (!ops[i].callback->finished()) {
-        try {
-          ops[i].connection->get()->RemoveHandler(hkeys[i]);
-        } catch (...) { }
-        kio_notice("Network timeout for operation ", i, " of ", ops.size());
+        /* To keep things simple, just declare the connection as failed straight away, don't bother to remove the handler key.
+          try {
+            ops[i].connection->get()->RemoveHandler(hkeys[i]);
+          } catch (const std::exception& e) {
+            kio_warning("Failed removing handle from connection ", ops[i].connection->getName(), "due to: ", e.what());   
+            ops[i].connection->setError();
+          }
+        */
+        kio_warning("Network timeout for operation ", ops[i].connection->getName(), " for callback ", ops.front().callback.get());
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
-        ops[i].callback->OnResult(status);
         ops[i].connection->setError();
+        ops[i].callback->OnResult(status);
       }
 
       /* Retry operations with CLIENT_IO_ERROR code result. Something went wrong with the connection,
@@ -624,6 +630,8 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
     }
   } while (need_retry && rounds_left);
 
+  kio_debug("Finished execution for callback ", ops.front().callback.get());
+  
   std::map<kinetic::StatusCode, int, KineticCluster::compareStatusCode> map;
   for (auto it = ops.begin(); it != ops.end(); it++) {
     map[it->callback->getResult().statusCode()]++;

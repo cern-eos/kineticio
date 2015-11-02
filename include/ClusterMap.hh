@@ -63,13 +63,11 @@ public:
   //--------------------------------------------------------------------------
   void loadConfiguration();
 
+
   //--------------------------------------------------------------------------
   //! ClusterMap is shared among all FileIo objects.
   //--------------------------------------------------------------------------
-  static ClusterMap& getInstance() {
-    static ClusterMap clustermap;
-    return clustermap;
-  }
+  static ClusterMap& getInstance();
 
   //--------------------------------------------------------------------------
   //! Copy constructing makes no sense
@@ -83,63 +81,67 @@ public:
 
 
 private:
-    //--------------------------------------------------------------------------
-    //! Configuration of library wide parameters.
-    //--------------------------------------------------------------------------
-    struct Configuration{
-        //! the maximum size of the data cache in bytes
-        size_t stripecache_capacity;
-        //! the maximum number of keys prefetched by readahead algorithm
-        size_t readahead_window_size;
-        //! the number of threads used for bg io in the data cache, can be 0
-        int background_io_threads;
-        //! the maximum number of operations queued for bg io, can be 0 
-        int background_io_queue_capacity;
-    };
+  //--------------------------------------------------------------------------
+  //! Configuration of library wide parameters.
+  //--------------------------------------------------------------------------
+  struct Configuration{
+      //! the maximum size of the data cache in bytes
+      size_t stripecache_capacity;
+      //! the maximum number of keys prefetched by readahead algorithm
+      size_t readahead_window_size;
+      //! the number of threads used for bg io in the data cache, can be 0
+      int background_io_threads;
+      //! the maximum number of operations queued for bg io, can be 0 
+      int background_io_queue_capacity;
+  };
 
-    //! storing the library wide configuration parameters
-    Configuration configuration;
+  //! storing the library wide configuration parameters
+  Configuration configuration;
 
-    //--------------------------------------------------------------------------
-    //! Store a cluster object and all information required to create it
-    //--------------------------------------------------------------------------
-    struct KineticClusterInfo
-    {
-        //! the number of data blocks in a stripe
-        std::size_t numData;
-        //! the number of parity blocks in a stripe
-        std::size_t numParity;
-        //! the size of a single data / parity block in bytes
-        std::size_t blockSize;
-        //! minimum interval between reconnection attempts to a drive (rate limit)
-        std::chrono::seconds min_reconnect_interval;
-        //! interval after which an operation will timeout without response
-        std::chrono::seconds operation_timeout;
-        //! the unique ids of drives belonging to this cluster
-        std::vector<std::string> drives;
-        //! the cluster object, shared among IO objects of a fst
-        std::shared_ptr<ClusterInterface> cluster;
-    };
+  //--------------------------------------------------------------------------
+  //! Store a cluster object and all information required to create it
+  //--------------------------------------------------------------------------
+  struct KineticClusterInfo
+  {
+      //! the number of data blocks in a stripe
+      std::size_t numData;
+      //! the number of parity blocks in a stripe
+      std::size_t numParity;
+      //! the size of a single data / parity block in bytes
+      std::size_t blockSize;
+      //! minimum interval between reconnection attempts to a drive (rate limit)
+      std::chrono::seconds min_reconnect_interval;
+      //! interval after which an operation will timeout without response
+      std::chrono::seconds operation_timeout;
+      //! the unique ids of drives belonging to this cluster
+      std::vector<std::string> drives;
+      //! the cluster object, shared among IO objects of a fst
+      std::shared_ptr<ClusterInterface> cluster;
+  };
 
-    //! the cluster map id <-> cluster info
-    std::unordered_map<std::string, KineticClusterInfo> clustermap;
+  //! the cluster map id <-> cluster info
+  std::unordered_map<std::string, KineticClusterInfo> clustermap;
 
-    //! the drive map id <-> connection info
-    std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> drivemap;
+  //! the drive map id <-> connection info
+  std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> drivemap;
 
-    //! ErasureCcoding instances of the same type (nData,nParity) can be shared
-    //! among multiple cluster instances, no need to duplicate decoding tables
-    //! in memory.
-    std::unordered_map<std::string, std::shared_ptr<ErasureCoding>> ecCache;
+  //! ErasureCcoding instances of the same type (nData,nParity) can be shared
+  //! among multiple cluster instances, no need to duplicate decoding tables
+  //! in memory.
+  std::unordered_map<std::string, std::shared_ptr<ErasureCoding>> ecCache;
 
-    //! the data cache shared among cluster instances
-    std::unique_ptr<DataCache> dataCache;
+  //! the data cache shared among cluster instances
+  std::unique_ptr<DataCache> dataCache;
 
-    //! epoll listener loop shared among all connections
-    std::unique_ptr<SocketListener> listener;
+  //! epoll listener loop shared among all connections
+  std::unique_ptr<SocketListener> listener;
 
-    //! concurrency control
-    std::mutex mutex;
+  //! concurrency control
+  std::mutex mutex;
+  
+  //! mutex for getInstance, as gcc 4.4 apparently does not support thread-safety for local static 
+  //! variable creation 
+  static std::mutex instance_mutex;
 
 private:
   //--------------------------------------------------------------------------
