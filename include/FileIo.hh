@@ -203,7 +203,7 @@ protected:
   std::shared_ptr<ClusterInterface> cluster;
 
   //! cache functionality
-  DataCache& cache;
+  DataCache* cache;
 
   //! keep track of the last block to answer stat requests reasonably
   LastBlockNumber lastBlockNumber;

@@ -1,5 +1,6 @@
 #include "KineticAutoConnection.hh"
 #include "LoggingException.hh"
+#include "KineticCallbacks.hh"
 #include <sstream>
 #include <Logging.hh>
 
@@ -61,18 +62,22 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
   throw kio_exception(ENXIO, "No valid connection ", logstring);
 }
 
+namespace{
+  class ConnectCallback : public kinetic::SimpleCallbackInterface
+  {
+  public:
+    void Success() { _done = _success = true; }
+    void Failure(kinetic::KineticStatus error) { _done = true; }  
+    ConnectCallback() : _done(false), _success(false) { }
+    ~ConnectCallback() { }
+    bool done(){ return _done; }
+    bool ok(){ return _success; }
 
-class ConnectCallback : public kinetic::SimpleCallbackInterface
-{
-public:
-  void Success() { }
-
-  void Failure(kinetic::KineticStatus error) { }
-
-  ConnectCallback() { }
-
-  ~ConnectCallback() { }
-};
+  private: 
+    bool _done; 
+    bool _success;
+  };
+}
 
 void KineticAutoConnection::connect()
 {
@@ -84,18 +89,28 @@ void KineticAutoConnection::connect()
   auto tmpfd = 0;
   std::shared_ptr<ThreadsafeNonblockingKineticConnection> tmpcon;
   KineticConnectionFactory factory = NewKineticConnectionFactory();
-
+  
   if (factory.NewThreadsafeNonblockingConnection(primary, tmpcon).ok() ||
-      factory.NewThreadsafeNonblockingConnection(secondary, tmpcon).ok()) {
-    auto cb = std::make_shared<ConnectCallback>();
-    fd_set a;
+      factory.NewThreadsafeNonblockingConnection(secondary, tmpcon).ok()) 
+  {
+    auto cb = std::make_shared<ConnectCallback>();    
     tmpcon->NoOp(cb);
-    tmpcon->Run(&a, &a, &tmpfd);
+    
+    /* Get the fd */
+    fd_set x; int y; 
+    tmpcon->Run(&x, &x, &tmpfd);
+    
+    /* wait on noop reply... we actually don't want to add drives where the connection succeeds 
+     * but requests don't (e.g. drive is in locked state or has an error) */  
+    while(tmpcon->Run(&x, &x, &y) && !cb->done()) { 
+      struct timeval tv{5,0};
+      if( select(tmpfd, &x, &x, NULL, &tv) <= 0 )
+        break;
+    }
+    if(!cb->ok())
+      tmpfd = 0; 
   }
-  else{
-    kio_debug("Connection attempt failed ",logstring);
-  }
-
+  
   {
     std::lock_guard<std::mutex> lock(mutex);
     timestamp = std::chrono::system_clock::now();
@@ -109,8 +124,11 @@ void KineticAutoConnection::connect()
       }
       fd = tmpfd;
       connection = std::move(tmpcon);
-      healthy=true;
+      healthy = true;
       kio_debug("connection attempt succeeded ", logstring);
+    }
+    else {
+      kio_debug("Connection attempt failed ", logstring);
     }
   }
 }

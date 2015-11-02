@@ -595,7 +595,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
         ops[i].callback->OnResult(status);
         ops[i].connection->setError();
-        kio_notice("Failed executing async operation on connection ", ops[i].connection->getName(), " : ", status);
+        kio_notice("Failed executing async operation ", status);
       }
     }
 
@@ -607,17 +607,14 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
     for (int i = 0; i < ops.size(); i++) {
       /* timeout any unfinished request*/
       if (!ops[i].callback->finished()) {
-        /* To keep things simple, just declare the connection as failed straight away, don't bother to remove the handler key.
-          try {
-            ops[i].connection->get()->RemoveHandler(hkeys[i]);
-          } catch (const std::exception& e) {
-            kio_warning("Failed removing handle from connection ", ops[i].connection->getName(), "due to: ", e.what());   
-            ops[i].connection->setError();
-          }
-        */
+        try {
+          ops[i].connection->get()->RemoveHandler(hkeys[i]);
+        } catch (const std::exception& e) {
+          kio_warning("Failed removing handle from connection ", ops[i].connection->getName(), "due to: ", e.what());   
+          ops[i].connection->setError();
+        }
         kio_warning("Network timeout for operation ", ops[i].connection->getName(), " for callback ", ops.front().callback.get());
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
-        ops[i].connection->setError();
         ops[i].callback->OnResult(status);
       }
 

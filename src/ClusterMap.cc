@@ -31,11 +31,8 @@ ClusterMap::ClusterMap()
   }
 }
 
-std::mutex ClusterMap::instance_mutex;
-
 ClusterMap& ClusterMap::getInstance()
 {
-   std::lock_guard<std::mutex> lock(instance_mutex);
    static ClusterMap clustermap;
    return clustermap;
 }

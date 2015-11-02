@@ -13,14 +13,15 @@ using namespace kio;
 
 
 FileIo::FileIo() :
-    cluster(), cache(ClusterMap::getInstance().getCache()), lastBlockNumber(*this)
+    cluster(), cache(NULL), lastBlockNumber(*this)
 {
 }
 
 FileIo::~FileIo()
 {
   /* If fileIo object is destroyed without closing properly, throw cache data out the window. */
-  cache.drop(this, true);
+  if(cache)
+  cache->drop(this, true);
 }
 
 /* All necessary checks have been done in the 993 line long
@@ -62,6 +63,7 @@ void FileIo::Open(const std::string &p, int flags,
     throw kio_exception(EIO, "Unexpected error opening file ", p, ": ", status);
 
   /* Setting cluster & path variables. */
+  cache = &(ClusterMap::getInstance().getCache());
   cluster = c;
   obj_path = p;
   block_basename = obj_path.substr(obj_path.find_last_of(':') + 1, obj_path.length());
@@ -73,8 +75,8 @@ void FileIo::Close(uint16_t timeout)
   if (!cluster)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
 
-  cache.flush(this);
-  cache.drop(this);
+  cache->flush(this);
+  cache->drop(this);
   cluster.reset();
   obj_path.clear();
   block_basename.clear();
@@ -107,14 +109,14 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
     auto prefetch = block_number < lastBlockNumber.get() ? true: false; 
     
     /* Get the data block */
-    auto data = cache.get(this, block_number, cm, prefetch);
+    auto data = cache->get(this, block_number, cm, prefetch);
 
     if (mode == rw::WRITE) {
       data->write(buffer + off_done, block_offset, block_length);
 
       /* Flush data in background if writing to block capacity.*/
       if (block_offset + block_length == block_capacity)
-        cache.async_flush(this, data);
+        cache->async_flush(this, data);
     }
     else if (mode == rw::READ) {
       data->read(buffer + off_done, block_offset, block_length);
@@ -164,14 +166,14 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
 
   if(offset>0){
     /* Step 1) truncate the block containing the offset. */
-    cache.get(this, block_number, DataBlock::Mode::STANDARD, false)->truncate(block_offset);
+    cache->get(this, block_number, DataBlock::Mode::STANDARD, false)->truncate(block_offset);
 
-    /* Step 2) Ensure we don't have data past block_number in the cache. Since
+    /* Step 2) Ensure we don't have data past block_number in the cache-> Since
      * truncate isn't super common, go the easy way and just sync+drop the entire
      * cache for this object... this will also sync the just truncated data.  */
-    cache.flush(this);
+    cache->flush(this);
   }
-  cache.drop(this, true);
+  cache->drop(this, true);
 
   /* Step 3) Delete all blocks past block_number. When truncating to size 0,
    * (and only then) also delete the first block. */
@@ -211,7 +213,7 @@ void FileIo::Sync(uint16_t timeout)
   if (!cluster)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
 
-  cache.flush(this);
+  cache->flush(this);
 }
 
 void FileIo::Stat(struct stat *buf, uint16_t timeout)
@@ -220,7 +222,7 @@ void FileIo::Stat(struct stat *buf, uint16_t timeout)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
 
   lastBlockNumber.verify();
-  std::shared_ptr<DataBlock> last_block = cache.get(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD, false);
+  std::shared_ptr<DataBlock> last_block = cache->get(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD, false);
 
   memset(buf, 0, sizeof(struct stat));
   buf->st_blksize = cluster->limits().max_value_size;

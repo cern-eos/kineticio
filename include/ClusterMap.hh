@@ -138,10 +138,6 @@ private:
 
   //! concurrency control
   std::mutex mutex;
-  
-  //! mutex for getInstance, as gcc 4.4 apparently does not support thread-safety for local static 
-  //! variable creation 
-  static std::mutex instance_mutex;
 
 private:
   //--------------------------------------------------------------------------
