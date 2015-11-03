@@ -226,9 +226,9 @@ KineticStatus KineticCluster::get(
             v->resize(utility::uuidDecodeSize(target_version.version));
             value = std::move(v);
           }
-          /* set version */
-          version = target_version.version;
         }
+        /* set version */
+        version = target_version.version;
       }
       /* Put down an indicator if there is anything wrong with this stripe. */  
       if(it->second < nData+nParity && getParities)
