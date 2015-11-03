@@ -167,7 +167,10 @@ void DataBlock::write(const char *const buffer, off_t offset, size_t length)
   if (offset + length > cluster->limits().max_value_size)
     throw std::invalid_argument("attempting to write past cluster limits");
   
-  /* Ensure that the value string is big enough to store the write request. If necessary,
+  /* Set new entry size. */
+  value_size = std::max((size_t) offset + length, value_size);
+  
+  /* Ensure that the value string exists and is big enough to store the write request. If necessary,
    * we will allocate straight to capacity size to prevent multiple resize operations making
    * a mess of heap allocation (that's why we are storing value_size separately in the first
    * place). */
@@ -177,11 +180,10 @@ void DataBlock::write(const char *const buffer, off_t offset, size_t length)
       local_value->replace(0, string::npos, *remote_value);
       remote_value.reset();
     }
-  }
-
-  /* Set new entry size. */
-  value_size = std::max((size_t) offset + length, value_size);
-
+  }  
+  if(value_size > local_value->size())
+    local_value->resize(capacity());
+  
   /* Copy data and remember write access. */
   local_value->replace(offset, length, buffer, length);
   updates.push_back(std::pair<off_t, size_t>(offset, length));
@@ -208,13 +210,16 @@ void DataBlock::flush()
     if(status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH)
       getRemoteValue();
 
-    if(local_value && value_size != local_value->size()) 
-      local_value->resize(value_size);
-    if(!local_value && !remote_value) 
-      remote_value = std::make_shared<const string>();       
-    
-    status = cluster->put(key, version, local_value ? local_value : remote_value, false, version);
-    
+    if(local_value){
+      if(value_size != local_value->size())
+        local_value->resize(value_size);
+      status = cluster->put(key, version, local_value, false, version);
+    }
+    else{
+      if(!remote_value)
+        remote_value = std::make_shared<const string>();       
+      status = cluster->put(key, version, remote_value, false, version);
+    }    
   } while (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH); 
 
   if (!status.ok())
