@@ -15,8 +15,8 @@ const std::chrono::milliseconds DataBlock::expiration_time(1000);
 
 
 DataBlock::DataBlock(std::shared_ptr<ClusterInterface> c, const std::shared_ptr<const std::string> k, Mode m) :
-    mode(m), cluster(c), key(k), version(), value(make_shared<string>()), value_size(0),
-    timestamp(), updates(), mutex()
+    mode(m), cluster(c), key(k), version(), remote_value(), local_value(), value_size(0), updates(),
+    timestamp(), mutex()
 {
   if (!cluster) throw std::invalid_argument("no cluster supplied");
 }
@@ -39,6 +39,8 @@ void DataBlock::reassign(std::shared_ptr<ClusterInterface> c, std::shared_ptr<co
   version.reset();
   updates.clear();
   timestamp = system_clock::time_point();
+  if(local_value) 
+    local_value->assign(capacity(),'0');
 }
 
 std::string DataBlock::getIdentity()
@@ -61,8 +63,8 @@ bool DataBlock::validateVersion()
 
   /* Check remote version & compare it to in-memory version. */
   shared_ptr<const string> remote_version;
-  shared_ptr<const string> remote_value;
-  KineticStatus status = cluster->get(key, true, remote_version, remote_value);
+  shared_ptr<const string> empty;
+  KineticStatus status = cluster->get(key, true, remote_version, empty);
 
   /*If no version is set, the entry has never been flushed. In this case,
     not finding an entry with that key in the cluster is expected. */
@@ -76,23 +78,44 @@ bool DataBlock::validateVersion()
   return false;
 }
 
+/* This function is written a lot more complex than it should be at first glance. It all is 
+ * to avoid / minimize memory allocations and copies as much as possible */
 void DataBlock::getRemoteValue()
 {
-  auto remote_value = make_shared<const string>();
   auto status = cluster->get(key, false, version, remote_value);
-
+  
   if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-    throw kio_exception(EIO, "Attempting to read key '",  *key,  "' from cluster returned error ", status);
+      throw kio_exception(EIO, "Attempting to read key '",  *key,  "' from cluster returned error ", status);
 
   /* If remote is not available, reset version. */
-  if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
+  if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
     version.reset();
+  }
+  /* set value_size to reflect remote_value */
+  else {
+    value_size = remote_value ? remote_value->size() : 0;
+  }
 
+  /* We read in the value from the drive. Remember the time. */
+  timestamp = system_clock::now();
+
+  /* If there are no local updates, there is no need to do any more work... just ensure that the 
+     local_value variable is empty so that all reads will be served from the remote_value */
+  if(updates.empty()) {
+    local_value.reset();
+    return;
+  }
+  
+  /* If we have local updates but no remote value, the local value can be left alone */
+  if(!remote_value)
+    return;
+        
+  /* Due to getting a <const string> returned from the cluster, we will have to create yet another string 
+   * variable to merge the local changes. */
   auto merged_value = make_shared<string>(*remote_value);
-  value_size = merged_value->size();
 
   /* Merge all updates done on the local data copy (value) into the freshly read-in data copy. */
-  if(!updates.empty() && merged_value->size() < capacity())
+  if(merged_value->size() < capacity())
     merged_value->resize(capacity());
 
   for (auto iter = updates.begin(); iter != updates.end(); ++iter) {
@@ -102,13 +125,11 @@ void DataBlock::getRemoteValue()
     }
     else{
       value_size = std::max(update.first + update.second, value_size); 
-      merged_value->replace(update.first, update.second, *value, update.first, update.second);  
+      merged_value->replace(update.first, update.second, *local_value, update.first, update.second);  
     }
   }
-  value = merged_value;
-  
-  /* We read in the current value from the drive. Remember the time. */
-  timestamp = system_clock::now();
+  remote_value.reset();
+  local_value = std::move(merged_value);
 }
 
 void DataBlock::read(char *const buffer, off_t offset, size_t length)
@@ -130,7 +151,10 @@ void DataBlock::read(char *const buffer, off_t offset, size_t length)
 
   if (value_size > (size_t) offset) {
     size_t copy_length = std::min(length, (size_t) (value_size - offset));
-    value->copy(buffer, copy_length, offset);
+    if(local_value)
+      local_value->copy(buffer, copy_length, offset);
+    else
+      remote_value->copy(buffer, copy_length, offset);
   }
 }
 
@@ -142,19 +166,24 @@ void DataBlock::write(const char *const buffer, off_t offset, size_t length)
   if (offset < 0) throw std::invalid_argument("negative offset");
   if (offset + length > cluster->limits().max_value_size)
     throw std::invalid_argument("attempting to write past cluster limits");
-
-  /* Set new entry size. */
-  value_size = std::max((size_t) offset + length, value_size);
   
   /* Ensure that the value string is big enough to store the write request. If necessary,
    * we will allocate straight to capacity size to prevent multiple resize operations making
    * a mess of heap allocation (that's why we are storing value_size separately in the first
-   * place. */
-  if(value->size() < value_size)
-    value->resize(capacity());
+   * place). */
+  if(!local_value) {
+    local_value = std::make_shared<string>(capacity(),'0'); 
+    if(remote_value) {
+      local_value->replace(0, string::npos, *remote_value);
+      remote_value.reset();
+    }
+  }
+
+  /* Set new entry size. */
+  value_size = std::max((size_t) offset + length, value_size);
 
   /* Copy data and remember write access. */
-  value->replace(offset, length, buffer, length);
+  local_value->replace(offset, length, buffer, length);
   updates.push_back(std::pair<off_t, size_t>(offset, length));
 }
 
@@ -173,15 +202,20 @@ void DataBlock::truncate(off_t offset)
 void DataBlock::flush()
 {
   std::lock_guard<std::mutex> lock(mutex);
-  
-  if(value_size != value->size())
-    value->resize(value_size);
+    
+  KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "invalid");
+  do{
+    if(status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH)
+      getRemoteValue();
 
-  auto status = cluster->put(key, version, value, false, version);
-  while (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH) {
-    getRemoteValue();
-    status = cluster->put(key, version, value, false, version);
-  }
+    if(local_value && value_size != local_value->size()) 
+      local_value->resize(value_size);
+    if(!local_value && !remote_value) 
+      remote_value = std::make_shared<const string>();       
+    
+    status = cluster->put(key, version, local_value ? local_value : remote_value, false, version);
+    
+  } while (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH); 
 
   if (!status.ok())
     throw kio_exception(EIO, "Attempting to write key '",  *key, "' from cluster returned error ", status);

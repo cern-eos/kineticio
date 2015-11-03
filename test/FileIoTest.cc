@@ -193,19 +193,19 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
 
     THEN("Writing is possible from an offset."){
-      REQUIRE(fileio->Write(1000000,write_buf,buf_size) == buf_size);
+      REQUIRE(fileio->Write(77777777,write_buf,buf_size) == buf_size);
 
       AND_THEN("Written data can be read in again."){
-        REQUIRE(fileio->Read(1000000, read_buf, buf_size) == buf_size);
+        REQUIRE(fileio->Read(77777777, read_buf, buf_size) == buf_size);
         REQUIRE(memcmp(write_buf,read_buf,buf_size) == 0);
       }
 
       AND_THEN("Reading with offset < filesize but offset+length > filesize only reads to filesize limits"){
-        REQUIRE(fileio->Read(1000000+buf_size/2, read_buf, buf_size) == buf_size/2);
+        REQUIRE(fileio->Read(77777777+buf_size/2, read_buf, buf_size) == buf_size/2);
       }
 
       AND_THEN("Reading data before the offset is possible and returns 0s (file with holes)"){
-        REQUIRE(fileio->Read(1000000/3, read_buf, buf_size) == buf_size);
+        REQUIRE(fileio->Read(66666666, read_buf, buf_size) == buf_size);
         REQUIRE(memcmp(null_buf,read_buf,buf_size) == 0);
       }
     }

@@ -147,7 +147,7 @@ private:
   //! via write and / or truncate on the local copy of the value.
   //--------------------------------------------------------------------------
   void getRemoteValue();
-
+  
 private:
   //! setting the block mode can increase performance by preventing unnecessary
   //! I/O in some cases.
@@ -161,20 +161,23 @@ private:
 
   //! the latest known version of the key that is stored in the cluster
   std::shared_ptr<const std::string> version;
+  
+  //! the latest known data of the key that is stored in the cluster
+  std::shared_ptr<const std::string> remote_value; 
 
-  //! the actual data
-  std::shared_ptr<std::string> value;
+  //! if data is written, the local_value will replace the remote value 
+  std::shared_ptr<std::string> local_value;
   
   //! keeping track of the value size, since value may be pre-allocated to maximum size for efficiency
   std::size_t value_size;
-
-  //! time the block was last verified to be up to date
-  std::chrono::system_clock::time_point timestamp;
 
   //! a list of bit-regions that have been changed since this data block has
   //! last been flushed
   std::list<std::pair<off_t, size_t> > updates;
 
+  //! time the block was last verified to be up to date
+  std::chrono::system_clock::time_point timestamp;
+  
   //! thread-safety
   mutable std::mutex mutex;
 };

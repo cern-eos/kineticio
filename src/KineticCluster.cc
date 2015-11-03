@@ -166,12 +166,13 @@ KineticStatus KineticCluster::get(
     shared_ptr<const string>& value
 )
 {
-  /* Try to get the value without parities, unless the cluster has been switched into parity mode in the last 10 
+  /* Try to get the value without parities, unless the cluster has been switched into parity mode in the last 5 
    * minutes. */
   bool getParities = true;
   if(nData > nParity) {
     std::lock_guard<std::mutex> lock(mutex);
-    if(std::chrono::duration_cast<std::chrono::minutes>(std::chrono::system_clock::now()-parity_required).count() > 10)
+    using namespace std::chrono;
+    if(duration_cast<minutes>(system_clock::now()-parity_required) > minutes(5))
       getParities = false;
   }
 
@@ -569,7 +570,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
     CallbackSynchronization& sync
 )
 {
-  kio_debug("Start execution for callback ", ops.front().callback.get());
+  kio_debug("Start execution of ", ops.size(), " operations for sync-point ", &sync);
   auto need_retry = false;
   auto rounds_left = 2;
   do {
@@ -613,7 +614,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
           kio_warning("Failed removing handle from connection ", ops[i].connection->getName(), "due to: ", e.what());   
           ops[i].connection->setError();
         }
-        kio_warning("Network timeout for operation ", ops[i].connection->getName(), " for callback ", ops.front().callback.get());
+        kio_warning("Network timeout for operation ", ops[i].connection->getName(), " for sync-point", &sync);
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
         ops[i].callback->OnResult(status);
       }
@@ -627,7 +628,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
     }
   } while (need_retry && rounds_left);
 
-  kio_debug("Finished execution for callback ", ops.front().callback.get());
+  kio_debug("Finished execution for sync-point", &sync);
   
   std::map<kinetic::StatusCode, int, KineticCluster::compareStatusCode> map;
   for (auto it = ops.begin(); it != ops.end(); it++) {
