@@ -5,25 +5,8 @@ include(ExternalProject)
 ################################################################################
 # Options
 option(BUILD_TEST "Build test executables." off)
-option(LINK_STATIC "Link non-standard libraries statically" off)
+option(LINK_STATIC "Link kinetic-cpp-client library statically" off)
 message(STATUS "Set Options: BUILD_TEST=${BUILD_TEST} LINK_STATIC=${LINK_STATIC}")
-
-################################################################################
-# Dependencies
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
-
-find_package(jsonc REQUIRED)
-find_package(uuid REQUIRED)
-find_package(Threads REQUIRED)
-if (LINK_STATIC)
-  find_package(OpenSSL REQUIRED)
-  find_package(Protobuf REQUIRED)
-  find_library(LIBUNWIND "unwind")
-else()
-  find_package(kinetic-c++ REQUIRED)
-  find_package(isal REQUIRED)
-endif()
-
 
 ################################################################################
 # Force /usr/ installation prefix, same as EOS
@@ -50,46 +33,66 @@ endif (CMAKE_COMPILER_IS_GNUCXX)
 ################################################################################
 # Set CXX flags
 set(CMAKE_CXX_FLAGS "--std=c++0x -g")
-message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+
+################################################################################
+# Dependencies
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+
+find_package(jsonc REQUIRED)
+find_package(uuid REQUIRED)
+find_package(Threads REQUIRED)
+find_package(kinetic-c++)
+find_package(isal)
 
 
 ################################################################################
-# Compile dependencies if LINK_STATIC is set 
-if(LINK_STATIC)
+# Compile dependencies if required
+if(LINK_STATIC OR NOT KINETIC-C++_FOUND)
   ExternalProject_add(
     kinetic_cpp_client
     PREFIX "vendor"
     GIT_REPOSITORY "https://github.com/plensing/kinetic-cpp-client"
     GIT_TAG ""
-    CMAKE_ARGS -DBUILD_STATIC=on
+    CMAKE_ARGS -DGOOGLE_STATIC=on
     BUILD_IN_SOURCE 1
     INSTALL_COMMAND ""
   )
   set(KINETIC-C++_INCLUDE_DIRS "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/include")
-  set(KINETIC-C++_LIBRARIES 
-    "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/libkinetic_client.a"
-    "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/vendor/lib/libglog.a"
-    "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/vendor/lib/libgflags.a"
-    ${OPENSSL_LIBRARIES}
-    ${PROTOBUF_LIBRARIES}
-  )        
-  if(LIBUNWIND)
-      set(KINETIC-C++_LIBRARIES 
-          ${KINETIC-C++_LIBRARIES} 
-          ${LIBUNWIND}
-      )
-  endif()
+  if(LINK_STATIC)
+    find_package(OpenSSL REQUIRED)
+    find_package(Protobuf REQUIRED)
+    find_library(LIBUNWIND "unwind")
 
+    set(KINETIC-C++_LIBRARIES 
+      "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/libkinetic_client_static.a"
+      "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/vendor/lib/libglog.a"
+      "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/vendor/lib/libgflags.a"
+      ${OPENSSL_LIBRARIES}
+      ${PROTOBUF_LIBRARIES}  
+    )        
+    if(LIBUNWIND)
+      set(KINETIC-C++_LIBRARIES ${KINETIC-C++_LIBRARIES} ${LIBUNWIND})
+    endif(LIBUNWIND)
+  else(LINK_STATIC)
+    set(KINETIC-C++_LIBRARIES 
+      "${kineticio_BINARY_DIR}/vendor/src/kinetic_cpp_client/libkinetic_client.so"
+    )        
+  endif(LINK_STATIC)
+endif()
+
+if(NOT ISAL_FOUND)
+  # building 2.13 instead of 2.14 because SLC-6 has problems with the 2.14 build system
   ExternalProject_add(
     isal
     PREFIX "vendor"
-    URL "https://01.org/sites/default/files/downloads/intelr-storage-acceleration-library-open-source-version/isa-l-2.14.0.tar.gz"
-    URL_MD5 ""
-    CONFIGURE_COMMAND ../isal/configure --prefix=${kineticio_BINARY_DIR}/vendor --enable-static --with-pic
+    URL "https://01.org/sites/default/files/downloads/intelr-storage-acceleration-library-open-source-version/isa-lopensrc2.13.tar.gz"
+    URL_MD5 "f21ca06fc07857c71d574e59896c58d7"
+    CONFIGURE_COMMAND ""
+    BUILD_IN_SOURCE 1
+    INSTALL_COMMAND ""
   )
-  set(ISAL_INCLUDE_DIRS "${kineticio_BINARY_DIR}/vendor/lib/include")
-  set(ISAL_LIBRARIES "${kineticio_BINARY_DIR}/vendor/lib/libisal.a")
-
+  set(ISAL_INCLUDE_DIRS "${kineticio_BINARY_DIR}/vendor/src/isal/include")
+  set(ISAL_LIBRARIES "${kineticio_BINARY_DIR}/vendor/src/isal/bin/libisal.so")
 endif()
 
 
@@ -128,16 +131,21 @@ set(kineticio_LIB
     ${KINETIC-C++_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT}
 )
+
 add_library(kineticio SHARED ${kineticio_SRC})
-target_link_libraries(kineticio ${kineticio_LIB})
-
 add_executable(admin ${kineticio_SRC} tools/admin.cc)
-target_link_libraries(admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
 
-if(LINK_STATIC)
+if(LINK_STATIC OR NOT KINETIC-C++_FOUND)
   add_dependencies(kineticio kinetic_cpp_client)
   add_dependencies(admin kinetic_cpp_client)
 endif()
+if(NOT ISAL_FOUND)
+  add_dependencies(kineticio isal)
+  add_dependencies(admin isal)
+endif()
+
+target_link_libraries(kineticio ${kineticio_LIB})
+target_link_libraries(admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
 
 install(TARGETS kineticio LIBRARY DESTINATION lib64)
 install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
@@ -157,6 +165,17 @@ if(BUILD_TEST)
     find_package(z REQUIRED)
     include_directories(${Z_INCLUDE_DIRS})
 
+    ExternalProject_add(
+      kinetic_simulator
+      PREFIX "vendor"
+      GIT_REPOSITORY "https://github.com/kinetic/kinetic-java"
+      GIT_TAG "kinetic-java-0.8.0.5"
+      CONFIGURE_COMMAND ""
+      BUILD_IN_SOURCE 1
+      BUILD_COMMAND mvn package -Dmaven.test.skip=true --quiet 
+      INSTALL_COMMAND ""
+    )
+
     add_executable(kinetic-test
         ${kineticio_SRC}
         test/TestMain.cc
@@ -173,6 +192,14 @@ if(BUILD_TEST)
         test/KineticAdminClusterTest.cc
         test/DataCacheTest.cc
     )
+    if(LINK_STATIC OR NOT KINETIC-C++_FOUND)
+      add_dependencies(kinetic-test kinetic_cpp_client)
+      add_dependencies(kinetic-test kinetic_cpp_client)
+    endif()
+    if(NOT ISAL_FOUND)
+      add_dependencies(kinetic-test isal)
+      add_dependencies(kinetic-test isal)
+    endif()
     target_link_libraries(kinetic-test
         ${Z_LIBRARIES}
         ${kineticio_LIB}

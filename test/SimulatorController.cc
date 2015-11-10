@@ -24,7 +24,7 @@ bool SimulatorController::start(int index)
           (char*)"-home", (char*)home.c_str(),
           (char*)0
     };
-    execv("../../kinetic-java/bin/startSimulator.sh", args);
+    execv("vendor/src/kinetic_simulator/bin/startSimulator.sh", args);
   }
   else {
     if(pids.size()<index+1)
