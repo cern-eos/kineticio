@@ -30,12 +30,9 @@ void Factory::registerLogFunction(logfunc_t log, shouldlogfunc_t shouldLog)
   Logger::get().registerLogFunction(std::move(log), std::move(shouldLog));
 }
 
-std::unique_ptr<AdminClusterInterface> Factory::makeAdminCluster(
-          const char* cluster_id, 
-          AdminClusterInterface::OperationTarget target, 
-          size_t numthreads)
+std::unique_ptr<AdminClusterInterface> Factory::makeAdminCluster(const char* cluster_id)
 {
-  return ClusterMap::getInstance().getAdminCluster(cluster_id, target, numthreads);
+  return ClusterMap::getInstance().getAdminCluster(cluster_id);
 }
 
 void Factory::reloadConfiguration()

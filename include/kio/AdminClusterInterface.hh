@@ -7,6 +7,7 @@
 #define KINETICIO_ADMINCLUSTERINTERFACE_HH
 
 #include <vector>
+#include <functional>
 
 namespace kio {
   
@@ -40,55 +41,51 @@ public:
     //! #keys were repair / remove was detected to be necessary but failed
     int unrepairable;
   };
-  
-  //--------------------------------------------------------------------------
-  //! Key statistics since the last restart
-  //!
-  //! @return the key statistics since the last restart 
-  //--------------------------------------------------------------------------
-  virtual KeyCounts getCounts() = 0;
 
   //--------------------------------------------------------------------------
   //! Only count the number of keys existing on the cluster.
   //!
-  //! @param maximum number of keys to count
-  //! @param restart if not true, the next call will continue where the
-  //!   previous call stopped
-  //! @return the number of keys processed 
+  //! @param target the types of keys to be counted
+  //! @param callback optionally register a callback function that is called 
+  //! with the current number of processed keys periodically
+  //! @return the number of keys in the cluster
   //--------------------------------------------------------------------------
-  virtual int count(size_t maximum, bool restart=false) = 0;
+  virtual int count(OperationTarget target, std::function<void(int)> callback = NULL) = 0;
 
   //--------------------------------------------------------------------------
-  //! Scan all subchunks of every key and check if keys need to
+  //! Scan all subchunks of every target key and check if keys need to
   //! be repaired. This is a scan only, no write operations will occur.
   //!
-  //! @param maximum number of keys to scan
-  //! @param restart if not true, the next call will continue where the
-  //!   previous call stopped
-  //! @return the number of keys processed 
-  //--------------------------------------------------------------------------
-  virtual int scan(size_t maximum, bool restart=false) = 0;
+  //! @param target the types of keys to be scanned 
+  //! @param callback optionally register a callback function that is called 
+  //! with the current number of processed keys periodically
+  //! @param numThreads the number of background IO threads used for scanning
+  //! @return statistics about the scanned keys
+  //--------------------------------------------------------------------------  
+  virtual KeyCounts scan(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1) = 0;
 
   //--------------------------------------------------------------------------
-  //! Scan all subchunks of every key and check if keys need to
+  //! Scan all subchunks of every target key and check if keys need to
   //! be repaired. If so, attempt repair.
   //!
-  //! @param maximum number of keys to repair
-  //! @param restart if not true, the next call will continue where the
-  //!   previous call stopped
-  //! @return the number of keys processed 
+  //! @param target the types of keys to be repaired 
+  //! @param callback optionally register a callback function that is called 
+  //! with the current number of processed keys periodically
+  //! @param numThreads the number of background IO threads used for repair
+  //! @return statistics about the keys
   //--------------------------------------------------------------------------
-  virtual int repair(size_t maximum, bool restart=false) = 0;
+  virtual KeyCounts repair(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1) = 0;
 
   //--------------------------------------------------------------------------
-  //! Force delete _all_ keys on the cluster.
+  //! Force delete keys on the cluster.
   //!
-  //! @param maximum number of keys to remove
-  //! @param restart if not true, the next call will continue where the
-  //!   previous call stopped
-  //! @return the number of keys processed 
+  //! @param target the types of keys to be scanned 
+  //! @param callback optionally register a callback function that is called 
+  //! with the current number of processed keys periodically
+  //! @param numThreads the number of background IO threads used for deletion
+  //! @return statistics about the keys
   //--------------------------------------------------------------------------
-  virtual int reset(size_t maximum, bool restart=false) = 0;
+  virtual KeyCounts reset(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1) = 0;
 
   //--------------------------------------------------------------------------
   //! Obtain the current status of connections to all drives attached to this

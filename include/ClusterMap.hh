@@ -44,11 +44,7 @@ public:
   //! @param numthreads number of background io threads during scan operations
   //! @return a valid admin cluster object
   //--------------------------------------------------------------------------
-  std::unique_ptr<KineticAdminCluster> getAdminCluster(
-      const std::string& id,
-      AdminClusterInterface::OperationTarget target, 
-      size_t numthreads
-  );
+  std::unique_ptr<KineticAdminCluster> getAdminCluster(const std::string& id);
 
   //--------------------------------------------------------------------------
   //! Obtain a reference to the io data cache.
