@@ -67,6 +67,8 @@ private:
   //!
   //! @param o The operation type to be executed
   //! @param t The operation target
+  //! @param callback function will be called periodically with total number of 
+  //!   keys the requested operation has been executed on.
   //! @param numthreads the number of io threads
   //! @return statistics of keys
   //--------------------------------------------------------------------------
@@ -75,31 +77,31 @@ private:
   //--------------------------------------------------------------------------
   //! Apply a scan / repair / reset operation to the supplied keys.
   //!
-  //! @param keys a set of keys to scan
   //! @param o Operation type
-  //! @param counts keep statistics current by increasing repaired / removed
-  //!   and unrepairable counts as necessary.
+  //! @param key_counts keep statistics current
+  //! @param keys a set of keys apply the requested operation on
   //--------------------------------------------------------------------------
-  void applyOperation(Operation o, OperationTarget t, 
-    KeyCountsInternal& key_counts, std::vector<std::shared_ptr<const std::string>> keys);
+  void applyOperation(Operation o, KeyCountsInternal& key_counts, std::vector<std::shared_ptr<const std::string>> keys);
 
   //--------------------------------------------------------------------------
-  //! Check if the key requires repair. If the stripe of the key cannot be
+  //! Scan all chunk versions of the stripe key. If sufficient chunks cannot be
   //! read in due to more failures than parities, the function will throw.
   //!
   //! @param key the key of the stripe to test
-  //! @param counts  keep statistics current by increasing incomplete and
-  //!   need_repair counts as necessary.
-  //! @return Returns true if the key needs to be repaired, false if it is
+  //! @param key_counts  keep statistics current by increasing incomplete and
+  //!   need_action counts as necessary.
+  //! @return true if the key needs to be repaired, false if it is
   //! either fine or nothing can be done due to unreachable drives.
   //--------------------------------------------------------------------------
   bool scanKey(const std::shared_ptr<const std::string>& key, KeyCountsInternal& key_counts);
   
   //--------------------------------------------------------------------------
-  //! Initialize the start_key and end_key variables, depending
-  //! on the OperationTarget
-  //--------------------------------------------------------------------------  
-  void initKeyRange();
+  //! Repairs stripe key.
+  //!
+  //! @param key the key of the stripe to test
+  //! @param key_counts  keep statistics current by increasing repaired / removed counts.
+  //--------------------------------------------------------------------------
+  void repairKey(const std::shared_ptr<const std::string>& key, KeyCountsInternal& key_counts);
 };
 
 }
