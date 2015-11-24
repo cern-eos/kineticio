@@ -32,7 +32,7 @@ SCENARIO("Admin integration test.", "[Admin]")
     std::size_t nParity = 1;
     std::size_t blocksize = 1024*1024;
 
-    auto cluster = make_shared<KineticAdminCluster>(AdminClusterInterface::OperationTarget::FILE, 1, 
+    auto cluster = make_shared<KineticAdminCluster>(
             nData, nParity, blocksize, info, std::chrono::seconds(1), std::chrono::seconds(1),
             std::make_shared<ErasureCoding>(nData, nParity), listener
     );
@@ -53,8 +53,7 @@ SCENARIO("Admin integration test.", "[Admin]")
       REQUIRE(putversion);
 
       THEN("It is marked as incomplete during a scan"){
-        REQUIRE(cluster->scan(std::numeric_limits<int>::max(), true) == 1);
-        auto kc = cluster->getCounts();
+        auto kc = cluster->scan(AdminClusterInterface::OperationTarget::FILE);
         REQUIRE(kc.total == 1);
         REQUIRE(kc.incomplete == 1);
         REQUIRE(kc.need_action == 0);
@@ -63,25 +62,23 @@ SCENARIO("Admin integration test.", "[Admin]")
         REQUIRE(kc.unrepairable == 0);
       }
       THEN("We can't repair it while the drive is down."){
-        REQUIRE(cluster->repair(std::numeric_limits<int>::max(), true) == 1);
-        REQUIRE(cluster->getCounts().repaired == 0);
+        auto kc = cluster->repair(AdminClusterInterface::OperationTarget::FILE);
+        REQUIRE(kc.repaired == 0);
       }
       THEN("We can still remove it by resetting the cluster."){
-        REQUIRE(cluster->reset(std::numeric_limits<int>::max(), true) == 1);
-        auto kc = cluster->getCounts();
-        REQUIRE(cluster->getCounts().removed == 1);
+        auto kc = cluster->reset(AdminClusterInterface::OperationTarget::FILE);
+        REQUIRE(kc.removed == 1);
       }
 
       AND_WHEN("The drive comes up again."){
         c.start(0);
         // trigger a random operation so that the cluster connection will be re-established 
-        cluster->remove(std::make_shared<const string>(""), std::make_shared<const string>(""),true);
+        cluster->remove(std::make_shared<const string>(""), std::make_shared<const string>(""), true);
         // wait for connection to reconnect
         sleep(2);
 
         THEN("It is no longer marked as incomplete but as need_repair after a scan"){
-          REQUIRE(cluster->scan(std::numeric_limits<int>::max(), true) == 1);
-          auto kc = cluster->getCounts();
+          auto kc = cluster->scan(AdminClusterInterface::OperationTarget::FILE);
           REQUIRE(kc.total == 1);
           REQUIRE(kc.incomplete == 0);
           REQUIRE(kc.need_action == 1);
@@ -90,12 +87,12 @@ SCENARIO("Admin integration test.", "[Admin]")
           REQUIRE(kc.unrepairable == 0);
         }
         THEN("We can repair the key.") {
-          REQUIRE(cluster->repair(std::numeric_limits<int>::max(), true) == 1);
-          REQUIRE(cluster->getCounts().repaired == 1);
+          auto kc = cluster->repair(AdminClusterInterface::OperationTarget::FILE);
+          REQUIRE(kc.repaired == 1);
         }
         THEN("We can reset the cluster."){
-          REQUIRE(cluster->reset(std::numeric_limits<int>::max(), true) == 1);
-          REQUIRE(cluster->getCounts().removed == 1);
+          auto kc = cluster->reset(AdminClusterInterface::OperationTarget::FILE); 
+          REQUIRE(kc.removed == 1);
         }
       }
     }

@@ -16,32 +16,24 @@ namespace kio{
 //------------------------------------------------------------------------------
 class KineticAdminCluster : public KineticCluster, public AdminClusterInterface {
 public:
+  //! See documentation of public interface in AdminClusterInterface
+  int count(OperationTarget target, std::function<void(int)> callback = NULL);
+
+  //! See documentation of public interface in AdminClusterInterface 
+  KeyCounts scan(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1);
 
   //! See documentation of public interface in AdminClusterInterface
-  KeyCounts getCounts();
-  
-  //! See documentation of public interface in AdminClusterInterface
-  int count(size_t maximum, bool restart=false);
+  KeyCounts repair(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1);
 
   //! See documentation of public interface in AdminClusterInterface
-  int scan(size_t maximum, bool restart=false);
-
-  //! See documentation of public interface in AdminClusterInterface
-  int repair(size_t maximum,bool restart=false);
-
-  //! See documentation of public interface in AdminClusterInterface
-  int reset(size_t maximum, bool restart=false);
+  KeyCounts reset(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1);
 
   //! See documentation of public interface in AdminClusterInterface
   std::vector<bool> status();
 
   //! Perfect forwarding is nice, and I am lazy. Look in KineticCluster.hh for the correct arguments
   template<typename... Args>
-  KineticAdminCluster(OperationTarget target, size_t numthreads, Args&& ... args) :
-      KineticCluster(std::forward<Args>(args)...), 
-      target(target), 
-      threads(numthreads)
-  {};
+  KineticAdminCluster(Args&& ... args) : KineticCluster(std::forward<Args>(args)...) {};
 
   //! Destructor
   ~KineticAdminCluster();
@@ -68,61 +60,48 @@ private:
       KeyCountsInternal() : total(0), incomplete(0), need_action(0), repaired(0), removed(0), unrepairable(0) {};
   };
   
-  //! keeping track of key counts for continuing operations
-  KeyCountsInternal key_counts;  
-  
-  //! keeping track of the start key for continuing operations
-  std::shared_ptr<const std::string> start_key;
-  
-  //! the end key for continuing operations
-  std::shared_ptr<const std::string> end_key;
-  
-  //! the type of keys affected by operations
-  OperationTarget target;
-  
-  //! handle background operations 
-  std::unique_ptr<BackgroundOperationHandler> bg; 
-  
-  //! number of background io threads
-  size_t threads;
+  std::function<void(int)> callback;
   
   //--------------------------------------------------------------------------
   //! The main loop for count / scan / repair / reset operations.
   //!
   //! @param o The operation type to be executed
-  //! @param maximum number of keys to execute the operation on
-  //! @param restart continue with last seen key or start fresh
+  //! @param t The operation target
+  //! @param callback function will be called periodically with total number of 
+  //!   keys the requested operation has been executed on.
+  //! @param numthreads the number of io threads
   //! @return statistics of keys
   //--------------------------------------------------------------------------
-  int doOperation(Operation o, size_t maximum, bool restart);
+  KeyCounts doOperation(Operation o, OperationTarget t, std::function<void(int)> callback, int numthreads);
 
   //--------------------------------------------------------------------------
   //! Apply a scan / repair / reset operation to the supplied keys.
   //!
-  //! @param keys a set of keys to scan
   //! @param o Operation type
-  //! @param counts keep statistics current by increasing repaired / removed
-  //!   and unrepairable counts as necessary.
+  //! @param key_counts keep statistics current
+  //! @param keys a set of keys apply the requested operation on
   //--------------------------------------------------------------------------
-  void applyOperation(Operation o, std::vector<std::shared_ptr<const std::string>> keys);
+  void applyOperation(Operation o, KeyCountsInternal& key_counts, std::vector<std::shared_ptr<const std::string>> keys);
 
   //--------------------------------------------------------------------------
-  //! Check if the key requires repair. If the stripe of the key cannot be
+  //! Scan all chunk versions of the stripe key. If sufficient chunks cannot be
   //! read in due to more failures than parities, the function will throw.
   //!
   //! @param key the key of the stripe to test
-  //! @param counts  keep statistics current by increasing incomplete and
-  //!   need_repair counts as necessary.
-  //! @return Returns true if the key needs to be repaired, false if it is
+  //! @param key_counts  keep statistics current by increasing incomplete and
+  //!   need_action counts as necessary.
+  //! @return true if the key needs to be repaired, false if it is
   //! either fine or nothing can be done due to unreachable drives.
   //--------------------------------------------------------------------------
-  bool scanKey(const std::shared_ptr<const std::string>& key);
+  bool scanKey(const std::shared_ptr<const std::string>& key, KeyCountsInternal& key_counts);
   
   //--------------------------------------------------------------------------
-  //! Initialize the start_key and end_key variables, depending
-  //! on the OperationTarget
-  //--------------------------------------------------------------------------  
-  void initKeyRange();
+  //! Repairs stripe key.
+  //!
+  //! @param key the key of the stripe to test
+  //! @param key_counts  keep statistics current by increasing repaired / removed counts.
+  //--------------------------------------------------------------------------
+  void repairKey(const std::shared_ptr<const std::string>& key, KeyCountsInternal& key_counts);
 };
 
 }

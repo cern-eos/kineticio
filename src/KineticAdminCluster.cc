@@ -23,7 +23,13 @@ std::vector<bool> KineticAdminCluster::status()
   return sv;
 }
 
-bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key)
+bool isIndicatorKey(const string& key)
+{
+  auto empty_indicator = utility::keyToIndicator("");
+  return key.compare(0, empty_indicator->length(), *empty_indicator) == 0;
+}
+
+bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyCountsInternal& key_counts)
 {
   auto ops = initialize(key, nData + nParity);
   auto sync = asyncops::fillGetVersion(ops, key);
@@ -54,69 +60,60 @@ bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key)
       "(", nData, ") needed."
   ));
 }
+  
+void KineticAdminCluster::repairKey(const std::shared_ptr<const string>& key, KeyCountsInternal& key_counts)
+{
+    std::shared_ptr<const string> version;
+    std::shared_ptr<const string> value;
+    
+    auto getstatus = this->get(key, false, version, value);
+    if (getstatus.ok()) {
+        auto putstatus = this->put(key, version, value, false, version);
+        if (!putstatus.ok())
+          throw kio_exception(EIO, "Failed put operation on target-key \"", *key, "\" ", putstatus);
+        key_counts.repaired++;
+    }
 
-bool isIndicatorKey(const string& key){
-  auto empty_indicator = utility::keyToIndicator("");
-  return key.compare(0, empty_indicator->length(), *empty_indicator) == 0;
+    else if (getstatus.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
+      auto rmstatus = this->remove(key, version, true);
+      if (!rmstatus.ok())
+        throw kio_exception(EIO, "Failed remove operation on target-key \"", *key, "\" ", rmstatus);
+      key_counts.removed++;
+    }
+    
+    else
+      throw kio_exception(EIO, "Failed get operation on target-key \"", *key, "\" ", getstatus);
 }
 
-void KineticAdminCluster::applyOperation(
-    Operation o,
-    std::vector<std::shared_ptr<const string>> keys)
+void KineticAdminCluster::applyOperation(Operation o, KeyCountsInternal& key_counts, std::vector<std::shared_ptr<const string>> keys)
 {
-  auto version = std::make_shared<const string>();
-  auto value = std::make_shared<const string>();
-
   for(auto it = keys.cbegin(); it != keys.cend(); it++) {
-    /* If we are traversing all keys anyways, we can skip indicator keys unless we are in a reset operation. */
-    if(target==OperationTarget::ALL && o != Operation::RESET && isIndicatorKey(**it))
-      continue; 
-    
-    auto& key = target==OperationTarget::INDICATOR ? utility::indicatorToKey(**it) : *it;
-    try {
+    auto& key = isIndicatorKey(**it) ? utility::indicatorToKey(**it) : *it; 
+    try{
       switch(o){
-        /* Nothing to do but scan. */
-        case Operation::SCAN:
-          scanKey(key);
+        case Operation::SCAN: {
+          scanKey(key, key_counts);
           break;
-          
-        /* In case of RESET, we want to target the actual indicator keys if they are supplied... so using *it here. */
+        }
+        case Operation::REPAIR: {
+          if(scanKey(key, key_counts))
+            repairKey(key, key_counts); 
+
+          if(isIndicatorKey(**it)){
+            auto istatus = remove(*it, std::make_shared<const string>(), true);
+            if(!istatus.ok())
+              kio_warning("Failed removing indicator key after repair for target-key \"", *key, "\" ", istatus);
+          }   
+          break;
+        }
         case Operation::RESET: {
-          auto rmstatus = this->remove(*it, version, true);
+          auto rmstatus = this->remove(*it, std::make_shared<const string>(), true);
           if (!rmstatus.ok())
-           throw kio_exception(EIO, "Failed remove operation on target-key \"", **it, "\" ", rmstatus);
+            throw kio_exception(EIO, "Failed remove operation on target-key \"", **it, "\" ", rmstatus);
           key_counts.removed++;
           break;
         }
-          
-        /* Repair key only if the scan tells us to. If the operation is performed using indicator keys, 
-         * we can remove the indicator after the repair operation. */
-        case Operation::REPAIR: {
-          if(scanKey(key)){
-            auto getstatus = this->get(key, false, version, value);
-            if (getstatus.ok()) {
-                auto putstatus = this->put(key, version, value, false, version);
-                if (!putstatus.ok())
-                  throw kio_exception(EIO, "Failed put operation on target-key \"", *key, "\" ", putstatus);
-                key_counts.repaired++;
-            }
-            else if (getstatus.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
-              auto rmstatus = this->remove(key, version, true);
-              if (!rmstatus.ok())
-                throw kio_exception(EIO, "Failed remove operation on target-key \"", *key, "\" ", rmstatus);
-              key_counts.removed++;
-            }
-            else
-              throw kio_exception(EIO, "Failed get operation on target-key \"", *key, "\" ", getstatus);
-          }
-          if(target == OperationTarget::INDICATOR || target == OperationTarget::ALL){
-            auto istatus = remove(*it, std::make_shared<const string>(), true);
-            if(!istatus.ok() && target == OperationTarget::INDICATOR)
-              kio_warning("Failed removing indicator key after repair for target-key \"", *key, "\" ", istatus);
-          }
-          break;
-        }
-      }     
+      }    
     } catch (const std::exception& e) {
       key_counts.unrepairable++;
       kio_warning(e.what());
@@ -124,86 +121,89 @@ void KineticAdminCluster::applyOperation(
   }
 }
 
-void KineticAdminCluster::initKeyRange()
+void initRangeKeys(
+    kio::KineticAdminCluster::OperationTarget t, 
+    std::shared_ptr<const string>& start_key, 
+    std::shared_ptr<const string>& end_key
+)
 {
   end_key = std::make_shared<const string>(1, static_cast<char>(255));
-  switch(target){
-    case OperationTarget::ALL: 
+  switch(t){
+    case kio::KineticAdminCluster::OperationTarget::ALL: 
       start_key = std::make_shared<const string>(1, static_cast<char>(0));
       break;
-    case OperationTarget::ATTRIBUTE:
+    case kio::KineticAdminCluster::OperationTarget::ATTRIBUTE:
       start_key = utility::constructAttributeKey("","");
       end_key = utility::constructAttributeKey(*end_key, *end_key);
       break;
-    case OperationTarget::FILE:
+    case kio::KineticAdminCluster::OperationTarget::FILE:
       start_key = std::make_shared<const string>("/");
       break;
-    case OperationTarget::INDICATOR:
+    case kio::KineticAdminCluster::OperationTarget::INDICATOR:
       start_key = utility::keyToIndicator("");
       end_key = utility::keyToIndicator(*end_key);
   }   
-  
-  bg.reset(new BackgroundOperationHandler(threads, threads));
-  key_counts.incomplete = key_counts.need_action = key_counts.removed = key_counts.repaired
-        = key_counts.total = key_counts.unrepairable = 0;
 }
 
-int KineticAdminCluster::doOperation(Operation o, size_t maximum, bool restart)
+kio::AdminClusterInterface::KeyCounts KineticAdminCluster::doOperation(
+    Operation o, 
+    OperationTarget t, 
+    std::function<void(int)> callback, 
+    int numthreads
+)
 {
-  if (!start_key || restart)
-    initKeyRange();
+  KeyCountsInternal key_counts;  
   
-  /* Iterate over up to to maximum keys and perform the requested operation */
-  std::unique_ptr<std::vector<string>> keys;
-  int processed_keys = 0;
-  do {
-    auto status = range(start_key, end_key, maximum - processed_keys > 100 ? 100 : maximum - processed_keys, keys);
-    if (!status.ok()) {
-      kio_warning("range(", *start_key, " - ", *end_key, ") failed on cluster. Cannot proceed. ", status);
-      break;
-    }
-    if (keys && keys->size()) {
-      start_key = std::make_shared<const string>(keys->back() + static_cast<char>(0));
-      key_counts.total += keys->size();
-      processed_keys += keys->size();
-      
-      if (o != Operation::COUNT) {
-        std::vector<std::shared_ptr<const string>> out;
-        for (auto it = keys->cbegin(); it != keys->cend(); it++){
-           out.push_back(std::make_shared<const string>(std::move(*it)));
-        }
-        bg->run(std::bind(&KineticAdminCluster::applyOperation, this, o, out));
+  std::shared_ptr<const string> start_key;
+  std::shared_ptr<const string> end_key;
+  initRangeKeys(t, start_key, end_key);
+  
+  {
+    BackgroundOperationHandler bg(numthreads,numthreads); 
+    std::unique_ptr<std::vector<string>> keys;
+    do {
+      auto status = range(start_key, end_key, 100, keys);
+      if (!status.ok()) {
+        kio_warning("range(", *start_key, " - ", *end_key, ") failed on cluster. Cannot proceed. ", status);
+        break;
       }
-    }
-  } while (keys && keys->size() && processed_keys < maximum);
-  return processed_keys; 
-}
+      if (keys && keys->size()) {
+        start_key = std::make_shared<const string>(keys->back() + static_cast<char>(0));
+        key_counts.total += keys->size();
 
-int KineticAdminCluster::count(size_t maximum, bool restart)
-{
-  return doOperation(Operation::COUNT, maximum, restart);
-}
-
-int KineticAdminCluster::scan(size_t maximum, bool restart)
-{
-  return doOperation(Operation::SCAN, maximum, restart);
-}
-
-int KineticAdminCluster::repair(size_t maximum, bool restart)
-{
-  return doOperation(Operation::REPAIR, maximum, restart);
-}
-
-int KineticAdminCluster::reset(size_t maximum, bool restart)
-{
-  return doOperation(Operation::RESET, maximum, restart);
-}
-
-AdminClusterInterface::KeyCounts KineticAdminCluster::getCounts()
-{
-  /* Re-initialize background operation handler to ensure that all possibly scheduled operations
-   complete before returning key counts. */
-  bg.reset(new BackgroundOperationHandler(threads, threads));
+        if (o != Operation::COUNT) {
+          std::vector<std::shared_ptr<const string>> out;
+          for (auto it = keys->cbegin(); it != keys->cend(); it++){
+             out.push_back(std::make_shared<const string>(std::move(*it)));
+          }
+          bg.run(std::bind(&KineticAdminCluster::applyOperation, this, o, std::ref(key_counts), out));
+        }
+        if(callback)
+          callback(key_counts.total);
+      }
+    } while (keys && keys->size());
+  }
+  
   return KeyCounts{key_counts.total, key_counts.incomplete, key_counts.need_action, 
-          key_counts.repaired, key_counts.removed, key_counts.unrepairable};
+                   key_counts.repaired, key_counts.removed, key_counts.unrepairable}; 
+}
+
+int KineticAdminCluster::count(OperationTarget target, std::function<void(int)> callback)
+{
+  return doOperation(Operation::COUNT, target, std::move(callback), 0).total;
+}
+
+kio::AdminClusterInterface::KeyCounts KineticAdminCluster::scan(OperationTarget target, std::function<void(int)> callback, int numThreads)
+{
+  return doOperation(Operation::SCAN, target, std::move(callback), numThreads);
+}
+
+kio::AdminClusterInterface::KeyCounts KineticAdminCluster::repair(OperationTarget target, std::function<void(int)> callback, int numThreads)
+{
+  return doOperation(Operation::REPAIR, target, std::move(callback), numThreads);
+}
+
+kio::AdminClusterInterface::KeyCounts KineticAdminCluster::reset(OperationTarget target, std::function<void(int)> callback, int numThreads)
+{
+  return doOperation(Operation::RESET, target, std::move(callback), numThreads);
 }
