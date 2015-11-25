@@ -21,7 +21,7 @@ public:
   //! Specify which types of keys should be targeted in an operation. 
   //----------------------------------------------------------------------------
   enum class OperationTarget{
-    ALL, FILE, ATTRIBUTE, INDICATOR, INVALID
+    DATA, METADATA, ATTRIBUTE, INDICATOR, INVALID
   };
   
   //----------------------------------------------------------------------------

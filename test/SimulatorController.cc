@@ -31,7 +31,7 @@ bool SimulatorController::start(int index)
       pids.resize(index+1);
     pids[index] = pid;
     kio_debug("Starting Simulator on port ", 8123+index, "with pid ",pids[index]);
-    usleep(1000 * 1000);
+    usleep(1000 * 2000);
     return true;
   }
 }

@@ -60,6 +60,7 @@ private:
       KeyCountsInternal() : total(0), incomplete(0), need_action(0), repaired(0), removed(0), unrepairable(0) {};
   };
   
+  //! Callback function to report incremental progress
   std::function<void(int)> callback;
   
   //--------------------------------------------------------------------------
@@ -72,7 +73,12 @@ private:
   //! @param numthreads the number of io threads
   //! @return statistics of keys
   //--------------------------------------------------------------------------
-  KeyCounts doOperation(Operation o, OperationTarget t, std::function<void(int)> callback, int numthreads);
+  KeyCounts doOperation(
+    Operation o, 
+    OperationTarget t, 
+    std::function<void(int)> callback, 
+    int numthreads
+  );
 
   //--------------------------------------------------------------------------
   //! Apply a scan / repair / reset operation to the supplied keys.
@@ -81,7 +87,11 @@ private:
   //! @param key_counts keep statistics current
   //! @param keys a set of keys apply the requested operation on
   //--------------------------------------------------------------------------
-  void applyOperation(Operation o, KeyCountsInternal& key_counts, std::vector<std::shared_ptr<const std::string>> keys);
+  void applyOperation(
+    Operation o, 
+    KeyCountsInternal& key_counts, 
+    std::vector<std::shared_ptr<const std::string>> keys
+  );
 
   //--------------------------------------------------------------------------
   //! Scan all chunk versions of the stripe key. If sufficient chunks cannot be
@@ -93,7 +103,10 @@ private:
   //! @return true if the key needs to be repaired, false if it is
   //! either fine or nothing can be done due to unreachable drives.
   //--------------------------------------------------------------------------
-  bool scanKey(const std::shared_ptr<const std::string>& key, KeyCountsInternal& key_counts);
+  bool scanKey(
+    const std::shared_ptr<const std::string>& key, 
+    KeyCountsInternal& key_counts
+  );
   
   //--------------------------------------------------------------------------
   //! Repairs stripe key.
@@ -101,7 +114,23 @@ private:
   //! @param key the key of the stripe to test
   //! @param key_counts  keep statistics current by increasing repaired / removed counts.
   //--------------------------------------------------------------------------
-  void repairKey(const std::shared_ptr<const std::string>& key, KeyCountsInternal& key_counts);
+  void repairKey(
+    const std::shared_ptr<const std::string>& key, 
+    KeyCountsInternal& key_counts
+  );
+
+  //--------------------------------------------------------------------------
+  //! Initialize start and end keys for range requests based on operation target.
+  //!
+  //! @param t the operation target type
+  //! @param start_key start key for range request
+  //! @param end_key end_key for range request
+  //--------------------------------------------------------------------------
+  void initRangeKeys(
+    OperationTarget t, 
+    std::shared_ptr<const std::string>& start_key, 
+    std::shared_ptr<const std::string>& end_key
+  );
 };
 
 }

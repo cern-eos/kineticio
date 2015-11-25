@@ -125,7 +125,7 @@ std::unique_ptr<KineticAdminCluster> ClusterMap::getAdminCluster(const std::stri
   fillArgs(ki, ec, cops);
 
   return std::unique_ptr<KineticAdminCluster>(new KineticAdminCluster(
-      ki.numData, ki.numParity, ki.blockSize,
+      id, ki.numData, ki.numParity, ki.blockSize,
       cops, ki.min_reconnect_interval, ki.operation_timeout,
       ec, *listener)
   );
@@ -147,7 +147,7 @@ std::shared_ptr<ClusterInterface> ClusterMap::getCluster(const std::string &id)
     fillArgs(ki, ec, cops);
 
     ki.cluster = std::make_shared<KineticCluster>(
-        ki.numData, ki.numParity, ki.blockSize,
+        id, ki.numData, ki.numParity, ki.blockSize,
         cops, ki.min_reconnect_interval, ki.operation_timeout,
         ec, *listener
     );

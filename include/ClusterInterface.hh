@@ -119,13 +119,6 @@ public:
     const std::shared_ptr<const std::string>& end_key,
     int maxRequested,
     std::unique_ptr< std::vector<std::string> >& keys) = 0;
-
-  //----------------------------------------------------------------------------
-  //! Obtain unique id for cluster instance. 
-  //! 
-  //! @return the cluster id 
-  //----------------------------------------------------------------------------
-  virtual const std::string& id() const = 0;
   
   //----------------------------------------------------------------------------
   //! Obtain maximum key / version / value sizes.
@@ -155,6 +148,20 @@ public:
   //----------------------------------------------------------------------------
   virtual ClusterIo iostats() = 0;
   
+  //----------------------------------------------------------------------------
+  //! Obtain unique id for cluster instance (changes for different instances of
+  //! the same cluster).
+  //! 
+  //! @return the cluster instance-id 
+  //----------------------------------------------------------------------------
+  virtual const std::string& instanceId() const = 0;
+  
+  //----------------------------------------------------------------------------
+  //! Obtain identifier of the cluster.
+  //! 
+  //! @return the cluster id 
+  //----------------------------------------------------------------------------
+  virtual const std::string& id() const = 0;
   
   //----------------------------------------------------------------------------
   //! Destructor.

@@ -12,14 +12,16 @@ using namespace kinetic;
 using namespace kio;
 
 KineticCluster::KineticCluster(
-    std::size_t stripe_size, std::size_t num_parities, std::size_t block_size,
+    std::string id, std::size_t stripe_size, std::size_t num_parities, std::size_t block_size,
     std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> > info,
     std::chrono::seconds min_reconnect_interval,
     std::chrono::seconds op_timeout,
     std::shared_ptr<ErasureCoding> ec,
     SocketListener& listener
-) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout), clusteridentifier(utility::uuidGenerateString()),
-     statistics_snapshot{0,0,0,0,0}, clusterio{0,0,0,0,0}, clustersize{1,0}, background(1,1), erasure(ec)
+) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout), 
+    identity(id), instanceIdentity(utility::uuidGenerateString()),
+    statistics_snapshot{0,0,0,0,0}, clusterio{0,0,0,0,0}, 
+    clustersize{1,0}, background(1,1), erasure(ec)
 {
   if (nData + nParity > info.size()) {
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
@@ -45,8 +47,8 @@ KineticCluster::KineticCluster(
                                    "is bigger than maximum drive block size of ", l.max_value_size);
       }
       clusterlimits.max_key_size = l.max_key_size;
-      clusterlimits.max_value_size = block_size * nData;
       clusterlimits.max_version_size = l.max_version_size;
+      clusterlimits.max_value_size = block_size * nData;
       break;
     }
   }
@@ -145,7 +147,7 @@ void KineticCluster::putIndicatorKey(const std::shared_ptr<const std::string>& k
     /* Schedule a write... we're not sticking around. If something fails, tough luck. */
     try{
       auto con = ops[i].connection->get();
-      con->Put(utility::keyToIndicator(*key), 
+      con->Put(utility::makeIndicatorKey(*key), 
               make_shared<const string>(), 
               kinetic::WriteMode::REQUIRE_SAME_VERSION, 
               record, 
@@ -428,7 +430,6 @@ KineticStatus KineticCluster::range(
   auto rmap = execute(ops, *sync);
 
   if (rmap[StatusCode::OK] > connections.size() - nData - nParity) {
-    /* Process Results stored in Callbacks. */
     /* merge in set to eliminate doubles  */
     std::set<std::string> set;
     for (auto o = ops.cbegin(); o != ops.cend(); o++) {
@@ -523,9 +524,14 @@ const ClusterLimits& KineticCluster::limits() const
   return clusterlimits;
 }
 
+const std::string& KineticCluster::instanceId() const
+{
+  return instanceIdentity;
+}
+
 const std::string& KineticCluster::id() const
 {
-  return clusteridentifier;
+  return identity;
 }
 
 ClusterSize KineticCluster::size()

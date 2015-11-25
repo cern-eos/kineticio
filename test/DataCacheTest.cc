@@ -14,6 +14,11 @@ using namespace std::chrono;
 
 class MockCluster : public ClusterInterface {
 public:  
+  const std::string& instanceId() const
+  {
+    return _id;
+  }
+
   const std::string& id() const
   {
     return _id;
@@ -85,9 +90,9 @@ private:
 class MockFileIo : public kio::FileIo {
 public:
 
-  MockFileIo(std::string path, std::shared_ptr<kio::ClusterInterface> c){
+  MockFileIo(std::string path, std::shared_ptr<kio::ClusterInterface> c) {
     cluster = c; 
-    block_basename = path; 
+    path = path; 
     }
   ~MockFileIo (){};
 

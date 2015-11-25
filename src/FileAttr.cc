@@ -4,9 +4,9 @@
 using std::string;
 using namespace kio;
 
-FileAttr::FileAttr(const char *p,
+FileAttr::FileAttr(std::string base,
                    std::shared_ptr<ClusterInterface> c) :
-    path(p), cluster(c)
+    path(base), cluster(c)
 {
 }
 
@@ -44,7 +44,7 @@ bool FileAttr::Get(const char *name, char *content, size_t &size)
   if(type == RequestType::STANDARD){
     std::shared_ptr<const string> version;
     auto status = cluster->get(
-        utility::constructAttributeKey(path, name),
+        utility::makeAttributeKey(cluster->id(), path, name),
         false, version, value);
 
     /* Requested attribute doesn't exist or there was connection problem. */
@@ -96,7 +96,7 @@ bool FileAttr::Set(const char *name, const char *content, size_t size)
 
   auto empty = std::make_shared<const string>();
   auto status = cluster->put(
-      utility::constructAttributeKey(path,name),
+      utility::makeAttributeKey(cluster->id(), path, name),
       empty,
       std::make_shared<const string>(content, size),
       true,

@@ -25,7 +25,7 @@ std::vector<bool> KineticAdminCluster::status()
 
 bool isIndicatorKey(const string& key)
 {
-  auto empty_indicator = utility::keyToIndicator("");
+  auto empty_indicator = utility::makeIndicatorKey("");
   return key.compare(0, empty_indicator->length(), *empty_indicator) == 0;
 }
 
@@ -39,12 +39,11 @@ bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyC
   auto target_version = asyncops::mostFrequentVersion(ops);
 
   if(valid_results < nData+nParity){
-    kio_debug("Not all drives for key \"", *key, "\" could be accessed: Only ", valid_results, " valid results for a "
-        "stripe size of ", nData+nParity);
+    kio_debug("Key \"", *key, "\": Only ", valid_results, " valid results for a stripe size of ", nData+nParity);
     key_counts.incomplete++;
   }
   if(target_version.frequency == valid_results && valid_results >= nData) {
-    kio_debug("Key \"", *key, "\" does not require repair.");
+    kio_debug("Key \"", *key, "\" does not require action.");
     return false;
   }
   else if(target_version.frequency >=  nData || rmap[StatusCode::REMOTE_NOT_FOUND] >= nData) {
@@ -121,27 +120,30 @@ void KineticAdminCluster::applyOperation(Operation o, KeyCountsInternal& key_cou
   }
 }
 
-void initRangeKeys(
-    kio::KineticAdminCluster::OperationTarget t, 
+void KineticAdminCluster::initRangeKeys(
+    OperationTarget t, 
     std::shared_ptr<const string>& start_key, 
     std::shared_ptr<const string>& end_key
 )
 {
-  end_key = std::make_shared<const string>(1, static_cast<char>(255));
+  auto id = this->id();
   switch(t){
-    case kio::KineticAdminCluster::OperationTarget::ALL: 
-      start_key = std::make_shared<const string>(1, static_cast<char>(0));
+    case OperationTarget::METADATA:
+      start_key = utility::makeMetadataKey(id, " ");
+      end_key   = utility::makeMetadataKey(id, "~");
       break;
-    case kio::KineticAdminCluster::OperationTarget::ATTRIBUTE:
-      start_key = utility::constructAttributeKey("","");
-      end_key = utility::constructAttributeKey(*end_key, *end_key);
+    case OperationTarget::ATTRIBUTE:
+      start_key = utility::makeAttributeKey(id, " ", " ");
+      end_key   = utility::makeAttributeKey(id, "~", "~");
       break;
-    case kio::KineticAdminCluster::OperationTarget::FILE:
-      start_key = std::make_shared<const string>("/");
+    case OperationTarget::DATA:
+      start_key = utility::makeDataKey(id, " ", 0);
+      end_key   = utility::makeDataKey(id, "~", 99999999);
       break;
-    case kio::KineticAdminCluster::OperationTarget::INDICATOR:
-      start_key = utility::keyToIndicator("");
-      end_key = utility::keyToIndicator(*end_key);
+    case OperationTarget::INDICATOR:
+      start_key = utility::makeIndicatorKey(id);
+      end_key   = utility::makeIndicatorKey(id + "~");
+      break;
   }   
 }
 

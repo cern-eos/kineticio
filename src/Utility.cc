@@ -51,19 +51,17 @@ std::ostream& kio::utility::operator<<(std::ostream& os, const std::chrono::seco
   return os;
 }
 
-
-std::shared_ptr<const std::string> utility::constructBlockKey(const std::string& base, int block_number)
-{
-  std::ostringstream ss;
-  ss << base << "_" << std::setw(10) << std::setfill('0') << block_number;
-  return std::make_shared<const std::string>(ss.str());
-}
-
 std::string utility::extractClusterID(const std::string& path)
 {
   size_t id_start = path.find_first_of(':') + 1;
   size_t id_end   = path.find_first_of(':', id_start);
   return path.substr(id_start, id_end-id_start);
+}
+
+std::string utility::extractBasePath(const std::string& path)
+{
+  auto start = path.find_first_of(':') + 1;
+  return path.substr(path.find_first_of(':', start) + 1);
 }
 
 std::string utility::uuidGenerateString()
@@ -88,17 +86,36 @@ std::size_t utility::uuidDecodeSize(const std::shared_ptr<const std::string>& uu
   return atoi(size.c_str());
 }
 
-std::shared_ptr<const std::string> utility::keyToIndicator(const std::string& key)
+std::shared_ptr<const std::string> utility::makeDataKey(const std::string& clusterId, const std::string& base, int block_number)
 {
-  return std::make_shared<const std::string>("-indicator-" + key);
+  std::ostringstream ss;
+  ss << clusterId << ":data:" << base << "_" << std::setw(10) << std::setfill('0') << block_number;
+  return std::make_shared<const std::string>(ss.str());
+}
+
+std::shared_ptr<const std::string> utility::makeMetadataKey(const std::string& clusterId, const std::string& base)
+{
+  return std::make_shared<const std::string>(clusterId + ":metadata:" + base);
+}
+
+std::shared_ptr<const std::string> utility::makeAttributeKey(const std::string& clusterId, const std::string& base, const std::string& attribute_name)
+{
+  return std::make_shared<const std::string>(clusterId + ":attribute:"+ base + ":" + attribute_name);
+}
+
+std::shared_ptr<const std::string> utility::makeIndicatorKey(const std::string& key)
+{
+  return std::make_shared<const std::string>("indicator:" + key);
 }
 
 std::shared_ptr<const std::string> utility::indicatorToKey(const std::string& indicator_key)
 {
-  return std::make_shared<const std::string>(indicator_key.substr(sizeof("-indicator"),std::string::npos));  
+  return std::make_shared<const std::string>(indicator_key.substr(sizeof("indicator"),std::string::npos));  
 }
 
-std::shared_ptr<const std::string> utility::constructAttributeKey(const std::string& key, const std::string& attribute_name)
+std::string utility::metadataToPath(const std::string& mdkey)
 {
-  return std::make_shared<const std::string>("-attribute-"+ key + "-" + attribute_name);
+  auto pos1 = mdkey.find_first_of(':');
+  auto pos2 = mdkey.find_first_of(':', pos1+1);  
+  return "kinetic:" + mdkey.substr(0,pos1) + mdkey.substr(pos2);
 }

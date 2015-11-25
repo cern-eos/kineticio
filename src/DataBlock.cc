@@ -45,7 +45,7 @@ void DataBlock::reassign(std::shared_ptr<ClusterInterface> c, std::shared_ptr<co
 
 std::string DataBlock::getIdentity()
 {
-  return *key + cluster->id();
+  return *key + cluster->instanceId();
 }
 
 bool DataBlock::validateVersion()

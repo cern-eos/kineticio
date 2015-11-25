@@ -38,10 +38,10 @@ int kinetic_help(){
   fprintf(stdout, "             repair                                          : check keys, repair as required, display key status information (Warning: Long Runtime)\n");
   fprintf(stdout, "             reset                                           : force remove keys (Warning: Data will be lost!)\n");
   fprintf(stdout, "         <target>\n");
-  fprintf(stdout, "             all                                             : all keys of the cluster\n");
-  fprintf(stdout, "             data                                            : only data keys\n");
-  fprintf(stdout, "             attribute                                       : only attribute keys\n");
-  fprintf(stdout, "             indicator                                       : only keys with indicators (written automatically when encountering partial failures during normal operation)\n");
+  fprintf(stdout, "             data                                            : data keys\n");
+  fprintf(stdout, "             metadata                                        : metadata keys\n");
+  fprintf(stdout, "             attribute                                       : attribute keys\n");
+  fprintf(stdout, "             indicator                                       : keys with indicators (written automatically when encountering partial failures during normal operation)\n");
   fprintf(stdout, "\n");
   fprintf(stdout, "       kinetic ... [--threads <numthreads>] ...              : (optional) specify the number of background io threads \n");
   fprintf(stdout, "       kinetic ... [--verbosity debug|notice|warning|error]  : (optional) specify verbosity level, warning is set as default \n");
@@ -107,12 +107,12 @@ bool parseArguments(int argc, char** argv, Configuration& config) {
       config.op = Operation::STATUS;
     else if(strcmp("reset", argv[i]) == 0)
       config.op = Operation::RESET;
-    else if(strcmp("all", argv[i]) == 0)
-      config.target = OperationTarget::ALL;
     else if(strcmp("indicator", argv[i]) == 0)
       config.target = OperationTarget::INDICATOR;
     else if(strcmp("data", argv[i]) == 0)
-      config.target = OperationTarget::FILE;
+      config.target = OperationTarget::DATA;
+    else if(strcmp("metadata", argv[i]) == 0)
+      config.target = OperationTarget::METADATA;
     else if(strcmp("attribute", argv[i]) == 0)
       config.target = OperationTarget::ATTRIBUTE;
     else if(strcmp("-m", argv[i]) == 0)

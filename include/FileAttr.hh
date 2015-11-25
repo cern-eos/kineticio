@@ -42,8 +42,8 @@ public:
   // ------------------------------------------------------------------------
   //! Constructor
   // ------------------------------------------------------------------------
-  explicit FileAttr (const char* path,
-                  std::shared_ptr<ClusterInterface> cluster);
+  explicit FileAttr (std::string path, 
+                     std::shared_ptr<ClusterInterface> cluster);
 
   // ------------------------------------------------------------------------
   //! Destructor
@@ -51,7 +51,7 @@ public:
   ~FileAttr ();
 
 private:
-  //! the path of the FileIo object this attribute object is associated with
+  //! the base path of the FileIo object this attribute object is associated with
   std::string path;
   //! the cluster attributes are to be stored in / retrieved from
   std::shared_ptr<ClusterInterface> cluster;

@@ -36,7 +36,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
     std::size_t nParity = 1;
     std::size_t blocksize = 1024*1024;
 
-    auto cluster = make_shared<KineticCluster>(nData, nParity, blocksize, info,
+    auto cluster = make_shared<KineticCluster>("testcluster", nData, nParity, blocksize, info,
                                                std::chrono::seconds(20),
                                                std::chrono::seconds(2),
                                                std::make_shared<ErasureCoding>(nData, nParity),
@@ -91,14 +91,14 @@ SCENARIO("Cluster integration test.", "[Cluster]")
             THEN("An indicator key will have been generated, showing that the stripe had a problem."){
                 std::unique_ptr<std::vector<string>> keys; 
                 auto status = cluster->range(
-                  utility::keyToIndicator(""),
-                  utility::keyToIndicator("~"),
+                  utility::makeIndicatorKey(""),
+                  utility::makeIndicatorKey("~"),
                   100,
                   keys
                 );
                 REQUIRE(status.ok());
                 REQUIRE(keys->size() == 1);
-                REQUIRE(keys->at(0) == *utility::keyToIndicator("key"));
+                REQUIRE(keys->at(0) == *utility::makeIndicatorKey("key"));
             }
         }
 

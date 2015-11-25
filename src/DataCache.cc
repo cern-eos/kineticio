@@ -150,8 +150,8 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
    
   /* We cannot use the block key directly for cache lookups, as reloading the configuration will create 
      different cluster objects and we have to avoid FileIo objects being associated with multiple clusters */
-  auto block_key = utility::constructBlockKey(owner->block_basename, blocknumber);
-  std::string cache_key = *block_key + owner->cluster->id();
+  auto data_key = utility::makeDataKey(owner->cluster->id(), owner->path, blocknumber);
+  std::string cache_key = *data_key + owner->cluster->instanceId();
   
   /* Register requested block with read-ahead logic if requested. */
   if (prefetch)
@@ -160,7 +160,7 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
   std::lock_guard<std::mutex> cachelock(cache_mutex);
   /* If the requested block is already cached, we can return it without IO. */
   if (lookup.count(cache_key)) {
-    kio_debug("Serving data key ", *block_key, " for owner ", owner, " from cache.");
+    kio_debug("Serving data key ", *data_key, " for owner ", owner, " from cache.");
     
     /* Splicing the element into the front of the list will keep iterators valid. */
     cache.splice(cache.begin(), cache, lookup[cache_key]);
@@ -184,14 +184,14 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
     unused_size -= it->data->capacity();
     it->owners.clear();
     it->owners.insert(owner);
-    it->data->reassign(owner->cluster, block_key, mode);
+    it->data->reassign(owner->cluster, data_key, mode);
     it->last_access = std::chrono::system_clock::now();
     cache.splice(cache.begin(), unused_items, it);  
     
   }else{
     cache.push_front(
       CacheItem{ std::set<kio:: FileIo*>{owner}, 
-                 std::make_shared<DataBlock>(owner->cluster, block_key, mode), 
+                 std::make_shared<DataBlock>(owner->cluster, data_key, mode), 
                  std::chrono::system_clock::now()
       }
     );
@@ -200,7 +200,7 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
   lookup[cache_key] = cache.begin();
   owner_tables[owner].insert(cache.begin());
 
-  kio_debug("Added data key ", *block_key, " to the cache for owner ", owner);
+  kio_debug("Added data key ", *data_key, " to the cache for owner ", owner);
   return cache.front().data;;
 }
 

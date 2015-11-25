@@ -15,14 +15,17 @@ std::unique_ptr<FileIoInterface> Factory::makeFileIo()
 
 std::unique_ptr<FileAttrInterface> Factory::makeFileAttr(const char* path)
 {
-  auto cluster = ClusterMap::getInstance().getCluster(utility::extractClusterID(path));
-
+  auto clusterId = utility::extractClusterID(path);
+  auto cluster = ClusterMap::getInstance().getCluster(clusterId);
+  auto base = utility::extractBasePath(path);
+  auto mdkey = utility::makeMetadataKey(clusterId, base);
+  
   std::shared_ptr<const std::string> empty;
-  auto status = cluster->get(std::make_shared<const std::string>(path), true, empty, empty);
+  auto status = cluster->get(mdkey, true, empty, empty);
 
   if (!status.ok())
     return std::unique_ptr<FileAttrInterface>();
-  return std::unique_ptr<FileAttr>(new FileAttr(path, cluster));
+  return std::unique_ptr<FileAttr>(new FileAttr(base, cluster));
 }
 
 void Factory::registerLogFunction(logfunc_t log, shouldlogfunc_t shouldLog)

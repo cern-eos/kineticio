@@ -21,21 +21,25 @@ FileIo::~FileIo()
 {
   /* If fileIo object is destroyed without closing properly, throw cache data out the window. */
   if(cache)
-  cache->drop(this, true);
+    cache->drop(this, true);
 }
 
-/* All necessary checks have been done in the 993 line long
- * XrdFstOfsFile::open method before we are called. */
 void FileIo::Open(const std::string &p, int flags,
                   mode_t mode, const std::string &opaque, uint16_t timeout)
 {
-  auto c = ClusterMap::getInstance().getCluster(utility::extractClusterID(p));
-
+  if (cluster)
+    throw kio_exception(EPERM, "A cluster is already set for FileIO object. Cannot open object twice.");
+  
+  auto clusterId = utility::extractClusterID(p);
+  path = utility::extractBasePath(p);
+  auto mdkey = utility::makeMetadataKey(clusterId, path);
+  auto mdcluster = ClusterMap::getInstance().getCluster(clusterId);
+  
   KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "");
   if(flags & SFS_O_CREAT) {
     shared_ptr<const string> version;
-    status = c->put(
-        make_shared<string>(p),
+    status = mdcluster->put(
+        mdkey,
         make_shared<const string>(),
         make_shared<const string>(),
         false,
@@ -49,8 +53,8 @@ void FileIo::Open(const std::string &p, int flags,
   else {
     shared_ptr<const string> version;
     std::shared_ptr<const string> value;
-    status = c->get(
-        make_shared<string>(p),
+    status = mdcluster->get(
+        mdkey,
         true,
         version,
         value
@@ -62,24 +66,20 @@ void FileIo::Open(const std::string &p, int flags,
   if(!status.ok())
     throw kio_exception(EIO, "Unexpected error opening file ", p, ": ", status);
 
-  /* Setting cluster & path variables. */
+  /* Setting cluster & cache variables. */
   cache = &(ClusterMap::getInstance().getCache());
-  cluster = c;
-  obj_path = p;
-  block_basename = obj_path.substr(obj_path.find_last_of(':') + 1, obj_path.length());
+  cluster = mdcluster;
 }
 
 
 void FileIo::Close(uint16_t timeout)
 {
   if (!cluster)
-    throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ");
 
   cache->flush(this);
   cache->drop(this);
   cluster.reset();
-  obj_path.clear();
-  block_basename.clear();
 }
 
 
@@ -87,7 +87,7 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
                           int length, FileIo::rw mode, uint16_t timeout)
 {
   if (!cluster)
-    throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ");
 
   const size_t block_capacity = cluster->limits().max_value_size;
   size_t length_todo = length;
@@ -158,7 +158,7 @@ int64_t FileIo::Write(long long offset, const char *buffer,
 void FileIo::Truncate(long long offset, uint16_t timeout)
 {
   if (!cluster)
-    throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ");
 
   const size_t block_capacity = cluster->limits().max_value_size;
   int block_number = offset / block_capacity;
@@ -181,15 +181,15 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
   const size_t max_keys_requested = 100;
   do {
     KineticStatus status = cluster->range(
-        utility::constructBlockKey(block_basename, offset ? block_number + 1 : 0),
-        utility::constructBlockKey(block_basename, std::numeric_limits<int>::max()),
+        utility::makeDataKey(cluster->id(), path, offset ? block_number + 1 : 0),
+        utility::makeDataKey(cluster->id(), path, std::numeric_limits<int>::max()),
         max_keys_requested, keys);
     if (!status.ok())
-      throw kio_exception(EIO, "KeyRange request unexpectedly failed for object ",  obj_path,  ": ", status);
+      throw kio_exception(EIO, "KeyRange request unexpectedly failed for path ",  path,  ": ", status);
 
     for (auto iter = keys->begin(); iter != keys->end(); ++iter) {
       status = cluster->remove(make_shared<string>(*iter),
-                               make_shared<string>(""), true);
+                               make_shared<string>(), true);
       if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
         throw kio_exception(EIO, "Deleting block ", *iter, " failed: ", status);
     }
@@ -202,16 +202,15 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
 void FileIo::Remove(uint16_t timeout)
 {
   Truncate(0);
-  KineticStatus status = cluster->remove(make_shared<string>(obj_path),
-                                         make_shared<string>(), true);
+  KineticStatus status = cluster->remove(utility::makeMetadataKey(cluster->id(), path), make_shared<string>(), true);
   if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
-    throw kio_exception(EIO, "Could not delete metdata key ", obj_path, ": ", status);
+    throw kio_exception(EIO, "Could not delete metdata key for path", path, ": ", status);
 }
 
 void FileIo::Sync(uint16_t timeout)
 {
   if (!cluster)
-    throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ");
 
   cache->flush(this);
 }
@@ -219,7 +218,7 @@ void FileIo::Sync(uint16_t timeout)
 void FileIo::Stat(struct stat *buf, uint16_t timeout)
 {
   if (!cluster)
-    throw kio_exception(ENXIO, "No cluster set for FileIO object ", obj_path);
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ");
 
   lastBlockNumber.verify();
   std::shared_ptr<DataBlock> last_block = cache->get(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD, false);
@@ -233,17 +232,12 @@ void FileIo::Stat(struct stat *buf, uint16_t timeout)
 
 void FileIo::Statfs(const char *p, struct statfs *sfs)
 {
-  if (obj_path.length() && obj_path.compare(p))
-    throw kio_exception(EINVAL, "Object concurrently used for both Statfs and FileIO: ", obj_path);
-
-  if (!cluster) {
-    cluster = ClusterMap::getInstance().getCluster(utility::extractClusterID(p));
-    obj_path = p;
-  }
-
-  ClusterSize s = cluster->size();
+  auto statfsClusterID = utility::extractClusterID(p);
+  auto statfsCluster = ClusterMap::getInstance().getCluster(statfsClusterID);
+  
+  ClusterSize s = statfsCluster->size();
   if (!s.bytes_total)
-    throw kio_exception(EIO, "Could not obtain cluster size values: ", obj_path);
+    throw kio_exception(EIO, "Could not obtain cluster size values: ");
 
   /* Minimal allocated block size. Set to 4K because that's the
    * maximum accepted value by Linux. */
@@ -279,12 +273,23 @@ struct ftsState
 
 void *FileIo::ftsOpen(std::string subtree)
 {
-  cluster = ClusterMap::getInstance().getCluster(utility::extractClusterID(subtree));
-  return new ftsState(subtree);
+  if (cluster)
+    throw kio_exception(EINVAL, "A cluster is already set for FileIO object. Cannot open object twice");
+  
+  auto clusterId = utility::extractClusterID(subtree);
+  cluster = ClusterMap::getInstance().getCluster(clusterId);
+    
+  auto base_path = utility::extractBasePath(subtree);
+  auto mdkey = utility::makeMetadataKey(clusterId, base_path);
+
+  return new ftsState(*mdkey);
 }
 
 std::string FileIo::ftsRead(void *fts_handle)
 {
+  if (!cluster)
+    throw kio_exception(ENXIO, "No cluster set for FileIO object");
+    
   if (!fts_handle) return "";
   ftsState *state = (ftsState *) fts_handle;
 
@@ -299,11 +304,18 @@ std::string FileIo::ftsRead(void *fts_handle)
         max_key_requests, state->keys
     );
   }
-  return state->keys->empty() ? "" : state->keys->at(state->index++);
+  if(state->keys->empty())
+    return "";
+  
+  return utility::metadataToPath( state->keys->at(state->index++) );
 }
 
 int FileIo::ftsClose(void *fts_handle)
 {
+  if (!cluster)
+    throw kio_exception(ENXIO, "No cluster set for FileIO object");
+    
+  cluster.reset();
   ftsState *state = (ftsState *) fts_handle;
   if (state) {
     delete state;
@@ -346,14 +358,14 @@ void FileIo::LastBlockNumber::verify()
   do {
     KineticStatus status = parent.cluster->range(
         keys ? make_shared<const string>(keys->back()) :
-               utility::constructBlockKey(parent.block_basename, last_block_number),
-        utility::constructBlockKey(parent.block_basename,std::numeric_limits<int>::max()),
+        utility::makeDataKey(parent.cluster->id(), parent.path, last_block_number),
+        utility::makeDataKey(parent.cluster->id(), parent.path, std::numeric_limits<int>::max()),
         max_keys_requested,
         keys);
 
     if (!status.ok())
-      throw kio_exception(EIO, "KeyRange request unexpectedly failed for blocks with base name: ",
-                          parent.block_basename, ": ", status);
+      throw kio_exception(EIO, "KeyRange request unexpectedly failed for blocks of path: ",
+                          parent.path, ": ", status);
   } while (keys->size() == max_keys_requested);
 
   /* Success: get block number from last key.*/
@@ -376,9 +388,9 @@ void FileIo::LastBlockNumber::verify()
   shared_ptr<const string> version;
   shared_ptr<const string> value;
   auto status = parent.cluster->get(
-      make_shared<const string>(parent.obj_path),
+      make_shared<const string>(parent.path),
       true, version, value);
   if (!status.ok())
-    throw kio_exception(ENOENT, "File does not exist: ", parent.obj_path);
+    throw kio_exception(ENOENT, "File does not exist: ", parent.path);
 }
 

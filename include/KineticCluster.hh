@@ -27,6 +27,8 @@ public:
   //! See documentation in superclass.
   const std::string& id() const; 
   //! See documentation in superclass.
+  const std::string& instanceId() const; 
+  //! See documentation in superclass.
   const ClusterLimits& limits() const;
   //! See documentation in superclass.
   ClusterSize size();
@@ -73,7 +75,7 @@ public:
   //! @param erasure pointer to an ErasureCoding object
   //--------------------------------------------------------------------------
   explicit KineticCluster(
-    std::size_t num_data, std::size_t num_parities, std::size_t block_size,
+    std::string id, std::size_t num_data, std::size_t num_parities, std::size_t block_size,
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > targets,
     std::chrono::seconds min_reconnect_interval,
     std::chrono::seconds operation_timeout,
@@ -185,7 +187,10 @@ protected:
   const std::chrono::seconds operation_timeout;
   
   //! cluster id 
-  const std::string clusteridentifier; 
+  const std::string identity;
+  
+  // cluster instance id
+  const std::string instanceIdentity; 
   
   //! all connections associated with this cluster
   std::vector< std::unique_ptr<KineticAutoConnection> > connections;

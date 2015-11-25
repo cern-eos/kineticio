@@ -104,10 +104,18 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     std::string path(base_path+"filename");
 
     REQUIRE_NOTHROW(fileio->Open(path.c_str(), SFS_O_CREAT));
+    
+    THEN("Trying to open anything again on the non-closed object fails with EPERM"){
+      try{
+        fileio->Open(path.c_str(), SFS_O_CREAT);
+      }catch(const LoggingException& le){
+        REQUIRE(le.errnum() == EPERM);
+      }
+    }
 
     THEN("Trying to create the same file again fails with EEXIST"){
       try{
-        fileio->Open(path.c_str(), SFS_O_CREAT);
+        Factory::makeFileIo()->Open(path.c_str(), SFS_O_CREAT);
       }catch(const LoggingException& le){
         REQUIRE(le.errnum() == EEXIST);
       }
@@ -138,6 +146,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
 
     THEN("The first ftsRead returns the full path, the second \"\"."){
+      fileio->Close();
       void * handle = fileio->ftsOpen(base_path);
       REQUIRE(handle != NULL);
       REQUIRE(fileio->ftsRead(handle) == path);
@@ -157,6 +166,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
         REQUIRE(memcmp(write_buf,read_buf,buf_size) == 0);
       
         AND_THEN("attributes are not returned by by ftsRead"){
+            fileio->Close();
             void * handle = fileio->ftsOpen(base_path);
             REQUIRE(handle != NULL);
             REQUIRE(fileio->ftsRead(handle) == path);
@@ -231,12 +241,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
         }
       }
     }
-
-    THEN("Calling statfs on the same object is illegal,"){
-      struct statfs sfs;
-      REQUIRE_THROWS(fileio->Statfs(base_path.c_str(), &sfs));
-    }
-
+    
     AND_WHEN("The file is removed via a second io object."){
       auto fileio_2nd = Factory::makeFileIo();
       REQUIRE_NOTHROW(fileio_2nd->Open(path.c_str(), 0));

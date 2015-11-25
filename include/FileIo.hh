@@ -202,17 +202,14 @@ protected:
   //! we don't want to have to look in the drive map for every access...
   std::shared_ptr<ClusterInterface> cluster;
 
-  //! cache functionality
+  //! data cache functionality
   DataCache* cache;
 
   //! keep track of the last block to answer stat requests reasonably
   LastBlockNumber lastBlockNumber;
 
-  //! the full kinetic path of the form kinetic:clusterID:name
-  std::string obj_path;
-
-  //! the base name for data blocks of this object
-  std::string block_basename;
+  //! extracted from the supplied 'kinetic:clusterId:path' supplied to open()
+  std::string path;
 };
 
 }
