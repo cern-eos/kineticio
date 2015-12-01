@@ -21,6 +21,34 @@
 /*----------------------------------------------------------------------------*/
 
 namespace kio {
+  
+//--------------------------------------------------------------------------
+//! Clusters can be requested to have erasure coded stripes or replication 
+//! to provide redundancy. 
+//--------------------------------------------------------------------------
+enum class RedundancyType{
+  ERASURE_CODING, REPLICATION
+};  
+
+//--------------------------------------------------------------------------
+//! All information required to create a cluster object 
+//--------------------------------------------------------------------------
+struct ClusterInformation
+{
+  //! the number of data blocks in a stripe
+  size_t numData;
+  //! the number of parity blocks in a stripe
+  size_t numParity;
+  //! the size of a single data / parity block in bytes
+  size_t blockSize;
+  //! minimum interval between reconnection attempts to a drive (rate limit)
+  std::chrono::seconds min_reconnect_interval;
+  //! interval after which an operation will timeout without response
+  std::chrono::seconds operation_timeout;
+  //! the unique ids of drives belonging to this cluster
+  std::vector<std::string> drives;
+};
+
 
 //------------------------------------------------------------------------------
 //! Providing access to cluster instances and the data io cache. Threadsafe.
@@ -47,158 +75,60 @@ public:
   std::unique_ptr<KineticAdminCluster> getAdminCluster(const std::string& id);
 
   //--------------------------------------------------------------------------
-  //! Obtain a reference to the io data cache.
-  //!
-  //! @return a reference to the data cache
+  //! Reset the object with supplied configuration
+  //! 
+  //! @param clusterInfo containing id <-> cluster info mapping for all clusters
+  //! @param driveInfo containing id <-> drive info mapping for all clusters
   //--------------------------------------------------------------------------
-  DataCache& getCache();
+  void reset(
+    std::unordered_map<std::string, ClusterInformation> clusterInfo, 
+    std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> driveInfo
+  );
 
   //--------------------------------------------------------------------------
-  //! (Re)load the json configuration files and reconfigure the ClusterMap
-  //! accordingly.
+  //! Constructor.
+  //! 
+  //! @param clusterInfo containing id <-> cluster info mapping for all clusters
+  //! @param driveInfo containing id <-> drive info mapping for all clusters
   //--------------------------------------------------------------------------
-  void loadConfiguration();
-
-
-  //--------------------------------------------------------------------------
-  //! ClusterMap is shared among all FileIo objects.
-  //--------------------------------------------------------------------------
-  static ClusterMap& getInstance();
-
-  //--------------------------------------------------------------------------
-  //! Copy constructing makes no sense
-  //--------------------------------------------------------------------------
-  ClusterMap(ClusterMap&) = delete;
-
-  //--------------------------------------------------------------------------
-  //! Assignment make no sense
-  //--------------------------------------------------------------------------
-  void operator=(ClusterMap&) = delete;
-
+  explicit ClusterMap(
+    std::unordered_map<std::string, ClusterInformation> clusterInfo, 
+    std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> driveInfo
+  );
 
 private:
-  //--------------------------------------------------------------------------
-  //! Configuration of library wide parameters.
-  //--------------------------------------------------------------------------
-  struct Configuration{
-      //! the maximum size of the data cache in bytes
-      size_t stripecache_capacity;
-      //! the maximum number of keys prefetched by readahead algorithm
-      size_t readahead_window_size;
-      //! the number of threads used for bg io in the data cache, can be 0
-      int background_io_threads;
-      //! the maximum number of operations queued for bg io, can be 0 
-      int background_io_queue_capacity;
-  };
-
-  //! storing the library wide configuration parameters
-  Configuration configuration;
-
-  //--------------------------------------------------------------------------
-  //! Store a cluster object and all information required to create it
-  //--------------------------------------------------------------------------
-  struct KineticClusterInfo
-  {
-      //! the number of data blocks in a stripe
-      std::size_t numData;
-      //! the number of parity blocks in a stripe
-      std::size_t numParity;
-      //! the size of a single data / parity block in bytes
-      std::size_t blockSize;
-      //! minimum interval between reconnection attempts to a drive (rate limit)
-      std::chrono::seconds min_reconnect_interval;
-      //! interval after which an operation will timeout without response
-      std::chrono::seconds operation_timeout;
-      //! the unique ids of drives belonging to this cluster
-      std::vector<std::string> drives;
-      //! the cluster object, shared among IO objects of a fst
-      std::shared_ptr<ClusterInterface> cluster;
-  };
-
-  //! the cluster map id <-> cluster info
-  std::unordered_map<std::string, KineticClusterInfo> clustermap;
-
+  //! the cluster id <-> cluster info
+  std::unordered_map<std::string, ClusterInformation> clusterInfoMap;
+  
   //! the drive map id <-> connection info
-  std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> drivemap;
+  std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> driveInfoMap;
+  
+  //! the cluster cache 
+  std::unordered_map<std::string,  std::shared_ptr<ClusterInterface> > clusterCache;
 
   //! RedundancyProvider instances of the same type (nData,nParity) can be shared
   //! among multiple cluster instances
   std::unordered_map<std::string, std::shared_ptr<RedundancyProvider>> rpCache;
-
-  //! the data cache shared among cluster instances
-  std::unique_ptr<DataCache> dataCache;
-
-  //! epoll listener loop shared among all connections
-  std::unique_ptr<SocketListener> listener;
-
+  
+  //! epoll listener loop shared among all connections of clusters in this cluster map 
+  std::unique_ptr<SocketListener> listener;  
+  
   //! concurrency control
   std::mutex mutex;
 
 private:
   //--------------------------------------------------------------------------
-  //! Constructor.
-  //! Requires a json file listing kinetic drives to be stored at the location
-  //! indicated by the KINETIC_DRIVE_LOCATION and KINETIC_DRIVE_SECURITY
-  //! environment variables
-  //--------------------------------------------------------------------------
-  explicit ClusterMap();
-
-  //--------------------------------------------------------------------------
-  //! Set erasure coding instance and connection options based on the
-  //! inforamtion available in the supplied KineticClusterInfo.
+  //! Set redundancy provider and connection options based on the
+  //! information available in the supplied ClusterInfo structure.
   //!
-  //! @param ki Cluster Information
-  //! @param ec Erase Coding instance to set
+  //! @param cinfo Cluster Information
+  //! @param rp redundancy provider instance to set
   //! @param cops Connection Options to fill
   //--------------------------------------------------------------------------
-  void fillArgs(const KineticClusterInfo &ki,
-                std::shared_ptr<RedundancyProvider>& ec,
+  void fillArgs(const ClusterInformation &cinfo,
+                std::shared_ptr<RedundancyProvider>& rp,
                 std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>>& cops
   );
-
-  //--------------------------------------------------------------------------
-  //! Private enum to differentiate between json configuration files.
-  //--------------------------------------------------------------------------
-  enum class filetype { location, security, cluster };
-
-  //--------------------------------------------------------------------------
-  //! Parse the supplied json file.
-  //!
-  //! @param filedata contents of a json file
-  //! @param filetype specifies if filedata contains security or location
-  //!        information.
-  //--------------------------------------------------------------------------
-  void parseJson(const std::string& filedata, filetype type);
-
-  //--------------------------------------------------------------------------
-  //! Creates a KineticConnection pair in the drive map containing the ip and
-  //! port information.
-  //!
-  //! @param drive json root of one drive description containing location data
-  //--------------------------------------------------------------------------
-  void parseDriveLocation(struct json_object* drive);
-
-  //--------------------------------------------------------------------------
-  //! Adds security attributes to drive description
-  //!
-  //! @param drive json root of one drive description containing security data
-  //--------------------------------------------------------------------------
-  void parseDriveSecurity(struct json_object* drive);
-
-  //--------------------------------------------------------------------------
-  //! Adds security attributes to drive description
-  //!
-  //! @param drive json root of one drive description containing security data
-  //--------------------------------------------------------------------------
-  void parseClusterInformation(struct json_object* cluster);
-
-  //--------------------------------------------------------------------------
-  //! Adds security attributes to drive description
-  //!
-  //! @param drive json root of library configuration
-  //--------------------------------------------------------------------------
-  void parseConfiguration(struct json_object* configuration);
-
 };
 
 }

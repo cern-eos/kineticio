@@ -1,7 +1,7 @@
 #include "KineticIoFactory.hh"
 #include "FileIo.hh"
 #include "FileAttr.hh"
-#include "ClusterMap.hh"
+#include "KineticIoSingleton.hh"
 #include "Utility.hh"
 #include "Logging.hh"
 
@@ -16,7 +16,7 @@ std::unique_ptr<FileIoInterface> Factory::makeFileIo()
 std::unique_ptr<FileAttrInterface> Factory::makeFileAttr(const char* path)
 {
   auto clusterId = utility::extractClusterID(path);
-  auto cluster = ClusterMap::getInstance().getCluster(clusterId);
+  auto cluster = kio().cmap().getCluster(clusterId);
   auto base = utility::extractBasePath(path);
   auto mdkey = utility::makeMetadataKey(clusterId, base);
   
@@ -35,10 +35,10 @@ void Factory::registerLogFunction(logfunc_t log, shouldlogfunc_t shouldLog)
 
 std::unique_ptr<AdminClusterInterface> Factory::makeAdminCluster(const char* cluster_id)
 {
-  return ClusterMap::getInstance().getAdminCluster(cluster_id);
+  return kio().cmap().getAdminCluster(cluster_id);
 }
 
 void Factory::reloadConfiguration()
 {
-  ClusterMap::getInstance().loadConfiguration();
+  kio().loadConfiguration();
 }

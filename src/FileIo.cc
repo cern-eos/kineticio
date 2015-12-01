@@ -1,6 +1,7 @@
 #include "Logging.hh"
 #include "FileIo.hh"
 #include "ClusterMap.hh"
+#include "KineticIoSingleton.hh"
 
 using std::shared_ptr;
 using std::unique_ptr;
@@ -33,7 +34,7 @@ void FileIo::Open(const std::string &p, int flags,
   auto clusterId = utility::extractClusterID(p);
   path = utility::extractBasePath(p);
   auto mdkey = utility::makeMetadataKey(clusterId, path);
-  auto mdcluster = ClusterMap::getInstance().getCluster(clusterId);
+  auto mdcluster = kio().cmap().getCluster(clusterId);
   
   KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "");
   if(flags & SFS_O_CREAT) {
@@ -67,7 +68,7 @@ void FileIo::Open(const std::string &p, int flags,
     throw kio_exception(EIO, "Unexpected error opening file ", p, ": ", status);
 
   /* Setting cluster & cache variables. */
-  cache = &(ClusterMap::getInstance().getCache());
+  cache = &(kio().cache());
   cluster = mdcluster;
 }
 
@@ -233,7 +234,7 @@ void FileIo::Stat(struct stat *buf, uint16_t timeout)
 void FileIo::Statfs(const char *p, struct statfs *sfs)
 {
   auto statfsClusterID = utility::extractClusterID(p);
-  auto statfsCluster = ClusterMap::getInstance().getCluster(statfsClusterID);
+  auto statfsCluster = kio().cmap().getCluster(statfsClusterID);
   
   ClusterSize s = statfsCluster->size();
   if (!s.bytes_total)
@@ -277,7 +278,7 @@ void *FileIo::ftsOpen(std::string subtree)
     throw kio_exception(EINVAL, "A cluster is already set for FileIO object. Cannot open object twice");
   
   auto clusterId = utility::extractClusterID(subtree);
-  cluster = ClusterMap::getInstance().getCluster(clusterId);
+  cluster = kio().cmap().getCluster(clusterId);
     
   auto base_path = utility::extractBasePath(subtree);
   auto mdkey = utility::makeMetadataKey(clusterId, base_path);

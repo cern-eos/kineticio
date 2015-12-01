@@ -60,6 +60,7 @@ set(kineticio_SRC
     src/DataBlock.cc
     src/DataCache.cc
     src/ClusterMap.cc
+    src/KineticIoSingleton.cc
     src/KineticAutoConnection.cc
     src/KineticAsyncOperation.cc
     src/KineticCallbacks.cc
@@ -121,7 +122,7 @@ if(BUILD_TEST)
       )
     endif()
 
-    add_executable(kinetic-test
+    add_executable(kio-test
         ${kineticio_SRC}
         test/TestMain.cc
         test/DataBlockTest.cc
@@ -137,11 +138,11 @@ if(BUILD_TEST)
         test/KineticAdminClusterTest.cc
         test/DataCacheTest.cc
     )
-    target_link_libraries(kinetic-test
+    target_link_libraries(kio-test
         ${Z_LIBRARIES}
         ${kineticio_LIB}
     )
-    add_dependencies(kinetic-test catch)
+    add_dependencies(kio-test catch)
     add_executable(replay ${kineticio_SRC} test/replay.cc)
     target_link_libraries(replay ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
 endif(BUILD_TEST)

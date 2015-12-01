@@ -37,16 +37,16 @@ std::vector< shared_ptr<const string> > makeStripe(int nData, int nParity)
   return stripe;  
 }
 
-SCENARIO("Erasure Encoding Test.", "[Erasure]"){
+SCENARIO("Redundancy Provider Test.", "[Redundancy]"){
     
   GIVEN ("A Replication Code") {
     int nData = 1;
     int nParity = 3; 
-    RedundancyProvider e(nData, nParity);
+    RedundancyProvider rp(nData, nParity);
     auto stripe = makeStripe(nData, nParity);   
     
     WHEN("We encoded Parity Information. "){
-      REQUIRE_NOTHROW(e.compute(stripe));
+      REQUIRE_NOTHROW(rp.compute(stripe));
 
       THEN("Parities are replications."){
         for(int i=0; i<nData+nParity; i++)
@@ -59,12 +59,12 @@ SCENARIO("Erasure Encoding Test.", "[Erasure]"){
     for(int nParity=0; nParity<=8; nParity+=2){
       
       GIVEN("Redundancy configuration: " + utility::Convert::toString(nData, "-", nParity)){
-        RedundancyProvider e(nData, nParity);
+        RedundancyProvider rp(nData, nParity);
         auto stripe = makeStripe(nData, nParity);   
 
         WHEN("We encoded Parity Information. "){
 
-          REQUIRE_NOTHROW(e.compute(stripe));
+          REQUIRE_NOTHROW(rp.compute(stripe));
 
           THEN("We can reconstruct randomly deleted subchunks."){
             srand (time(NULL));
@@ -72,7 +72,7 @@ SCENARIO("Erasure Encoding Test.", "[Erasure]"){
               auto indx = rand()%(nData+nParity);
               stripe[indx] = make_shared<const string>();
             }
-            REQUIRE_NOTHROW(e.compute(stripe));
+            REQUIRE_NOTHROW(rp.compute(stripe));
 
             std::string reconstructed;
             for(int i=0; i<nData; i++){
@@ -85,19 +85,19 @@ SCENARIO("Erasure Encoding Test.", "[Erasure]"){
 
         THEN("Too few healthy chunks throws."){
           stripe[0] = make_shared<const string>();
-          REQUIRE_THROWS_AS(e.compute(stripe), std::invalid_argument);
+          REQUIRE_THROWS_AS(rp.compute(stripe), std::invalid_argument);
         }
 
         if(nData>1) THEN("Invalid chunk size throws."){
           std::string s = *stripe[0];
           s.append("This Chunk is too long.");
           stripe[0] = make_shared<const string>(s);
-          REQUIRE_THROWS_AS(e.compute(stripe), std::invalid_argument);
+          REQUIRE_THROWS_AS(rp.compute(stripe), std::invalid_argument);
         }
 
         THEN("Invalid stripe size throws."){
           stripe.pop_back();
-          REQUIRE_THROWS_AS(e.compute(stripe), std::invalid_argument);
+          REQUIRE_THROWS_AS(rp.compute(stripe), std::invalid_argument);
         }
       }
     }
