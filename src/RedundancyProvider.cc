@@ -1,4 +1,4 @@
-#include "ErasureCoding.hh"
+#include "RedundancyProvider.hh"
 #include "Utility.hh"
 #include <isa-l.h>
 
@@ -84,7 +84,7 @@ static int gf_gen_decode_matrix(
   return 0;
 }
 
-ErasureCoding::ErasureCoding(std::size_t data, std::size_t parity) :
+RedundancyProvider::RedundancyProvider(std::size_t data, std::size_t parity) :
     nData(data), nParity(parity), encode_matrix((nData + nParity) * nData)
 {
   // k = data
@@ -92,7 +92,7 @@ ErasureCoding::ErasureCoding(std::size_t data, std::size_t parity) :
   gf_gen_cauchy1_matrix(encode_matrix.data(), nData + nParity, nData);
 }
 
-std::string ErasureCoding::getErrorPattern(
+std::string RedundancyProvider::getErrorPattern(
     const std::vector<std::shared_ptr<const std::string> > &stripe
 ) const
 {
@@ -131,7 +131,7 @@ std::string ErasureCoding::getErrorPattern(
   return pattern;
 }
 
-ErasureCoding::CodingTable& ErasureCoding::getCodingTable(
+RedundancyProvider::CodingTable& RedundancyProvider::getCodingTable(
     const std::string &pattern
 )
 {
@@ -179,12 +179,33 @@ ErasureCoding::CodingTable& ErasureCoding::getCodingTable(
   return cache.at(pattern);
 }
 
-void ErasureCoding::compute(std::vector<std::shared_ptr<const std::string> > &stripe)
+void replication(std::vector<std::shared_ptr<const std::string> > &stripe, std::string& pattern)
 {
+  int valid; 
+  /* get valid index */
+  for (valid = 0; valid < pattern.size(); valid++)
+    if (!pattern[valid]) 
+      break;
+  
+  for(int i=0; i<pattern.size(); i++){
+    if(pattern[i])
+      stripe[i] = stripe[valid];
+  }  
+}
+
+void RedundancyProvider::compute(std::vector<std::shared_ptr<const std::string> > &stripe)
+{
+  std::string pattern = getErrorPattern(stripe);
+  
+  /* nothing to do if there are no parity blocks. */
   if (!nParity)
     return;
-
-  std::string pattern = getErrorPattern(stripe);
+  
+  /* In case of a single data block use replication */
+  if (nData == 1)
+    return replication(stripe, pattern);
+  
+  /* normal operation: erasure coding */
   auto &dd = getCodingTable(pattern);
 
   unsigned char *inbuf[nData];

@@ -11,7 +11,7 @@
 #include "KineticAsyncOperation.hh"
 #include "KineticCallbacks.hh"
 #include "SocketListener.hh"
-#include "ErasureCoding.hh"
+#include "RedundancyProvider.hh"
 #include <utility>
 #include <chrono>
 #include <mutex>
@@ -79,7 +79,7 @@ public:
     std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > targets,
     std::chrono::seconds min_reconnect_interval,
     std::chrono::seconds operation_timeout,
-    std::shared_ptr<ErasureCoding> erasure,
+    std::shared_ptr<RedundancyProvider> rp,
     SocketListener& sockwatch
   );
 
@@ -221,7 +221,7 @@ protected:
   std::mutex mutex;
 
   //! erasure coding
-  std::shared_ptr<ErasureCoding> erasure;
+  std::shared_ptr<RedundancyProvider> redundancy;
 };
 
 }

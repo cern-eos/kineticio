@@ -60,7 +60,7 @@ void ClusterMap::loadConfiguration()
   std::lock_guard<std::mutex> lock(mutex);
   clustermap.clear();
   drivemap.clear();
-  ecCache.clear();
+  rpCache.clear();
 
   /* parse files */
   parseJson(location_data, filetype::location);
@@ -91,7 +91,7 @@ DataCache& ClusterMap::getCache()
 }
 
 void ClusterMap::fillArgs(const KineticClusterInfo &ki,
-                          std::shared_ptr<ErasureCoding>& ec,
+                          std::shared_ptr<RedundancyProvider>& rp,
                           std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>>& cops)
 {
   for (auto wwn = ki.drives.begin(); wwn != ki.drives.end(); wwn++) {
@@ -100,13 +100,13 @@ void ClusterMap::fillArgs(const KineticClusterInfo &ki,
     cops.push_back(drivemap.at(*wwn));
   }
 
-  auto ectype = utility::Convert::toString(ki.numData, "-", ki.numParity);
-  if(ecCache.count(ectype)){
-    ec = ecCache.at(ectype);
+  auto rtype = utility::Convert::toString(ki.numData, "-", ki.numParity);
+  if(rpCache.count(rtype)){
+    rp = rpCache.at(rtype);
   }
   else{
-    ec = std::make_shared<ErasureCoding>(ki.numData, ki.numParity);
-    ecCache.insert(std::make_pair(ectype, ec));
+    rp = std::make_shared<RedundancyProvider>(ki.numData, ki.numParity);
+    rpCache.insert(std::make_pair(rtype, rp));
   }
 }
 
@@ -120,14 +120,14 @@ std::unique_ptr<KineticAdminCluster> ClusterMap::getAdminCluster(const std::stri
     throw kio_exception(ENODEV, "Nonexisting cluster id requested: ", id);
 
   std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> cops;
-  std::shared_ptr<ErasureCoding> ec;
+  std::shared_ptr<RedundancyProvider> rp;
   KineticClusterInfo &ki = clustermap.at(id);
-  fillArgs(ki, ec, cops);
+  fillArgs(ki, rp, cops);
 
   return std::unique_ptr<KineticAdminCluster>(new KineticAdminCluster(
       id, ki.numData, ki.numParity, ki.blockSize,
       cops, ki.min_reconnect_interval, ki.operation_timeout,
-      ec, *listener)
+      rp, *listener)
   );
 }
 
@@ -143,13 +143,13 @@ std::shared_ptr<ClusterInterface> ClusterMap::getCluster(const std::string &id)
   KineticClusterInfo &ki = clustermap.at(id);
   if (!ki.cluster) {
     std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> cops;
-    std::shared_ptr<ErasureCoding> ec;
-    fillArgs(ki, ec, cops);
+    std::shared_ptr<RedundancyProvider> rp;
+    fillArgs(ki, rp, cops);
 
     ki.cluster = std::make_shared<KineticCluster>(
         id, ki.numData, ki.numParity, ki.blockSize,
         cops, ki.min_reconnect_interval, ki.operation_timeout,
-        ec, *listener
+        rp, *listener
     );
   }
   return ki.cluster;

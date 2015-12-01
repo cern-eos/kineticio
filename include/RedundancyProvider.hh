@@ -1,10 +1,10 @@
 //------------------------------------------------------------------------------
-//! @file ErasureCoding.hh
+//! @file RedundancyProvider.hh
 //! @author Paul Hermann Lensing
 //! @brief Class for computing parities and recovering data
 //------------------------------------------------------------------------------
-#ifndef KINETICIO_ERASURECODING_HH
-#define KINETICIO_ERASURECODING_HH
+#ifndef KINETICIO_REDUNDANCYPROVIDER_HH
+#define KINETICIO_REDUNDANCYPROVIDER_HH
 
 #include <memory>
 #include <vector>
@@ -14,7 +14,13 @@
 
 namespace kio {
 
-class ErasureCoding {
+  
+//------------------------------------------------------------------------------
+//! The redundancy provider class offers automatic parity computing and data 
+//! recovery. Depending on configuration it will use erasure coding or 
+//! replication. 
+//------------------------------------------------------------------------------
+class RedundancyProvider {
 public:
   //--------------------------------------------------------------------------
   //! Compute all missing data and parity blocks in the the stripe. Stripe size
@@ -34,7 +40,7 @@ public:
   //! @param nData number of data blocks in stripes to be encoded by this object
   //! @param nParity number of parity blocks in stripes
   //--------------------------------------------------------------------------
-  explicit ErasureCoding(std::size_t nData, std::size_t nParity);
+  explicit RedundancyProvider(std::size_t nData, std::size_t nParity);
 
 private:
   //--------------------------------------------------------------------------

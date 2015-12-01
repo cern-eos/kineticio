@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "ErasureCoding.hh"
+#include "RedundancyProvider.hh"
 
 using std::shared_ptr;
 using std::string;
@@ -7,8 +7,7 @@ using std::make_shared;
 
 using namespace kio;
 
-SCENARIO("Erasure Encoding Test.", "[Erasure]"){
-  std::string value(
+const std::string value(
   "ISTANBUL — Confronted with widespread protests two summers ago, Prime Minister Recep Tayyip Erdogan ordered a harsh police crackdown and tarnished the demonstrators as traitors and spies. Faced with a corruption inquiry focused on his inner circle, he responded by purging the police and judiciary."
   "So when Mr. Erdogan, now president, suffered a stinging electoral defeat in June that left his party without a majority in Parliament and seemingly dashed his hopes of establishing an executive presidency, Turks were left wondering how he would respond."
   "Now many say they have their answer: a new war."
@@ -19,63 +18,87 @@ SCENARIO("Erasure Encoding Test.", "[Erasure]"){
   "The outcome of these polls will be indicative of which direction they will go, Mr. Kiniklioglu said."
   "Many analysts say that after weeks of stalled coalition talks between the A.K.P. and three opposition parties, new elections are likely. And at a time of crisis, Turkish voters, experts say, could very well turn again to Mr. Erdogan and the A.K.P."
   "The results of a voter survey released Wednesday by a widely cited Turkish pollster found that Mr. Erdogan's party could regain a parliamentary majority if elections were held today."
-  );
+);
 
-  
-  GIVEN ("An Erasure Code"){
-    int nData = 32;
-    int nParity = 4;
-    ErasureCoding e(nData, nParity);
-
-    size_t chunk_size = (value.size() + nData-1) / (nData);
-    std::vector< shared_ptr<const string> > stripe;
-    for(int i=0; i<nData+nParity; i++){
-      if(i<nData){
-        auto subchunk = make_shared<string>(value.substr(i*chunk_size, chunk_size));
-        subchunk->resize(chunk_size); // ensure that all chunks are the same size
-        stripe.push_back(std::move(subchunk));
-      }
-      else
-        stripe.push_back(make_shared<string>());
+std::vector< shared_ptr<const string> > makeStripe(int nData, int nParity)
+{
+  size_t chunk_size = (value.size() + nData-1) / (nData);
+  std::vector< shared_ptr<const string> > stripe;
+  for(int i=0; i<nData+nParity; i++){
+    if(i<nData){
+      auto subchunk = make_shared<string>(value.substr(i*chunk_size, chunk_size));
+      subchunk->resize(chunk_size); // ensure that all chunks are the same size
+      stripe.push_back(std::move(subchunk));
     }
+    else
+      stripe.push_back(make_shared<string>());
+  }
+  return stripe;  
+}
 
+SCENARIO("Erasure Encoding Test.", "[Erasure]"){
+    
+  GIVEN ("A Replication Code") {
+    int nData = 1;
+    int nParity = 3; 
+    RedundancyProvider e(nData, nParity);
+    auto stripe = makeStripe(nData, nParity);   
+    
     WHEN("We encoded Parity Information. "){
-
       REQUIRE_NOTHROW(e.compute(stripe));
 
-      THEN("We can reconstruct randomly deleted subchunks."){
-        srand (time(NULL));
-        for(int i=0; i<nParity; i++){
-          auto indx = rand()%(nData+nParity);
-          stripe[indx] = make_shared<const string>();
-        }
-        REQUIRE_NOTHROW(e.compute(stripe));
-
-        std::string reconstructed;
-        for(int i=0; i<nData; i++){
-          reconstructed.append(stripe[i]->c_str());
-        }
-        reconstructed.resize(value.size());
-        REQUIRE(value == reconstructed);
+      THEN("Parities are replications."){
+        for(int i=0; i<nData+nParity; i++)
+          REQUIRE(value == *stripe[i]);  
       }
     }
+  }
+    
+  for(int nData=1; nData<=32; nData*=4){
+    for(int nParity=0; nParity<=8; nParity+=2){
+      
+      GIVEN ("Redundancy configuration: "+std::to_string(nData)+"-"+std::to_string(nParity)){
+        RedundancyProvider e(nData, nParity);
+        auto stripe = makeStripe(nData, nParity);   
 
-    THEN("Too few healthy chunks throws."){
-      stripe[0] = make_shared<const string>();
-      REQUIRE_THROWS_AS(e.compute(stripe), std::invalid_argument);
+        WHEN("We encoded Parity Information. "){
+
+          REQUIRE_NOTHROW(e.compute(stripe));
+
+          THEN("We can reconstruct randomly deleted subchunks."){
+            srand (time(NULL));
+            for(int i=0; i<nParity; i++){
+              auto indx = rand()%(nData+nParity);
+              stripe[indx] = make_shared<const string>();
+            }
+            REQUIRE_NOTHROW(e.compute(stripe));
+
+            std::string reconstructed;
+            for(int i=0; i<nData; i++){
+              reconstructed.append(stripe[i]->c_str());
+            }
+            reconstructed.resize(value.size());
+            REQUIRE(value == reconstructed);
+          }
+        }
+
+        THEN("Too few healthy chunks throws."){
+          stripe[0] = make_shared<const string>();
+          REQUIRE_THROWS_AS(e.compute(stripe), std::invalid_argument);
+        }
+
+        if(nData>1) THEN("Invalid chunk size throws."){
+          std::string s = *stripe[0];
+          s.append("This Chunk is too long.");
+          stripe[0] = make_shared<const string>(s);
+          REQUIRE_THROWS_AS(e.compute(stripe), std::invalid_argument);
+        }
+
+        THEN("Invalid stripe size throws."){
+          stripe.pop_back();
+          REQUIRE_THROWS_AS(e.compute(stripe), std::invalid_argument);
+        }
+      }
     }
-
-    THEN("Invalid chunk size throws."){
-      std::string s = *stripe[0];
-      s.append("This Chunk is too long.");
-      stripe[0] = make_shared<const string>(s);
-      REQUIRE_THROWS_AS(e.compute(stripe), std::invalid_argument);
-    }
-
-    THEN("Invalid stripe size throws."){
-      stripe.pop_back();
-      REQUIRE_THROWS_AS(e.compute(stripe), std::invalid_argument);
-    }
-
   }
 };

@@ -14,7 +14,7 @@
 #include <mutex>
 #include <json-c/json.h>
 #include "ClusterInterface.hh"
-#include "ErasureCoding.hh"
+#include "RedundancyProvider.hh"
 #include "SocketListener.hh"
 #include "DataCache.hh"
 #include "KineticAdminCluster.hh"
@@ -121,10 +121,9 @@ private:
   //! the drive map id <-> connection info
   std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> drivemap;
 
-  //! ErasureCcoding instances of the same type (nData,nParity) can be shared
-  //! among multiple cluster instances, no need to duplicate decoding tables
-  //! in memory.
-  std::unordered_map<std::string, std::shared_ptr<ErasureCoding>> ecCache;
+  //! RedundancyProvider instances of the same type (nData,nParity) can be shared
+  //! among multiple cluster instances
+  std::unordered_map<std::string, std::shared_ptr<RedundancyProvider>> rpCache;
 
   //! the data cache shared among cluster instances
   std::unique_ptr<DataCache> dataCache;
@@ -153,7 +152,7 @@ private:
   //! @param cops Connection Options to fill
   //--------------------------------------------------------------------------
   void fillArgs(const KineticClusterInfo &ki,
-                std::shared_ptr<ErasureCoding>& ec,
+                std::shared_ptr<RedundancyProvider>& ec,
                 std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>>& cops
   );
 

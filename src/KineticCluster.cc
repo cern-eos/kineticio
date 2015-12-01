@@ -16,12 +16,12 @@ KineticCluster::KineticCluster(
     std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> > info,
     std::chrono::seconds min_reconnect_interval,
     std::chrono::seconds op_timeout,
-    std::shared_ptr<ErasureCoding> ec,
+    std::shared_ptr<RedundancyProvider> rp,
     SocketListener& listener
 ) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout), 
     identity(id), instanceIdentity(utility::uuidGenerateString()),
     statistics_snapshot{0,0,0,0,0}, clusterio{0,0,0,0,0}, 
-    clustersize{1,0}, background(1,1), erasure(ec)
+    clustersize{1,0}, background(1,1), redundancy(rp)
 {
   if (nData + nParity > info.size()) {
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
@@ -203,14 +203,13 @@ KineticStatus KineticCluster::get(
             if(stripe_values < it->second)
               it->second = stripe_values;
             
-            /* missing blocks -> erasure code. */
+            /* missing blocks -> recover from redundancy */
             if (stripe_values < stripe.size()){
               /*  If we skipped reading parities, we have to abort. */  
               if(!getParities)
                 break;                             
-              /* Now for the actual erasure coding */
               try {
-                erasure->compute(stripe);
+                redundancy->compute(stripe);
               } catch (const std::exception& e) {
                 putIndicatorKey(key, ops);
                 return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
@@ -326,11 +325,9 @@ KineticStatus KineticCluster::put(
     stripe.push_back(std::move(subchunk));
   }
   try {
-    /*Do not try to erasure code data if we are putting an empty key. The
-      erasure coding would assume all chunks are missing. and throw an error.
-      Computing takes about 4 ms for 8-2 and 60 ms for 38-4 */
+    /*Do not try to compute redundancy if we are putting an empty key. */
     if (chunk_size) {
-      erasure->compute(stripe);
+      redundancy->compute(stripe);
     }
   } catch (const std::exception& e) {
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());

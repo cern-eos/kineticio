@@ -66,7 +66,7 @@ set(kineticio_SRC
     src/KineticCluster.cc
     src/KineticAdminCluster.cc
     src/SocketListener.cc
-    src/ErasureCoding.cc
+    src/RedundancyProvider.cc
     src/PrefetchOracle.cc
     src/BackgroundOperationHandler.cc
     src/Utility.cc
@@ -129,7 +129,7 @@ if(BUILD_TEST)
         test/ClusterMapTest.cc
         test/KineticClusterTest.cc
         test/SocketListenerTest.cc
-        test/ErasureCodingTest.cc
+        test/RedundancyProviderTest.cc
         test/UtilityTest.cc
         test/PrefetchOracleTest.cc
         test/SimulatorController.cc
