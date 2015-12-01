@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "RedundancyProvider.hh"
+#include "Utility.hh"
 
 using std::shared_ptr;
 using std::string;
@@ -57,7 +58,7 @@ SCENARIO("Erasure Encoding Test.", "[Erasure]"){
   for(int nData=1; nData<=32; nData*=4){
     for(int nParity=0; nParity<=8; nParity+=2){
       
-      GIVEN ("Redundancy configuration: "+std::to_string(nData)+"-"+std::to_string(nParity)){
+      GIVEN("Redundancy configuration: " + utility::Convert::toString(nData, "-", nParity)){
         RedundancyProvider e(nData, nParity);
         auto stripe = makeStripe(nData, nParity);   
 
