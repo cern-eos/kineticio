@@ -14,15 +14,19 @@ using namespace kio;
 
 
 FileIo::FileIo() :
-    cluster(), cache(NULL), lastBlockNumber(*this)
+    cluster(), lastBlockNumber(*this)
 {
 }
 
 FileIo::~FileIo()
 {
-  /* If fileIo object is destroyed without closing properly, throw cache data out the window. */
-  if(cache)
-    cache->drop(this, true);
+  /* If fileIo object is destroyed without closing properly, 
+   * throw cache data out the window. */
+  try{
+    kio().cache().drop(this, true);
+  }catch(std::exception& e){
+    kio_warning(e.what());
+  }
 }
 
 void FileIo::Open(const std::string &p, int flags,
@@ -34,7 +38,7 @@ void FileIo::Open(const std::string &p, int flags,
   auto clusterId = utility::extractClusterID(p);
   path = utility::extractBasePath(p);
   auto mdkey = utility::makeMetadataKey(clusterId, path);
-  auto mdcluster = kio().cmap().getCluster(clusterId);
+  auto mdcluster = kio().cmap().getCluster(clusterId, RedundancyType::REPLICATION);
   
   KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "");
   if(flags & SFS_O_CREAT) {
@@ -67,9 +71,8 @@ void FileIo::Open(const std::string &p, int flags,
   if(!status.ok())
     throw kio_exception(EIO, "Unexpected error opening file ", p, ": ", status);
 
-  /* Setting cluster & cache variables. */
-  cache = &(kio().cache());
-  cluster = mdcluster;
+  /* Setting data cluster variable. */
+  cluster = kio().cmap().getCluster(clusterId, RedundancyType::ERASURE_CODING);;
 }
 
 
@@ -78,8 +81,8 @@ void FileIo::Close(uint16_t timeout)
   if (!cluster)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ");
 
-  cache->flush(this);
-  cache->drop(this);
+  kio().cache().flush(this);
+  kio().cache().drop(this);
   cluster.reset();
 }
 
@@ -110,14 +113,14 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
     auto prefetch = block_number < lastBlockNumber.get() ? true: false; 
     
     /* Get the data block */
-    auto data = cache->get(this, block_number, cm, prefetch);
+    auto data = kio().cache().get(this, block_number, cm, prefetch);
 
     if (mode == rw::WRITE) {
       data->write(buffer + off_done, block_offset, block_length);
 
       /* Flush data in background if writing to block capacity.*/
       if (block_offset + block_length == block_capacity)
-        cache->async_flush(this, data);
+        kio().cache().async_flush(this, data);
     }
     else if (mode == rw::READ) {
       data->read(buffer + off_done, block_offset, block_length);
@@ -167,14 +170,14 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
 
   if(offset>0){
     /* Step 1) truncate the block containing the offset. */
-    cache->get(this, block_number, DataBlock::Mode::STANDARD, false)->truncate(block_offset);
+    kio().cache().get(this, block_number, DataBlock::Mode::STANDARD, false)->truncate(block_offset);
 
-    /* Step 2) Ensure we don't have data past block_number in the cache-> Since
+    /* Step 2) Ensure we don't have data past block_number in the kio().cache() Since
      * truncate isn't super common, go the easy way and just sync+drop the entire
      * cache for this object... this will also sync the just truncated data.  */
-    cache->flush(this);
+    kio().cache().flush(this);
   }
-  cache->drop(this, true);
+  kio().cache().drop(this, true);
 
   /* Step 3) Delete all blocks past block_number. When truncating to size 0,
    * (and only then) also delete the first block. */
@@ -213,7 +216,7 @@ void FileIo::Sync(uint16_t timeout)
   if (!cluster)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ");
 
-  cache->flush(this);
+  kio().cache().flush(this);
 }
 
 void FileIo::Stat(struct stat *buf, uint16_t timeout)
@@ -222,7 +225,7 @@ void FileIo::Stat(struct stat *buf, uint16_t timeout)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ");
 
   lastBlockNumber.verify();
-  std::shared_ptr<DataBlock> last_block = cache->get(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD, false);
+  std::shared_ptr<DataBlock> last_block = kio().cache().get(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD, false);
 
   memset(buf, 0, sizeof(struct stat));
   buf->st_blksize = cluster->limits().max_value_size;
@@ -234,7 +237,7 @@ void FileIo::Stat(struct stat *buf, uint16_t timeout)
 void FileIo::Statfs(const char *p, struct statfs *sfs)
 {
   auto statfsClusterID = utility::extractClusterID(p);
-  auto statfsCluster = kio().cmap().getCluster(statfsClusterID);
+  auto statfsCluster = kio().cmap().getCluster(statfsClusterID, RedundancyType::ERASURE_CODING);
   
   ClusterSize s = statfsCluster->size();
   if (!s.bytes_total)
@@ -278,7 +281,7 @@ void *FileIo::ftsOpen(std::string subtree)
     throw kio_exception(EINVAL, "A cluster is already set for FileIO object. Cannot open object twice");
   
   auto clusterId = utility::extractClusterID(subtree);
-  cluster = kio().cmap().getCluster(clusterId);
+  cluster = kio().cmap().getCluster(clusterId, RedundancyType::REPLICATION);
     
   auto base_path = utility::extractBasePath(subtree);
   auto mdkey = utility::makeMetadataKey(clusterId, base_path);

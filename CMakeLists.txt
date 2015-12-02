@@ -56,7 +56,7 @@ include_directories(
 set(kineticio_SRC
     src/FileIo.cc
     src/FileAttr.cc
-    src/Factory.cc
+    src/KineticIoFactory.cc
     src/DataBlock.cc
     src/DataCache.cc
     src/ClusterMap.cc

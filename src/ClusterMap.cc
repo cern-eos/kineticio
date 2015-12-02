@@ -24,7 +24,8 @@ void ClusterMap::reset(
   std::lock_guard<std::mutex> locker(mutex);
   clusterInfoMap = std::move(clusterInfo);
   driveInfoMap = std::move(driveInfo);
-  clusterCache.clear();
+  ecClusterCache.clear();
+  replClusterCache.clear();
 }
 
 void ClusterMap::fillArgs(const ClusterInformation &ki,
@@ -47,7 +48,7 @@ void ClusterMap::fillArgs(const ClusterInformation &ki,
   }
 }
 
-std::unique_ptr<KineticAdminCluster> ClusterMap::getAdminCluster(const std::string& id)
+std::unique_ptr<KineticAdminCluster> ClusterMap::getAdminCluster(const std::string& id, RedundancyType r)
 {
   std::lock_guard<std::mutex> locker(mutex);
   if (!clusterInfoMap.count(id))
@@ -59,34 +60,34 @@ std::unique_ptr<KineticAdminCluster> ClusterMap::getAdminCluster(const std::stri
   fillArgs(ki, rp, cops);
 
   return std::unique_ptr<KineticAdminCluster>(new KineticAdminCluster(
-      id, ki.numData, ki.numParity, ki.blockSize,
+      id, (r == RedundancyType::ERASURE_CODING) ? ki.numData : 1, ki.numParity, ki.blockSize,
       cops, ki.min_reconnect_interval, ki.operation_timeout,
       rp, *listener)
   );
 }
 
-std::shared_ptr<ClusterInterface> ClusterMap::getCluster(const std::string &id)
+std::shared_ptr<ClusterInterface> ClusterMap::getCluster(const std::string &id, RedundancyType r)
 {
   std::lock_guard<std::mutex> locker(mutex);
   if (!clusterInfoMap.count(id))
     throw kio_exception(ENODEV, "Nonexisting cluster id requested: ", id);
   
-  if(!clusterCache.count(id)){
+  auto& cache = (r == RedundancyType::ERASURE_CODING) ? ecClusterCache : replClusterCache;
     
+  if(!cache.count(id)){
     ClusterInformation &ki = clusterInfoMap.at(id);
-    
     std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> cops;
     std::shared_ptr<RedundancyProvider> rp;
     fillArgs(ki, rp, cops);
 
-    clusterCache.insert(
+    cache.insert(
       std::make_pair(id, 
         std::make_shared<KineticCluster>(
-          id, ki.numData, ki.numParity, ki.blockSize,
+          id, (r == RedundancyType::ERASURE_CODING) ? ki.numData : 1, ki.numParity, ki.blockSize,
           cops, ki.min_reconnect_interval, ki.operation_timeout,
           rp, *listener
       ))
     );
   }
-  return clusterCache.at(id);
+  return cache.at(id);
 }

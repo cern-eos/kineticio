@@ -18,18 +18,11 @@
 #include "SocketListener.hh"
 #include "DataCache.hh"
 #include "KineticAdminCluster.hh"
+#include "kio/KineticIoFactory.hh"
 /*----------------------------------------------------------------------------*/
 
 namespace kio {
   
-//--------------------------------------------------------------------------
-//! Clusters can be requested to have erasure coded stripes or replication 
-//! to provide redundancy. 
-//--------------------------------------------------------------------------
-enum class RedundancyType{
-  ERASURE_CODING, REPLICATION
-};  
-
 //--------------------------------------------------------------------------
 //! All information required to create a cluster object 
 //--------------------------------------------------------------------------
@@ -62,7 +55,7 @@ public:
   //! @param id the unique identifier for the cluster
   //! @return a valid cluster object
   //--------------------------------------------------------------------------
-  std::shared_ptr<ClusterInterface> getCluster(const std::string& id);
+  std::shared_ptr<ClusterInterface> getCluster(const std::string& id, RedundancyType redundancy);
 
   //--------------------------------------------------------------------------
   //! Obtain an admin cluster instance for the supplied identifier.
@@ -72,7 +65,7 @@ public:
   //! @param numthreads number of background io threads during scan operations
   //! @return a valid admin cluster object
   //--------------------------------------------------------------------------
-  std::unique_ptr<KineticAdminCluster> getAdminCluster(const std::string& id);
+  std::unique_ptr<KineticAdminCluster> getAdminCluster(const std::string& id, RedundancyType redundancy);
 
   //--------------------------------------------------------------------------
   //! Reset the object with supplied configuration
@@ -103,8 +96,11 @@ private:
   //! the drive map id <-> connection info
   std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> driveInfoMap;
   
-  //! the cluster cache 
-  std::unordered_map<std::string,  std::shared_ptr<ClusterInterface> > clusterCache;
+  //! the cluster cache for erasure coding clusters
+  std::unordered_map<std::string,  std::shared_ptr<ClusterInterface> > ecClusterCache;
+  
+  //! the cluster cache for replication clusters
+  std::unordered_map<std::string,  std::shared_ptr<ClusterInterface> > replClusterCache;
 
   //! RedundancyProvider instances of the same type (nData,nParity) can be shared
   //! among multiple cluster instances

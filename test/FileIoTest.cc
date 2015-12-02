@@ -18,7 +18,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
   REQUIRE( c.reset(1) );
   REQUIRE( c.reset(2) );
 
-  auto fileio = Factory::makeFileIo();
+  auto fileio = KineticIoFactory::makeFileIo();
 
   int  buf_size = 64;
   char write_buf[] = "rcPOa12L3nhN5Cgvsa6Jlr3gn58VhazjA6oSpKacLFYqZBEu0khRwbWtEjge3BUA";
@@ -46,9 +46,9 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
         REQUIRE(le.errnum() == ENODEV);
       }
 
-      REQUIRE_THROWS_AS(Factory::makeFileAttr(path.c_str()), LoggingException);
+      REQUIRE_THROWS_AS(KineticIoFactory::makeFileAttr(path.c_str()), LoggingException);
       try{
-        Factory::makeFileAttr(path.c_str());
+        KineticIoFactory::makeFileAttr(path.c_str());
       }catch(const LoggingException& le){
         REQUIRE(le.errnum() == ENODEV);
       }
@@ -87,7 +87,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
 
     THEN("Factory function for Attribute class returns 0"){
-      auto a = Factory::makeFileAttr(path.c_str());
+      auto a = KineticIoFactory::makeFileAttr(path.c_str());
       REQUIRE_FALSE(a);
      }
 
@@ -115,7 +115,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
 
     THEN("Trying to create the same file again fails with EEXIST"){
       try{
-        Factory::makeFileIo()->Open(path.c_str(), SFS_O_CREAT);
+        KineticIoFactory::makeFileIo()->Open(path.c_str(), SFS_O_CREAT);
       }catch(const LoggingException& le){
         REQUIRE(le.errnum() == EEXIST);
       }
@@ -155,7 +155,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
 
     THEN("Factory function for Attribute class succeeds"){
-      auto a = Factory::makeFileAttr(path.c_str());
+      auto a = KineticIoFactory::makeFileAttr(path.c_str());
       REQUIRE(a);
 
       AND_THEN("attributes can be set and read-in again."){
@@ -243,7 +243,7 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
     }
     
     AND_WHEN("The file is removed via a second io object."){
-      auto fileio_2nd = Factory::makeFileIo();
+      auto fileio_2nd = KineticIoFactory::makeFileIo();
       REQUIRE_NOTHROW(fileio_2nd->Open(path.c_str(), 0));
       REQUIRE_NOTHROW(fileio_2nd->Remove());
 

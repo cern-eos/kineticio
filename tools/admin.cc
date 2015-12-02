@@ -155,10 +155,13 @@ int main(int argc, char** argv)
   }
 
   try{
-    kio::Factory::registerLogFunction(mlog,
+    kio::KineticIoFactory::registerLogFunction(mlog,
                                       std::bind(mshouldLog, std::placeholders::_1, std::placeholders::_2, config.verbosity)
                                       );
-    auto ac = kio::Factory::makeAdminCluster(config.id.c_str());
+    auto ac = kio::KineticIoFactory::makeAdminCluster(
+      config.id.c_str(), 
+      config.target == OperationTarget::DATA ? kio::RedundancyType::ERASURE_CODING : kio::RedundancyType::REPLICATION
+    );
 
     switch(config.op){
       case Operation::STATUS: {

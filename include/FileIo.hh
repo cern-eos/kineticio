@@ -202,9 +202,6 @@ protected:
   //! we don't want to have to look in the drive map for every access...
   std::shared_ptr<ClusterInterface> cluster;
 
-  //! data cache functionality
-  DataCache* cache;
-
   //! keep track of the last block to answer stat requests reasonably
   LastBlockNumber lastBlockNumber;
 

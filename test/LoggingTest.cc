@@ -37,9 +37,9 @@ SCENARIO("LoggingTest", "[log]"){
       std::string s = "'happy'";
       kinetic::KineticStatus status (kinetic::StatusCode::OK, "Test message.");
       
-      kio::Factory::registerLogFunction(tlog, tshouldLog);
+      kio::KineticIoFactory::registerLogFunction(tlog, tshouldLog);
       kio_notice("Logging Test: Integer ", i,", Double ", d, ", String ", s, ", KineticStatus ", status);
-      kio::Factory::registerLogFunction(tlog, tneverShouldLog);
+      kio::KineticIoFactory::registerLogFunction(tlog, tneverShouldLog);
     }
   }
 };
