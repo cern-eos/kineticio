@@ -105,7 +105,7 @@ SCENARIO("Cache Performance Test.", "[Cache]"){
       THEN("go ~"){
       for(int capacity = 1000; capacity < 100000; capacity*=5){
       
-        DataCache ccc(capacity*128, 20, 20, 0);
+        DataCache ccc(capacity*128, 0);
         std::shared_ptr<ClusterInterface> cluster(new MockCluster());
         MockFileIo fio("thepath",cluster);
 

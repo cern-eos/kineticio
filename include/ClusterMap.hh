@@ -80,14 +80,8 @@ public:
 
   //--------------------------------------------------------------------------
   //! Constructor.
-  //! 
-  //! @param clusterInfo containing id <-> cluster info mapping for all clusters
-  //! @param driveInfo containing id <-> drive info mapping for all clusters
   //--------------------------------------------------------------------------
-  explicit ClusterMap(
-    std::unordered_map<std::string, ClusterInformation> clusterInfo, 
-    std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> driveInfo
-  );
+  explicit ClusterMap();
 
 private:
   //! the cluster id <-> cluster info

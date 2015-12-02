@@ -1,6 +1,7 @@
 #include "KineticAutoConnection.hh"
 #include "LoggingException.hh"
 #include "KineticCallbacks.hh"
+#include "KineticIoSingleton.hh"
 #include <sstream>
 #include <Logging.hh>
 
@@ -12,7 +13,7 @@ KineticAutoConnection::KineticAutoConnection(
     std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> o,
     std::chrono::seconds r) :
     connection(), healthy(false), fd(0), options(o), timestamp(), ratelimit(r),
-    mutex(), bg(1,0), sockwatch(sw), mt()
+    mutex(), dmutex(std::make_shared<DestructionMutex>()), sockwatch(sw), mt()
 {
   std::random_device rd;
   mt.seed(rd());
@@ -23,6 +24,7 @@ KineticAutoConnection::KineticAutoConnection(
 
 KineticAutoConnection::~KineticAutoConnection()
 {
+  dmutex->setDestructed();
   if (fd) {
     sockwatch.unsubscribe(fd);
   }
@@ -45,7 +47,7 @@ void KineticAutoConnection::setError()
 
 std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConnection::get()
 {
-  std::call_once(intial_connect, &KineticAutoConnection::connect, this);
+  std::call_once(intial_connect, &KineticAutoConnection::connect, this, dmutex);
 
   std::lock_guard<std::mutex> lock(mutex);
   if (healthy)
@@ -55,9 +57,11 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
   using namespace std::chrono;
   auto duration = duration_cast<seconds>(system_clock::now() - timestamp);
   if (duration > ratelimit) {
-    if(bg.try_run(std::bind(&KineticAutoConnection::connect, this)))
+    if(kio().threadpool().try_run(std::bind(&KineticAutoConnection::connect, this, dmutex))) {
+      timestamp = std::chrono::system_clock::now();
       kio_debug("Attempting background reconnect. Last reconnect attempt has been ",
-               duration," seconds ago. ratelimit is ", ratelimit, " seconds ", logstring);
+                duration, " seconds ago. ratelimit is ", ratelimit, " seconds ", logstring);
+    }
   }
   throw kio_exception(ENXIO, "No valid connection ", logstring);
 }
@@ -79,8 +83,10 @@ namespace{
   };
 }
 
-void KineticAutoConnection::connect()
+void KineticAutoConnection::connect( std::shared_ptr<DestructionMutex> protect)
 {
+  std::lock_guard<DestructionMutex> dlock(*protect);
+  
   /* Choose connection to prioritize at random. */
   auto r = mt() % 2;
   auto& primary = r ? options.first : options.second;
@@ -113,7 +119,6 @@ void KineticAutoConnection::connect()
   
   {
     std::lock_guard<std::mutex> lock(mutex);
-    timestamp = std::chrono::system_clock::now();
     if (tmpfd) {
       tmpfd--;
       try{

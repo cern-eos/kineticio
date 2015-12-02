@@ -80,21 +80,15 @@ public:
   //! during runtime.
   //!
   //! @param capacity absolute maximum size of the cache in bytes
-  //! @param bg_threads number of threads to spawn for background IO
-  //! @param bg_queue_depth maximum number of functions queued for background
-  //!   execution
   //--------------------------------------------------------------------------
-  void changeConfiguration(size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_size);
+  void changeConfiguration(size_t capacity, size_t readahead_size);
 
   //--------------------------------------------------------------------------
   //! Constructor.
   //!
   //! @param capacity absolute maximum size of the cache in bytes
-  //! @param bg_threads number of threads to spawn for background IO
-  //! @param bg_queue_depth maximum number of functions queued for background
-  //!   execution
   //--------------------------------------------------------------------------
-  explicit DataCache(size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_window_size);
+  explicit DataCache(size_t capacity, size_t readahead_window_size);
 
   //--------------------------------------------------------------------------
   //! No copy constructor.
@@ -119,9 +113,6 @@ private:
   //! current size of the unused items list
   size_t unused_size;
   
-  //! handle background readahead and flush requests
-  BackgroundOperationHandler bg;
-
   struct CacheItem {
     std::set<kio::FileIo*> owners;
     std::shared_ptr<kio::DataBlock> data;

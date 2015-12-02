@@ -14,6 +14,7 @@
 #include <random>
 #include "SocketListener.hh"
 #include "BackgroundOperationHandler.hh"
+#include "DestructionMutex.hh"
 
 namespace kio{
 
@@ -80,8 +81,8 @@ private:
   std::chrono::seconds ratelimit;
   //! thread safety
   std::mutex mutex;
-  //! handle reconnects in the background
-  BackgroundOperationHandler bg;
+  //! prevent background thread accessing member variables after destruction
+  std::shared_ptr<DestructionMutex> dmutex; 
   //! use calling thread for initial connect
   std::once_flag intial_connect;
   //! register connections with epoll listener
@@ -94,7 +95,7 @@ private:
   //! Attempt to connect unless blocked by rate limit. Will attempt both host
   //! names supplied to options and prioritize randomly.
   //--------------------------------------------------------------------------
-  void connect();
+  void connect(std::shared_ptr<DestructionMutex> protect);
 };
 
 }

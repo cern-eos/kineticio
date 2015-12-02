@@ -3,23 +3,23 @@
 #include "Utility.hh"
 #include "Logging.hh"
 #include "KineticCluster.hh"
+#include "KineticIoSingleton.hh"
 #include <thread>
 #include <unistd.h>
 
 using namespace kio;
 
 
-DataCache::DataCache(size_t capacity, size_t bg_threads, size_t bg_queue_depth, size_t readahead_size) :
-    capacity(capacity), current_size(0), unused_size(0), bg(bg_threads, bg_queue_depth),
+DataCache::DataCache(size_t capacity, size_t readahead_size) :
+    capacity(capacity), current_size(0), unused_size(0),
     readahead_window_size(readahead_size)
 {
 }
 
-void DataCache::changeConfiguration(size_t cap, size_t bg_threads, size_t bg_queue_depth, size_t readahead_size)
+void DataCache::changeConfiguration(size_t cap, size_t readahead_size)
 {
   readahead_window_size = readahead_size;
   capacity = cap;
-  bg.changeConfiguration(bg_threads, bg_queue_depth);
 }
 
 void DataCache::drop(kio::FileIo* owner, bool force)
@@ -219,7 +219,7 @@ void DataCache::do_flush(kio::FileIo* owner, std::shared_ptr<kio::DataBlock> dat
 
 void DataCache::async_flush(kio::FileIo* owner, std::shared_ptr<DataBlock> data)
 {
-  bg.run(std::bind(&DataCache::do_flush, this, owner, data));
+  kio().threadpool().run(std::bind(&DataCache::do_flush, this, owner, data));
 }
 
 void do_readahead(std::shared_ptr<kio::DataBlock> data)
@@ -253,7 +253,7 @@ void DataCache::readahead(kio::FileIo* owner, int blocknumber)
     auto prediction = oracle->predict(readahead_length, PrefetchOracle::PredictionType::CONTINUE);
     for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
       auto data = get(owner, *it, DataBlock::Mode::STANDARD, false);
-      auto scheduled = bg.try_run(std::bind(do_readahead, data));
+      auto scheduled = kio().threadpool().try_run(std::bind(do_readahead, data));
       if(scheduled)
         kio_debug("Readahead of data block with identity ", data->getIdentity(), " scheduled for owner ", owner);
     }

@@ -7,7 +7,7 @@
 
 using namespace kio;
 
-KineticIoSingleton::KineticIoSingleton()
+KineticIoSingleton::KineticIoSingleton() : dataCache(0,0), threadPool(1,1)
 {
   try{
     loadConfiguration();
@@ -25,21 +25,17 @@ KineticIoSingleton& KineticIoSingleton::getInstance()
 
 DataCache& KineticIoSingleton::cache()
 {
-  if(!dataCache)
-    throw kio_exception(EINVAL,"DataCache not initialized.");
-  return *dataCache;
+  return dataCache;
 }
 
 ClusterMap& KineticIoSingleton::cmap()
 {
-  if(!clusterMap)
-    throw kio_exception(EINVAL,"Cluster Map not initialized.");
-  return *clusterMap;
+  return clusterMap;
 }
 
 BackgroundOperationHandler& KineticIoSingleton::threadpool()
 {
-  throw std::logic_error("not implemented");  
+  return threadPool;
 }
 
 /* Utility functions for this class only. */
@@ -125,30 +121,15 @@ void KineticIoSingleton::loadConfiguration()
   
   std::lock_guard<std::mutex> lock(mutex);
   configuration = config;
-  
-  if(!clusterMap)
-    clusterMap.reset(new ClusterMap(clusterInfo, driveInfo));
-  else
-    clusterMap->reset(clusterInfo, driveInfo);
-  
-  if(!dataCache)
-    dataCache.reset(new DataCache(
-        configuration.stripecache_capacity,
-        configuration.background_io_threads, configuration.background_io_queue_capacity,
-        configuration.readahead_window_size
-    ));
-  else
-    dataCache->changeConfiguration(configuration.stripecache_capacity,
-                                   configuration.background_io_threads, configuration.background_io_queue_capacity,
-                                   configuration.readahead_window_size
-    );
+  clusterMap.reset(std::move(clusterInfo), std::move(driveInfo));  
+  dataCache.changeConfiguration(configuration.stripecache_capacity, configuration.readahead_window_size);
+  threadPool.changeConfiguration(configuration.background_io_threads, configuration.background_io_queue_capacity);
 }
 
 std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> KineticIoSingleton::parseDrives(struct json_object* locations, struct json_object* security)
 {
   std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> driveInfo;
   
-  std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> kops;
   struct json_object *host = NULL;
   struct json_object *tmp = NULL;
     
@@ -163,6 +144,7 @@ std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::C
     host = json_object_array_get_idx(tmp, 0);
     if (!host)
       throw kio_exception(EINVAL, "Drive with wwn ", id, " is missing location information");
+    std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> kops;
     kops.first.host = json_object_get_string(host);
 
     host = json_object_array_get_idx(tmp, 1);
@@ -220,8 +202,8 @@ std::unordered_map<std::string, ClusterInformation> KineticIoSingleton::parseClu
     json_object *drive = NULL;
     int num_drives = json_object_array_length(list);
 
-    for (int i = 0; i < num_drives; i++) {
-      drive = json_object_array_get_idx(list, i);
+    for (int j = 0; j < num_drives; j++) {
+      drive = json_object_array_get_idx(list, j);
       cinfo.drives.push_back(loadJsonStringEntry(drive, "wwn"));
     }
     clusterInfo.insert(std::make_pair(id, cinfo));

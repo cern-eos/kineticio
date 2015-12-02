@@ -67,10 +67,13 @@ private:
   Configuration configuration;
   
   //! the cluster map 
-  std::unique_ptr<ClusterMap> clusterMap;
+  ClusterMap clusterMap;
   
   //! the data cache shared among cluster instances
-  std::unique_ptr<DataCache> dataCache;
+  DataCache dataCache;
+  
+  //! the threadpool for background operations
+  BackgroundOperationHandler threadPool;
   
   //! concurrency control
   std::mutex mutex;

@@ -3,6 +3,7 @@
 #include <set>
 #include <unistd.h>
 #include "Logging.hh"
+#include "KineticIoSingleton.hh"
 #include "outside/MurmurHash3.h"
 
 using std::unique_ptr;
@@ -21,7 +22,7 @@ KineticCluster::KineticCluster(
 ) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout), 
     identity(id), instanceIdentity(utility::uuidGenerateString()),
     statistics_snapshot{0,0,0,0,0}, clusterio{0,0,0,0,0}, 
-    clustersize{1,0}, background(1,1), redundancy(rp)
+    clustersize{1,0}, dmutex(std::make_shared<DestructionMutex>()), redundancy(rp)
 {
   if (nData + nParity > info.size()) {
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
@@ -56,11 +57,12 @@ KineticCluster::KineticCluster(
     throw kio_exception(ENXIO, "Failed obtaining cluster limits!");
   }
   /* Start a bg update of cluster io statistics and capacity */
-  background.try_run(std::bind(&KineticCluster::updateStatistics, this));
+  kio().threadpool().try_run(std::bind(&KineticCluster::updateStatistics, this, dmutex));
 }
 
 KineticCluster::~KineticCluster()
 {
+  dmutex->setDestructed();
 }
 
 
@@ -289,9 +291,9 @@ bool KineticCluster::mayForce(const shared_ptr<const string>& key, const shared_
   auto timeout_time = std::chrono::system_clock::now() + (getVersionPosition(version, ops)+1) * operation_timeout;
   do{
     usleep(10000);
-    auto ops = initialize(key, nData + nParity);
-    auto sync = asyncops::fillGetVersion(ops, key);
-    auto rmap = execute(ops, *sync);
+    ops = initialize(key, nData + nParity);
+    sync = asyncops::fillGetVersion(ops, key);
+    rmap = execute(ops, *sync);
 
     if(getVersionPosition(version, ops) < 0)
       return false;
@@ -455,15 +457,9 @@ KineticStatus KineticCluster::range(
 }
 
 
-void KineticCluster::updateStatistics()
-{
-  using namespace std::chrono;
-  
-  /* Let's rate-limit the update frequency to something sensible */
-  {  std::lock_guard<std::mutex> lock(mutex);
-  if(duration_cast<seconds>(system_clock::now()-statistics_timepoint) < seconds(5))
-    return; 
-  }
+void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
+{ 
+  std::lock_guard<DestructionMutex> dlock(*dm);
   
   auto ops = initialize(make_shared<string>("all"), connections.size());
   auto sync = asyncops::fillLog(ops, 
@@ -472,8 +468,9 @@ void KineticCluster::updateStatistics()
   execute(ops, *sync);
 
   /* Set up temporary variables */
+  using namespace std::chrono;
   auto timep = system_clock::now();
-  auto period = duration_cast<milliseconds>(timep-statistics_timepoint).count();
+  auto period = duration_cast<milliseconds>(timep-statistics_timepoint).count(); 
   ClusterSize size{0,0}; 
   ClusterIo io{0,0,0,0,0}; 
   
@@ -504,8 +501,6 @@ void KineticCluster::updateStatistics()
     
   /* update cluster variables */
   std::lock_guard<std::mutex> lock(mutex);
-  statistics_timepoint = timep;
-  clustersize = size;
   
   clusterio.read_ops = ((io.read_ops - statistics_snapshot.read_ops) * 1000) / period;
   clusterio.read_bytes = ((io.read_bytes - statistics_snapshot.read_bytes) *1000) / period;
@@ -513,7 +508,10 @@ void KineticCluster::updateStatistics()
   clusterio.write_bytes = ((io.write_bytes - statistics_snapshot.write_bytes) *1000) / period; 
   clusterio.number_drives = io.number_drives; 
   
+  statistics_timepoint = timep;
   statistics_snapshot = io;
+  
+  clustersize = size;
 }
 
 const ClusterLimits& KineticCluster::limits() const
@@ -533,15 +531,23 @@ const std::string& KineticCluster::id() const
 
 ClusterSize KineticCluster::size()
 {
-  background.try_run(std::bind(&KineticCluster::updateStatistics, this));
   std::lock_guard<std::mutex> lock(mutex);
+  using namespace std::chrono;
+  if(duration_cast<seconds>(system_clock::now()-statistics_scheduled) > seconds(2)) {
+    if(kio().threadpool().try_run(std::bind(&KineticCluster::updateStatistics, this, dmutex)))
+      statistics_scheduled = system_clock::now();
+  }
   return clustersize;
 }
 
 ClusterIo KineticCluster::iostats()
 {
-  background.try_run(std::bind(&KineticCluster::updateStatistics, this));
   std::lock_guard<std::mutex> lock(mutex);
+  using namespace std::chrono;
+  if(duration_cast<seconds>(system_clock::now()-statistics_scheduled) > seconds(2)) {
+    if(kio().threadpool().try_run(std::bind(&KineticCluster::updateStatistics, this, dmutex)))
+      statistics_scheduled = system_clock::now();
+  }
   return clusterio;
 }
 

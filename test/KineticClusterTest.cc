@@ -20,8 +20,6 @@ SCENARIO("Cluster integration test.", "[Cluster]")
 
   SocketListener listener;
 
-
-
   GIVEN ("A valid drive cluster") {
     REQUIRE(c.reset(0));
     REQUIRE(c.reset(1));
@@ -52,7 +50,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
       for (int i = 0; i < nData + nParity + 1; i++) {
         cluster->size();
         // sleep so that previous cluster->size background thread may finish
-        usleep(1000 * 1000);
+        usleep(2500 * 1000);
         ClusterSize s = cluster->size();
         if (i == nData + nParity) {
           REQUIRE(s.bytes_total == 0);

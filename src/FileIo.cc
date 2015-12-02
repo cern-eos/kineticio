@@ -22,11 +22,7 @@ FileIo::~FileIo()
 {
   /* If fileIo object is destroyed without closing properly, 
    * throw cache data out the window. */
-  try{
-    kio().cache().drop(this, true);
-  }catch(std::exception& e){
-    kio_warning(e.what());
-  }
+  kio().cache().drop(this, true);
 }
 
 void FileIo::Open(const std::string &p, int flags,

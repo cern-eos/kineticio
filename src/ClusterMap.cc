@@ -9,10 +9,7 @@ using namespace kio;
 
 
 /* Printing errors initializing static global object to stderr.*/
-ClusterMap::ClusterMap(
-  std::unordered_map<std::string, ClusterInformation> clusterInfo, 
-  std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> driveInfo
-) : clusterInfoMap(std::move(clusterInfo)), driveInfoMap(std::move(driveInfo)), listener(new SocketListener())
+ClusterMap::ClusterMap() : listener(new SocketListener())
 {
 }
 

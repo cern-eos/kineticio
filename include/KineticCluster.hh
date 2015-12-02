@@ -163,7 +163,7 @@ protected:
   //--------------------------------------------------------------------------
   //! Update the clusterio statistics and capacity information.
   //--------------------------------------------------------------------------
-  void updateStatistics();
+  void updateStatistics(std::shared_ptr<DestructionMutex> dm);
   
   //--------------------------------------------------------------------------
   //! In case a get operation notices missing / corrupt / inaccessible chunks,
@@ -201,6 +201,9 @@ protected:
 
   //! time point the clusterio statistics have last been updated, used to compute per second values
   std::chrono::system_clock::time_point statistics_timepoint; 
+  
+  //! time point the clusterio statistics have been last scheduled to be updated 
+  std::chrono::system_clock::time_point statistics_scheduled; 
 
   //! the io statistics at time point timep_statistics 
   ClusterIo statistics_snapshot; 
@@ -214,13 +217,13 @@ protected:
   //! cluster limits are constant over cluster lifetime
   ClusterLimits clusterlimits;
    
-  //! updating cluster size in the background
-  BackgroundOperationHandler background;
-
   //! concurrency control of cluster io, size and time_point variables
   std::mutex mutex;
-
-  //! erasure coding
+  
+  //! prevent background thread accessing member variables after destruction
+  std::shared_ptr<DestructionMutex> dmutex; 
+  
+  //! erasure coding / replication 
   std::shared_ptr<RedundancyProvider> redundancy;
 };
 
