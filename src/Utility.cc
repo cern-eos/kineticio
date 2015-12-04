@@ -83,7 +83,7 @@ std::size_t utility::uuidDecodeSize(const std::shared_ptr<const std::string>& uu
   if(!uuid || uuid->size() != 10 + sizeof(uuid_t))
     throw std::invalid_argument("invalid version supplied.");
   std::string size(uuid->substr(0,10));
-  return atoi(size.c_str());
+  return (size_t) atoi(size.c_str());
 }
 
 std::shared_ptr<const std::string> utility::makeDataKey(const std::string& clusterId, const std::string& base, int block_number)

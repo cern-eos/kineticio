@@ -315,8 +315,9 @@ KineticStatus KineticCluster::put(
 {
   /* Create a stripe vector by chunking up the value into nData data chunks
      and computing nParity parity chunks. */
-  int chunk_size = (value->size() + nData - 1) / (nData);
   std::vector<shared_ptr<const string> > stripe;
+  auto chunk_size = (value->size() + nData - 1) / (nData);
+
   for (int i = 0; i < nData + nParity; i++) {
     auto subchunk = std::make_shared<string>();
     if (i < nData) {
@@ -326,6 +327,7 @@ KineticStatus KineticCluster::put(
     }
     stripe.push_back(std::move(subchunk));
   }
+
   try {
     /*Do not try to compute redundancy if we are putting an empty key. */
     if (chunk_size) {
@@ -421,7 +423,7 @@ KineticStatus KineticCluster::remove(
 KineticStatus KineticCluster::range(
     const std::shared_ptr<const std::string>& start_key,
     const std::shared_ptr<const std::string>& end_key,
-    int maxRequested,
+    size_t maxRequested,
     std::unique_ptr<std::vector<std::string> >& keys)
 {
   auto ops = initialize(start_key, connections.size());

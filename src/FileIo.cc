@@ -105,11 +105,8 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
       cm = DataBlock::Mode::CREATE;
     }
     
-    /* Enable potential prefetch if we are accessing file anywhere but the end. */
-    auto prefetch = block_number < lastBlockNumber.get() ? true: false; 
-    
-    /* Get the data block */
-    auto data = kio().cache().get(this, block_number, cm, prefetch);
+    /* Get the data block, enable potential prefetch if we are accessing file anywhere but the end */
+    auto data = kio().cache().get(this, block_number, cm, block_number < lastBlockNumber.get());
 
     if (mode == rw::WRITE) {
       data->write(buffer + off_done, block_offset, block_length);

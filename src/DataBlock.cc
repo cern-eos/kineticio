@@ -197,7 +197,7 @@ void DataBlock::truncate(off_t offset)
   if (offset > cluster->limits().max_value_size)
     throw std::invalid_argument("attempting to truncate past cluster limits");
 
-  value_size = offset;
+  value_size = (size_t) offset;
   updates.push_back(std::pair<off_t, size_t>(offset, 0));
 }
 

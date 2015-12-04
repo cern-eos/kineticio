@@ -75,7 +75,7 @@ std::unique_ptr<CallbackSynchronization> fillRange(
     std::vector<KineticAsyncOperation>& ops,
     const std::shared_ptr<const std::string>& start_key,
     const std::shared_ptr<const std::string>& end_key,
-    int maxRequested
+    size_t maxRequested
 );
 
 std::unique_ptr<CallbackSynchronization> fillLog(

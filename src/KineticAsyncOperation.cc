@@ -122,7 +122,7 @@ unique_ptr<CallbackSynchronization> asyncops::fillRange(
     std::vector<KineticAsyncOperation>& ops,
     const std::shared_ptr<const std::string>& start_key,
     const std::shared_ptr<const std::string>& end_key,
-    int maxRequested
+    size_t maxRequested
 )
 {
   auto sync = std::unique_ptr<CallbackSynchronization>(new CallbackSynchronization());

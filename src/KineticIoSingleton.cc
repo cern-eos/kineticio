@@ -186,10 +186,10 @@ std::unordered_map<std::string, ClusterInformation> KineticIoSingleton::parseClu
     
     struct ClusterInformation cinfo;
      
-    cinfo.numData = loadJsonIntEntry(cluster, "numData");
-    cinfo.numParity = loadJsonIntEntry(cluster, "numParity");
+    cinfo.numData = (size_t) loadJsonIntEntry(cluster, "numData");
+    cinfo.numParity = (size_t) loadJsonIntEntry(cluster, "numParity");
 
-    cinfo.blockSize = loadJsonIntEntry(cluster, "chunkSizeKB");
+    cinfo.blockSize = (size_t) loadJsonIntEntry(cluster, "chunkSizeKB");
     cinfo.blockSize *= 1024;
 
     cinfo.min_reconnect_interval = std::chrono::seconds(loadJsonIntEntry(cluster, "minReconnectInterval"));
@@ -214,10 +214,10 @@ std::unordered_map<std::string, ClusterInformation> KineticIoSingleton::parseClu
 KineticIoSingleton::Configuration KineticIoSingleton::parseConfiguration(struct json_object* config)
 {
   KineticIoSingleton::Configuration c; 
-  c.stripecache_capacity = loadJsonIntEntry(config, "cacheCapacityMB");
+  c.stripecache_capacity = (size_t) loadJsonIntEntry(config, "cacheCapacityMB");
   c.stripecache_capacity *= 1024*1024;
 
-  c.readahead_window_size = loadJsonIntEntry(config, "maxReadaheadWindow");
+  c.readahead_window_size = (size_t) loadJsonIntEntry(config, "maxReadaheadWindow");
   c.background_io_threads = loadJsonIntEntry(config, "maxBackgroundIoThreads");
   c.background_io_queue_capacity = loadJsonIntEntry(config, "maxBackgroundIoQueue");
   

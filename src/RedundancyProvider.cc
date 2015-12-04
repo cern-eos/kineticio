@@ -27,7 +27,7 @@ static int gf_gen_decode_matrix(
   unsigned char *invert_matrix, *backup, *b, s;
   int incr = 0;
   
-  std::vector<unsigned char> memory(m*k*3);
+  std::vector<unsigned char> memory((size_t) (m * k * 3));
   b = &memory[0]; 
   backup = &memory[m*k];
   invert_matrix = &memory[2*m*k];
@@ -48,7 +48,7 @@ static int gf_gen_decode_matrix(
       return -1;
     }
     incr++;
-    memcpy(b, backup, m * k);
+    memcpy(b, backup, (size_t) (m * k));
     for (i = nsrcerrs; i < nerrs - nsrcerrs; i++) {
       if (src_err_list[i] == (decode_index[k - 1] + incr)) {
         // skip the erased parity line
