@@ -34,11 +34,9 @@ void PrefetchOracle::add(int number)
 
 std::list<int> PrefetchOracle::predict(size_t length, PredictionType type)
 {
-  if(length > max_prediction){
-    kio_warning("Requested prediction length ", length, " is larger than maximum prediction size of ", max_prediction);
+  if(length > max_prediction)
     length = max_prediction;
-  }
-  
+
   std::list<int> prediction;
   
   /* Can't make predictions without history. */

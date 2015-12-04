@@ -38,14 +38,12 @@ public:
   //! @param owner a pointer to the kio::FileIo object the block belongs to
   //! @param blocknumber specifies which block of the file is requested,
   //! @param mode argument to pass to a block if it has to be created
-  //! @param prefetch should prefetch be enabled or disabled for this request
   //! @return the block on success, throws on error
   //--------------------------------------------------------------------------
   std::shared_ptr<kio::DataBlock> get(
       kio::FileIo* owner,
       int blocknumber,
-      DataBlock::Mode cm,
-      bool prefetch
+      DataBlock::Mode cm
   );
 
   //--------------------------------------------------------------------------
@@ -65,15 +63,11 @@ public:
   void drop(kio::FileIo* owner, bool force=false);
 
   //--------------------------------------------------------------------------
-  //! Flushes the supplied data. If the number of current background threads
-  //! does not exceed thread_capacity, the data will be flushed in the
-  //! background. Otherwise, it will flush in the calling thread to prevent
-  //! unlimited thread creation.
+  //! Return current cache utilization as a double value between 0 and 1.
   //!
-  //! @param owner a pointer to the kio::FileIo object the data belongs to
-  //! @param data the data to flush
+  //! @return cache utilization
   //--------------------------------------------------------------------------
-  void async_flush(kio::FileIo* owner, std::shared_ptr<kio::DataBlock> data);
+  double utilization();
 
   //--------------------------------------------------------------------------
   //! The configuration of an existing ClusterChunkCache object can be changed
@@ -81,14 +75,14 @@ public:
   //!
   //! @param capacity absolute maximum size of the cache in bytes
   //--------------------------------------------------------------------------
-  void changeConfiguration(size_t capacity, size_t readahead_size);
+  void changeConfiguration(size_t capacity);
 
   //--------------------------------------------------------------------------
   //! Constructor.
   //!
   //! @param capacity absolute maximum size of the cache in bytes
   //--------------------------------------------------------------------------
-  explicit DataCache(size_t capacity, size_t readahead_window_size);
+  explicit DataCache(size_t capacity);
 
   //--------------------------------------------------------------------------
   //! No copy constructor.
@@ -106,10 +100,7 @@ private:
 
   //! current size of the cache
   std::atomic<size_t> current_size;
-    
-  //! the maximum number of blocks to prefetch 
-  std::atomic<size_t> readahead_window_size;
-  
+
   //! current size of the unused items list
   size_t unused_size;
   
@@ -140,43 +131,10 @@ private:
   //! keep set of cache items associated with each owner (for drop & flush commands)
   std::unordered_map<const kio::FileIo*, std::set<cache_iterator, cache_iterator_compare>> owner_tables;
 
-  //! Exceptions occurring during background execution are stored and thrown at
-  //! the next get request of the owner.
-  std::unordered_map<const kio::FileIo*, std::exception> exceptions;
-
-  //! Track per FileIo access patterns and attempt to pre-fetch intelligently
-  std::unordered_map<const kio::FileIo*, PrefetchOracle> prefetch;
-
-  //! Thread safety when accessing exception map
-  std::mutex exception_mutex;
-
-  //! Thread safety when accessing pre-fetch map
-  std::mutex readahead_mutex;
-
   //! Thread safety when accessing cache structures (lookup table and lru list)
   std::mutex cache_mutex;
 
 private:
-  //--------------------------------------------------------------------------
-  //! Attempt to read the requested block number for the owner in a background
-  //! thread. If this is not possible due to the number of active background
-  //! threads already reaching thread_capacity just skip the readahead request.
-  //! Errors during readahead will be swallowed, error handling can safely occur
-  //! during the following regular read of the data.
-  //!
-  //! @param owner a pointer to the kio::FileIo object the data belongs to
-  //! @param blocknumber the data block number to read in
-  //--------------------------------------------------------------------------
-  void readahead(kio::FileIo* owner, int blocknumber);
-
-  //--------------------------------------------------------------------------
-  //! Flush functionality
-  //!
-  //! @param owner a pointer to the kio::FileIo object the data belongs to
-  //! @param data the data to flush to the backend
-  //--------------------------------------------------------------------------
-  void do_flush(kio::FileIo* owner, std::shared_ptr<kio::DataBlock> data);
-
   //--------------------------------------------------------------------------
   //! Remove an item from the cache as well as the lookup table and from
   //! associated owners.

@@ -105,7 +105,7 @@ SCENARIO("Cache Performance Test.", "[Cache]"){
       THEN("go ~"){
       for(int capacity = 1000; capacity < 100000; capacity*=5){
       
-        DataCache ccc(capacity*128, 0);
+        DataCache ccc(capacity*128);
         std::shared_ptr<ClusterInterface> cluster(new MockCluster());
         MockFileIo fio("thepath",cluster);
 
@@ -114,20 +114,20 @@ SCENARIO("Cache Performance Test.", "[Cache]"){
         int break_point = capacity*0.7;
         auto tstart = system_clock::now();
         for(int i=0; i<break_point; i++)
-            ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD, false);
+            ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
         auto tend = system_clock::now();
 
         printf("%ld items per second up to 70 percent capacity\n", (capacity * 700) / (duration_cast<milliseconds>(tend-tstart).count()+1));
 
         tstart = system_clock::now();
         for(int i=break_point; i<capacity; i++)
-          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD, false);
+          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
         tend = system_clock::now();
         printf("%ld items per second up to capacity \n", (capacity * 300) / (duration_cast<milliseconds>(tend-tstart).count()+1));
 
         tstart = system_clock::now();
         for(int i=capacity; i<2*capacity; i++)
-          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD, false);
+          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
         tend = system_clock::now();
         printf("%ld items per second above capacity \n", (capacity * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
 
@@ -136,7 +136,7 @@ SCENARIO("Cache Performance Test.", "[Cache]"){
 
         tstart = system_clock::now();
         for(int i=2*capacity; i<3*capacity; i++)
-          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD, false);
+          ccc.get((FileIo*)&fio, i, DataBlock::Mode::STANDARD);
         tend = system_clock::now();
         printf("%ld items per second above capacity after timeout \n\n", (capacity * 1000) / (duration_cast<milliseconds>(tend-tstart).count()+1));
       }

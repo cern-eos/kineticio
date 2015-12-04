@@ -148,6 +148,31 @@ private:
   enum rw {READ, WRITE};
   int64_t ReadWrite (long long off, char* buffer, int length, rw mode, uint16_t timeout = 0);
 
+  //--------------------------------------------------------------------------
+  //! Attempt to prefetch blocks based on the provided block number. If no
+  //! access pattern can be detected, no io-threads are available or the cache
+  //! utilization is very high, read-ahead will be skipped.
+  //!
+  //! @param blocknumber the data block currently being read / written
+  //--------------------------------------------------------------------------
+  void scheduleReadahead(int blocknumber);
+
+  //--------------------------------------------------------------------------
+  //! Schedule a background flush for the supplied data block.
+  //!
+  //! @param data the data to flush
+  //--------------------------------------------------------------------------
+  void scheduleFlush(std::shared_ptr<kio::DataBlock> data);
+
+  //--------------------------------------------------------------------------
+  //! Execute a flush operation. As this function is intended to be run
+  //! by one of the background io threads, a possibly thrown exception will
+  //! be stored in this FileIo's exception queue.
+  //!
+  //! @param data the data to flush to the backend
+  //--------------------------------------------------------------------------
+  void doFlush(std::shared_ptr<kio::DataBlock> data);
+
 private:
   class LastBlockNumber {
 
@@ -202,8 +227,18 @@ protected:
   //! we don't want to have to look in the drive map for every access...
   std::shared_ptr<ClusterInterface> cluster;
 
+  //! readahead
+  PrefetchOracle prefetchOracle;
+
   //! keep track of the last block to answer stat requests reasonably
   LastBlockNumber lastBlockNumber;
+
+  //! Exceptions occurring during background execution are stored and thrown at
+  //! the next request.
+  std::queue<std::exception> exceptions;
+
+  //! Thread safety when accessing exceptions
+  std::mutex exception_mutex;
 
   //! extracted from the supplied 'kinetic:clusterId:path' supplied to open()
   std::string path;

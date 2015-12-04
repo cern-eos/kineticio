@@ -25,6 +25,8 @@ public:
   
   //! return thread pool 
   BackgroundOperationHandler& threadpool();
+
+  size_t readaheadWindowSize();
   
   //--------------------------------------------------------------------------
   //! (Re)load the json configuration files and reconfigure the ClusterMap
@@ -56,7 +58,7 @@ private:
       //! the maximum size of the data cache in bytes
       size_t stripecache_capacity;
       //! the maximum number of keys prefetched by readahead algorithm
-      size_t readahead_window_size;
+      std::atomic<size_t> readahead_window_size;
       //! the number of threads used for bg io in the data cache, can be 0
       int background_io_threads;
       //! the maximum number of operations queued for bg io, can be 0 
@@ -110,7 +112,7 @@ private:
   //!
   //! @param drive json library configuration
   //--------------------------------------------------------------------------
-  Configuration parseConfiguration(struct json_object* configuration);
+  void parseConfiguration(struct json_object* configuration);
   
 };
 

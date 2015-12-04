@@ -7,8 +7,9 @@
 
 using namespace kio;
 
-KineticIoSingleton::KineticIoSingleton() : dataCache(0,0), threadPool(1,1)
+KineticIoSingleton::KineticIoSingleton() : dataCache(0), threadPool(1,1)
 {
+  configuration.readahead_window_size = 0;
   try{
     loadConfiguration();
   }catch(const std::exception& e){
@@ -105,10 +106,6 @@ void KineticIoSingleton::loadConfiguration()
   struct json_object* o1 = NULL;
   struct json_object* o2 = NULL;
 
-  if (!json_object_object_get_ex(cluster_root.get(), "configuration", &o1))
-      throw kio_exception(EINVAL, "No configuration entry found");
-  auto config = parseConfiguration(o1);
-
   if (!json_object_object_get_ex(location_root.get(), "location", &o1))
       throw kio_exception(EINVAL, "No location entry found");
   if (!json_object_object_get_ex(security_root.get(), "security", &o2))
@@ -118,11 +115,14 @@ void KineticIoSingleton::loadConfiguration()
   if (!json_object_object_get_ex(cluster_root.get(), "cluster", &o1))
       throw kio_exception(EINVAL, "No cluster entry found");
   auto clusterInfo = parseClusters(o1);
-  
+
+  if (!json_object_object_get_ex(cluster_root.get(), "configuration", &o1))
+    throw kio_exception(EINVAL, "No configuration entry found");
+  parseConfiguration(o1);
+
   std::lock_guard<std::mutex> lock(mutex);
-  configuration = config;
-  clusterMap.reset(std::move(clusterInfo), std::move(driveInfo));  
-  dataCache.changeConfiguration(configuration.stripecache_capacity, configuration.readahead_window_size);
+  clusterMap.reset(std::move(clusterInfo), std::move(driveInfo));
+  dataCache.changeConfiguration(configuration.stripecache_capacity);
   threadPool.changeConfiguration(configuration.background_io_threads, configuration.background_io_queue_capacity);
 }
 
@@ -211,15 +211,17 @@ std::unordered_map<std::string, ClusterInformation> KineticIoSingleton::parseClu
   return clusterInfo;
 }
 
-KineticIoSingleton::Configuration KineticIoSingleton::parseConfiguration(struct json_object* config)
+void KineticIoSingleton::parseConfiguration(struct json_object* config)
 {
-  KineticIoSingleton::Configuration c; 
-  c.stripecache_capacity = (size_t) loadJsonIntEntry(config, "cacheCapacityMB");
-  c.stripecache_capacity *= 1024*1024;
+  configuration.stripecache_capacity = (size_t) loadJsonIntEntry(config, "cacheCapacityMB");
+  configuration.stripecache_capacity *= 1024*1024;
 
-  c.readahead_window_size = (size_t) loadJsonIntEntry(config, "maxReadaheadWindow");
-  c.background_io_threads = loadJsonIntEntry(config, "maxBackgroundIoThreads");
-  c.background_io_queue_capacity = loadJsonIntEntry(config, "maxBackgroundIoQueue");
-  
-  return c;
+  configuration.readahead_window_size = (size_t) loadJsonIntEntry(config, "maxReadaheadWindow");
+  configuration.background_io_threads = loadJsonIntEntry(config, "maxBackgroundIoThreads");
+  configuration.background_io_queue_capacity = loadJsonIntEntry(config, "maxBackgroundIoQueue");
+}
+
+size_t KineticIoSingleton::readaheadWindowSize()
+{
+  return configuration.readahead_window_size;
 }

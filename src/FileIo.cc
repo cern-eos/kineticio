@@ -14,14 +14,14 @@ using namespace kio;
 
 
 FileIo::FileIo() :
-    cluster(), lastBlockNumber(*this)
+    cluster(), lastBlockNumber(*this), prefetchOracle(kio().readaheadWindowSize())
 {
 }
 
 FileIo::~FileIo()
 {
-  /* If fileIo object is destroyed without closing properly, 
-   * throw cache data out the window. */
+  /* In case fileIo object is destroyed without having been closed, throw cache data out the window. If
+   * object has been closed, cache will have already been dropped. */
   kio().cache().drop(this, true);
 }
 
@@ -30,11 +30,12 @@ void FileIo::Open(const std::string &p, int flags,
 {
   if (cluster)
     throw kio_exception(EPERM, "A cluster is already set for FileIO object. Cannot open object twice.");
-  
-  auto clusterId = utility::extractClusterID(p);
+
   path = utility::extractBasePath(p);
+  auto clusterId = utility::extractClusterID(p);
   auto mdkey = utility::makeMetadataKey(clusterId, path);
   auto mdcluster = kio().cmap().getCluster(clusterId, RedundancyType::REPLICATION);
+  auto datacluster = kio().cmap().getCluster(clusterId, RedundancyType::ERASURE_CODING);
   
   KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "");
   if(flags & SFS_O_CREAT) {
@@ -67,10 +68,8 @@ void FileIo::Open(const std::string &p, int flags,
   if(!status.ok())
     throw kio_exception(EIO, "Unexpected error opening file ", p, ": ", status);
 
-  /* Setting data cluster variable. */
-  cluster = kio().cmap().getCluster(clusterId, RedundancyType::ERASURE_CODING);;
+  cluster = datacluster;
 }
-
 
 void FileIo::Close(uint16_t timeout)
 {
@@ -82,12 +81,69 @@ void FileIo::Close(uint16_t timeout)
   cluster.reset();
 }
 
+void do_readahead(std::shared_ptr<kio::DataBlock> data)
+{
+  char buf[1];
+  data->read(buf, 0, 1);
+}
+
+void FileIo::scheduleReadahead(int blocknumber)
+{
+  prefetchOracle.add(blocknumber);
+
+  /* Adjust scheduleReadahead to cache utilization. Full force to 0.75 usage, decreasing until 0.95, then disabled. */
+  size_t readahead_length = kio().readaheadWindowSize();
+  auto cache_utilization = kio().cache().utilization();
+
+  if(cache_utilization > 0.95)
+    readahead_length = 0;
+  else if(cache_utilization > 0.75)
+    readahead_length *= ((1.0 - cache_utilization) / 0.25);
+
+  if (readahead_length){
+    auto prediction = prefetchOracle.predict(readahead_length, PrefetchOracle::PredictionType::CONTINUE);
+    for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
+      if(*it < lastBlockNumber.get()) {
+        auto data = kio().cache().get(this, *it, DataBlock::Mode::STANDARD);
+        auto scheduled = kio().threadpool().try_run(std::bind(do_readahead, data));
+        if (scheduled)
+          kio_debug("Readahead of data block #", *it);
+      }
+    }
+  }
+}
+
+void FileIo::doFlush(std::shared_ptr<kio::DataBlock> data)
+{
+  if (data->dirty()) {
+    try {
+      data->flush();
+    }
+    catch (const std::exception& e) {
+      kio_warning("Exception ocurred in background flush: ", e.what());
+      std::lock_guard<std::mutex> lock(exception_mutex);
+      exceptions.push(e);
+    }
+  }
+}
+
+void FileIo::scheduleFlush(std::shared_ptr<kio::DataBlock> data)
+{
+  kio().threadpool().run(std::bind(&FileIo::doFlush, this, data));
+}
+
 
 int64_t FileIo::ReadWrite(long long off, char *buffer,
                           int length, FileIo::rw mode, uint16_t timeout)
 {
-  if (!cluster)
-    throw kio_exception(ENXIO, "No cluster set for FileIO object ");
+  { std::lock_guard<std::mutex> lock(exception_mutex);
+    if(!exceptions.empty()){
+      auto e = exceptions.front();
+      exceptions.pop();
+      kio_warning("Re-throwing exception caught in previous async flush operation: ", e.what());
+      throw e;
+    }
+  }
 
   const size_t block_capacity = cluster->limits().max_value_size;
   size_t length_todo = length;
@@ -104,16 +160,16 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
       lastBlockNumber.set(block_number);
       cm = DataBlock::Mode::CREATE;
     }
-    
-    /* Get the data block, enable potential prefetch if we are accessing file anywhere but the end */
-    auto data = kio().cache().get(this, block_number, cm, block_number < lastBlockNumber.get());
+
+    auto data = kio().cache().get(this, block_number, cm);
+    scheduleReadahead(block_number);
 
     if (mode == rw::WRITE) {
       data->write(buffer + off_done, block_offset, block_length);
 
       /* Flush data in background if writing to block capacity.*/
       if (block_offset + block_length == block_capacity)
-        kio().cache().async_flush(this, data);
+        scheduleFlush(data);
     }
     else if (mode == rw::READ) {
       data->read(buffer + off_done, block_offset, block_length);
@@ -142,12 +198,18 @@ int64_t FileIo::ReadWrite(long long off, char *buffer,
 int64_t FileIo::Read(long long offset, char *buffer, int length,
                      uint16_t timeout)
 {
+  if (!cluster)
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ");
+
   return ReadWrite(offset, buffer, length, FileIo::rw::READ, timeout);
 }
 
 int64_t FileIo::Write(long long offset, const char *buffer,
                       int length, uint16_t timeout)
 {
+  if (!cluster)
+    throw kio_exception(ENXIO, "No cluster set for FileIO object ");
+
   return ReadWrite(offset, const_cast<char *>(buffer), length,
                    FileIo::rw::WRITE, timeout);
 }
@@ -163,7 +225,7 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
 
   if(offset>0){
     /* Step 1) truncate the block containing the offset. */
-    kio().cache().get(this, block_number, DataBlock::Mode::STANDARD, false)->truncate(block_offset);
+    kio().cache().get(this, block_number, DataBlock::Mode::STANDARD)->truncate(block_offset);
 
     /* Step 2) Ensure we don't have data past block_number in the kio().cache() Since
      * truncate isn't super common, go the easy way and just sync+drop the entire
@@ -218,7 +280,7 @@ void FileIo::Stat(struct stat *buf, uint16_t timeout)
     throw kio_exception(ENXIO, "No cluster set for FileIO object ");
 
   lastBlockNumber.verify();
-  std::shared_ptr<DataBlock> last_block = kio().cache().get(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD, false);
+  auto last_block = kio().cache().get(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD);
 
   memset(buf, 0, sizeof(struct stat));
   buf->st_blksize = cluster->limits().max_value_size;
