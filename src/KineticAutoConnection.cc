@@ -18,7 +18,7 @@ KineticAutoConnection::KineticAutoConnection(
   std::random_device rd;
   mt.seed(rd());
   logstring = utility::Convert::toString(
-      "(",options.first.host, ":", options.first.port, " and ", options.second.host, ":", options.second.port,")"
+      "(",options.first.host, ":", options.first.port, " / ", options.second.host, ":", options.second.port,")"
   );
 }
 

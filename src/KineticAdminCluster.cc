@@ -9,18 +9,20 @@ KineticAdminCluster::~KineticAdminCluster()
 {
 }
 
-std::vector<bool> KineticAdminCluster::status()
+std::vector<std::pair<bool, std::string>> KineticAdminCluster::status()
 {
-  std::vector<bool> sv(connections.size(), true);
+  std::vector<std::pair<bool, std::string>> statusVector;
 
-  for(int i=0; i<connections.size(); i++){
+  for(auto it = connections.cbegin(); it != connections.cend(); it++){
+    auto& con = *it;
+    statusVector.push_back(std::make_pair(true, con->getName()));
     try{
-      connections[i]->get();
+      con->get();
     }catch(std::exception &e){
-      sv[i] = false;
+      statusVector.back().first = false;
     }
   }
-  return sv;
+  return statusVector;
 }
 
 bool isIndicatorKey(const string& key)
@@ -180,9 +182,9 @@ kio::AdminClusterInterface::KeyCounts KineticAdminCluster::doOperation(
           }
           bg.run(std::bind(&KineticAdminCluster::applyOperation, this, o, std::ref(key_counts), out));
         }
-        if(callback)
-          callback(key_counts.total);
       }
+      if(callback)
+        callback(key_counts.total);
     } while (keys && keys->size());
   }
   

@@ -21,47 +21,76 @@ struct Configuration{
 };
 
 int kinetic_help(){
-//  fprintf(stdout, "usage: kinetic config [--publish] [--space <space> ]\n");
+//  fprintf(stdout, "usage: kinetic config [--publish] [--space <space>]\n");
 //  fprintf(stdout, "       kinetic config [--space <space> ]                     : shows the currently deployed kinetic configuration - by default 'default' space\n");
-//  fprintf(stdout, "       kinetic config --publish                              : publishes the default MGM configuration files under <mgm>:/var/eos/kinetic to all currently existing FSTs in default or referenced space\n");
-//  fprintf(stdout, "       kinetic config --publish [--space <name>]             : identifier <name> refers to the MGM files like /var/eos/kinetic/kinetic-cluster-<name>.json /var/eos/kinetic/kinetic-drives-<name>.json /var/eos/kinetic/kinetic-security-<name>.json\n");
+//  fprintf(stdout, "       kinetic config --publish [--space <name>]             : publishes the configuration files under <mgm>:/var/eos/kinetic/ to all currently existing FSTs in default or referenced space\n");
 //  fprintf(stdout, "\n");
-  fprintf(stdout, "usage: kinetic --id <clusterid> <operation> <target> [--threads <numthreads>] [--verbosity debug|notice|warning|error] [-m]\n");
+  fprintf(stdout, "usage: kinetic --id <clusterid> <operation> <target> [--threads <numthreads>] [--space <name>] [-m] [--verbosity debug|notice|warning|error]\n");
   fprintf(stdout, "\n");
   fprintf(stdout, "       kinetic ... --id <clusterid> ...                      : specify cluster, <clusterid> refers to the name of the cluster set in the cluster configuration\n");
   fprintf(stdout, "\n");
-  fprintf(stdout, "       kinetic ... <operation> <target> ...                  : run <operation> on keys of type <target>\n");
+  fprintf(stdout, "       kinetic ... <operation> [<target>] ...                  : run <operation> on keys of type <target>\n");
   fprintf(stdout, "         <operation>\n");
-  fprintf(stdout, "             status                                          : show connection status, does not require a <target> type\n");
+  fprintf(stdout, "             status                                          : show connection status of cluster\n");
   fprintf(stdout, "             count                                           : count number of keys existing in the cluster\n");
-  fprintf(stdout, "             scan                                            : check keys and display their status information (Warning: Long Runtime)\n");
-  fprintf(stdout, "             repair                                          : check keys, repair as required, display key status information (Warning: Long Runtime)\n");
-  fprintf(stdout, "             reset                                           : force remove keys (Warning: Data will be lost!)\n");
-  fprintf(stdout, "         <target>\n");
+  fprintf(stdout, "             scan                                            : check keys and display their status information\n");
+  fprintf(stdout, "             repair                                          : check keys, repair as required, display key status information\n");
+  fprintf(stdout, "             reset                                           : force remove keys, requires target (Warning: Data will be lost!)\n");
+  fprintf(stdout, "         <target>, required for all operations except status operation\n");
   fprintf(stdout, "             data                                            : data keys\n");
   fprintf(stdout, "             metadata                                        : metadata keys\n");
   fprintf(stdout, "             attribute                                       : attribute keys\n");
   fprintf(stdout, "             indicator                                       : keys with indicators (written automatically when encountering partial failures during normal operation)\n");
   fprintf(stdout, "\n");
   fprintf(stdout, "       kinetic ... [--threads <numthreads>] ...              : (optional) specify the number of background io threads \n");
+  fprintf(stdout, "       kinetic ... [-m] ...                                  : (optional) monitoring key=value output format\n");
+  fprintf(stdout, "       kinetic ... [--space <name>] ...                      : (optional) use the kinetic configuration for the referenced space - by default 'default' space\n");
   fprintf(stdout, "       kinetic ... [--verbosity debug|notice|warning|error]  : (optional) specify verbosity level, warning is set as default \n");
-  fprintf(stdout, "       kinetic ... [-m] ...                                  : (optional) monitoring key=value output format\n");  
 
   return 0;
 }
 
-void printKeyCount(const kio::AdminClusterInterface::KeyCounts& kc)
+void printStatistics(const kio::AdminClusterInterface::KeyCounts& kc, Configuration& config)
 {
-  fprintf(stdout, "\n");
-  fprintf(stdout, "# ------------------------------------------------------------------------\n");
-  fprintf(stdout, "# Completed Operation - scanned a total of %d keys\n", kc.total);
-  fprintf(stdout, "# ------------------------------------------------------------------------\n");
-  fprintf(stdout, "# Keys with inaccessible drives:        %d\n", kc.incomplete);
-  fprintf(stdout, "# Keys requiring action:                %d\n", kc.need_action);
-  fprintf(stdout, "# Keys Repaired:                        %d\n", kc.repaired);
-  fprintf(stdout, "# Keys Removed:                         %d\n", kc.removed);
-  fprintf(stdout, "# Not repairable:                       %d\n", kc.unrepairable);
-  fprintf(stdout, "# ------------------------------------------------------------------------\n");
+  if (config.monitoring)
+  {
+    fprintf(stdout, "kinetic.stat.keys.n=%d kinetic.stat.drives.inaccessible.n=%d kinetic.stat.require.action.n=%d kinetic.stat.repaired.n=%d kinetic.stat.removed.n=%d Kinetic.stat.notrepairable.n=%d\n",
+            kc.total,
+            kc.incomplete,
+            kc.need_action,
+            kc.repaired,
+            kc.removed,
+            kc.unrepairable);
+  }
+  else
+  {
+    fprintf(stdout, "\n");
+    fprintf(stdout, "# ------------------------------------------------------------------------\n");
+    fprintf(stdout, "# Completed Operation - scanned a total of %d keys\n", kc.total);
+    fprintf(stdout, "# ------------------------------------------------------------------------\n");
+    fprintf(stdout, "# Keys with inaccessible drives:        %d\n", kc.incomplete);
+    fprintf(stdout, "# Keys requiring action:                %d\n", kc.need_action);
+    fprintf(stdout, "# Keys Repaired:                        %d\n", kc.repaired);
+    fprintf(stdout, "# Keys Removed:                         %d\n", kc.removed);
+    fprintf(stdout, "# Not repairable:                       %d\n", kc.unrepairable);
+    fprintf(stdout, "# ------------------------------------------------------------------------\n");
+  }
+}
+
+void printCount(int count, const Configuration& config)
+{
+
+  if (config.monitoring)
+  {
+    fprintf(stdout, "kinetic.stat.keys.n=%d\n", count);
+  }
+  else
+  {
+    fprintf(stdout, "\n");
+    fprintf(stdout, "# ------------------------------------------------------------------------\n");
+    fprintf(stdout, "# Completed Operation - Counted a total of %d keys\n", count);
+    fprintf(stdout, "# ------------------------------------------------------------------------\n");
+  }
 }
 
 bool mshouldLog (const char* func, int level, int target_level)
@@ -154,6 +183,10 @@ int main(int argc, char** argv)
     return EXIT_FAILURE;
   }
 
+  std::function<void(int)> callback;
+  if(!config.monitoring)
+    callback = printinc;
+
   try{
     kio::KineticIoFactory::registerLogFunction(mlog,
                                       std::bind(mshouldLog, std::placeholders::_1, std::placeholders::_2, config.verbosity)
@@ -173,28 +206,31 @@ int main(int argc, char** argv)
         auto v = ac->status();
         for (size_t i = 0; i < v.size(); i++) {
           if (config.monitoring)
-            fprintf(stdout, "kinetic.drive.index=%lu kinetic.drive.status=%s\n", i, v[i] ? "OK" : "FAILED");
+            fprintf(stdout, "kinetic.drive.index=%lu kinetic.drive.status=%s\n", i, v[i].first ? "OK" : "FAILED");
           else
-            fprintf(stdout, "# drive %5d : %s\n", (int)i, v[i] ? "OK" : "FAILED");
+            fprintf(stdout, "# drive %2d : %s %s\n", (int)i, v[i].first ? "OK" : "FAILED", v[i].second.c_str());
         }
         break;
       }
       case Operation::COUNT:
-        fprintf(stdout, "Counting number of keys on cluster: \n");
-        ac->count(config.target, printinc);
-        fprintf(stdout, "\n");
+        if(!config.monitoring)
+          fprintf(stdout, "Counting number of keys on cluster: \n");
+        printCount(ac->count(config.target, callback), config);
         break;
       case Operation::SCAN:
-        fprintf(stdout, "Scanning keys on cluster: \n");
-        printKeyCount( ac->scan(config.target, printinc, config.numthreads) );
+        if(!config.monitoring)
+          fprintf(stdout, "Scanning keys on cluster: \n");
+        printStatistics(ac->scan(config.target, callback, config.numthreads), config);
         break;
       case Operation::REPAIR:
-        fprintf(stdout, "Scan & repair of keys on cluster: \n");
-        printKeyCount( ac->repair(config.target, printinc, config.numthreads) );
+        if(!config.monitoring)
+          fprintf(stdout, "Scan & repair of keys on cluster: \n");
+        printStatistics(ac->repair(config.target, callback, config.numthreads), config);
         break;
-        case Operation::RESET:
-        fprintf(stdout, "Removing keys from cluster: \n");
-        printKeyCount( ac->reset(config.target, printinc, config.numthreads) );
+      case Operation::RESET:
+        if(!config.monitoring)
+          fprintf(stdout, "Removing keys from cluster: \n");
+        printStatistics(ac->reset(config.target, callback, config.numthreads), config);
         break;
     }
   }catch(std::exception& e){

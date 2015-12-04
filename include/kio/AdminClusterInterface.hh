@@ -91,9 +91,10 @@ public:
   //! Obtain the current status of connections to all drives attached to this
   //! cluster.
   //!
-  //! @return a boolean representation of the connection states
+  //! @return a boolean representation of the connection states and location
+  //!   information for the drives associated with the connection
   //--------------------------------------------------------------------------
-  virtual std::vector<bool> status() = 0;
+  virtual std::vector<std::pair<bool, std::string>> status() = 0;
 
   virtual ~AdminClusterInterface(){};
 };

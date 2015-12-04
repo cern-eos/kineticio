@@ -1,6 +1,8 @@
 #include "catch.hpp"
 #include "RedundancyProvider.hh"
 #include "Utility.hh"
+#include <fcntl.h>
+#include <unistd.h>
 
 using std::shared_ptr;
 using std::string;
@@ -21,20 +23,20 @@ const std::string value(
   "The results of a voter survey released Wednesday by a widely cited Turkish pollster found that Mr. Erdogan's party could regain a parliamentary majority if elections were held today."
 );
 
-std::vector< shared_ptr<const string> > makeStripe(int nData, int nParity)
+std::vector<std::shared_ptr<const std::string> > makeStripe(int nData, int nParity, std::string value)
 {
   size_t chunk_size = (value.size() + nData-1) / (nData);
-  std::vector< shared_ptr<const string> > stripe;
+  std::vector< std::shared_ptr<const std::string> > stripe;
   for(int i=0; i<nData+nParity; i++){
     if(i<nData){
-      auto subchunk = make_shared<string>(value.substr(i*chunk_size, chunk_size));
+      auto subchunk = std::make_shared<std::string>(value.substr(i*chunk_size, chunk_size));
       subchunk->resize(chunk_size); // ensure that all chunks are the same size
       stripe.push_back(std::move(subchunk));
     }
     else
-      stripe.push_back(make_shared<string>());
+      stripe.push_back(std::make_shared<std::string>());
   }
-  return stripe;  
+  return stripe;
 }
 
 SCENARIO("Redundancy Provider Test.", "[Redundancy]"){
@@ -43,7 +45,7 @@ SCENARIO("Redundancy Provider Test.", "[Redundancy]"){
     int nData = 1;
     int nParity = 3; 
     RedundancyProvider rp(nData, nParity);
-    auto stripe = makeStripe(nData, nParity);   
+    auto stripe = makeStripe(nData, nParity, value);
     
     WHEN("We encoded Parity Information. "){
       REQUIRE_NOTHROW(rp.compute(stripe));
@@ -54,13 +56,43 @@ SCENARIO("Redundancy Provider Test.", "[Redundancy]"){
       }
     }
   }
+
+  GIVEN ("A 16-4 stripe configuration"){
+    int nData = 16;
+    int nParity = 4;
+    RedundancyProvider rp(nData, nParity);
+
+    THEN("We can run performance numbers."){
+
+      for(int size = nData*1024*64; size <= nData*1024*1024; size*=2){
+
+        int fd = open("/dev/urandom", O_RDONLY);
+        std::vector<char> memory(size);
+        read(fd, memory.data(), size);
+
+        auto stripe = makeStripe(nData, nParity, std::string(memory.data(), size));
+
+        int runs = 100;
+
+        auto t = std::chrono::system_clock::now();
+        for(auto i=0; i<runs; i++){
+          rp.compute(stripe);
+          for(auto j=nData; j<nData+nParity; j++)
+            stripe[j] = std::make_shared<std::string>();
+        }
+        auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()-t).count();
+
+        printf( "%d KB chunk size -> %ld MB/sec \n", size / (1024*nData), (long int) ((((size/1048576.0) * runs) / (milliseconds)) * 1000));
+      }
+    }
+  }
     
   for(int nData=1; nData<=32; nData*=4){
     for(int nParity=0; nParity<=8; nParity+=2){
       
       GIVEN("Redundancy configuration: " + utility::Convert::toString(nData, "-", nParity)){
         RedundancyProvider rp(nData, nParity);
-        auto stripe = makeStripe(nData, nParity);   
+        auto stripe = makeStripe(nData, nParity, value);
 
         WHEN("We encoded Parity Information. "){
 

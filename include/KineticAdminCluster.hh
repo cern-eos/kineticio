@@ -29,7 +29,7 @@ public:
   KeyCounts reset(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1);
 
   //! See documentation of public interface in AdminClusterInterface
-  std::vector<bool> status();
+  std::vector<std::pair<bool, std::string>> status();
 
   //! Perfect forwarding is nice, and I am lazy. Look in KineticCluster.hh for the correct arguments
   template<typename... Args>
