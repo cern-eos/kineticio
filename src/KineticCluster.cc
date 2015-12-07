@@ -285,9 +285,10 @@ std::vector<std::shared_ptr<const std::string>> valueToStripe(
     const std::shared_ptr<kio::RedundancyProvider>& redundancy
 )
 {
-  if(!value.length())
-    return std::vector<std::shared_ptr<const string>>(nData+nParity);
-
+  if(!value.length()) {
+    auto empty = std::make_shared<const string>();
+    return std::vector<std::shared_ptr<const string>>(nData + nParity, empty);
+  }
   std::vector<std::shared_ptr<const std::string> > stripe;
   for (int i = 0; i < nData + nParity; i++) {
     auto chunk = std::make_shared<std::string>();
