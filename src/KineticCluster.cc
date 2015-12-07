@@ -318,6 +318,7 @@ KineticStatus KineticCluster::put(
   try {
     stripe = valueToStripe(nData, nParity, *value, chunkCapacity, redundancy);
   } catch (const std::exception& e) {
+    kio_warning("Failed building data stripe for key ", *key, ": ", e.what());
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
   }
 
@@ -334,8 +335,11 @@ KineticStatus KineticCluster::put(
       auto forcesync = asyncops::fillPut(ops, stripe, key, version_new, version_new, WriteMode::IGNORE_VERSION);
       rmap = execute(ops, *forcesync);
     }
-    else
+    else {
+      kio_debug("Put request for key ", *key, " failed partial write resolution and completed with status: ",
+                StatusCode::REMOTE_VERSION_MISMATCH);
       return KineticStatus(StatusCode::REMOTE_VERSION_MISMATCH, "");
+    }
   }
 
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {

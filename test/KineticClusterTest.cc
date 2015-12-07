@@ -62,7 +62,34 @@ SCENARIO("Cluster integration test.", "[Cluster]")
       }
     }
 
-    WHEN("Putting a key-value pair") {
+    WHEN("Putting a key-value pair on a cluster with 1 drive failure") {
+      auto value = make_shared<string>(cluster->limits().max_value_size, 'v');
+      c.stop(0);
+
+      shared_ptr<const string> putversion;
+      auto status = cluster->put(
+          make_shared<string>("key"),
+          make_shared<string>("version"),
+          value,
+          true,
+          putversion);
+      REQUIRE(status.ok());
+      REQUIRE(putversion);
+
+      THEN("An indicator key will _not_ have been generated") {
+        std::unique_ptr<std::vector<string>> keys;
+        auto status = cluster->range(
+            utility::makeIndicatorKey(""),
+            utility::makeIndicatorKey("~"),
+            100,
+            keys
+        );
+        REQUIRE(status.ok());
+        REQUIRE(keys->size() == 1);
+      }
+    }
+
+    WHEN("Putting a key-value pair on a healthy cluster") {
       auto value = make_shared<string>(cluster->limits().max_value_size, 'v');
 
       shared_ptr<const string> putversion;
@@ -75,7 +102,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
       REQUIRE(status.ok());
       REQUIRE(putversion);
 
-      THEN("With == nParity drive failures.") {
+      THEN("After nParity drive failures.") {
         for (int i = 0; i < nParity; i++)
           c.stop(i);
         
@@ -86,7 +113,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
             auto status = cluster->get(make_shared<string>("key"), true, version, value);
             REQUIRE(status.ok());
             
-            THEN("An indicator key will have been generated, showing that the stripe had a problem."){
+            THEN("An indicator key will _not_ have been generated"){
                 std::unique_ptr<std::vector<string>> keys; 
                 auto status = cluster->range(
                   utility::makeIndicatorKey(""),
@@ -95,8 +122,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
                   keys
                 );
                 REQUIRE(status.ok());
-                REQUIRE(keys->size() == 1);
-                REQUIRE(keys->at(0) == *utility::makeIndicatorKey("key"));
+                REQUIRE(keys->size() == 0);
             }
         }
 

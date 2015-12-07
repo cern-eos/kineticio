@@ -115,10 +115,9 @@ private:
   //! @param rp redundancy provider instance to set
   //! @param cops Connection Options to fill
   //--------------------------------------------------------------------------
-  void fillArgs(const ClusterInformation &cinfo,
+  void fillArgs(const ClusterInformation& cinfo, const RedundancyType& rType,
                 std::shared_ptr<RedundancyProvider>& rp,
-                std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>>& cops
-  );
+                std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>>& cops);
 };
 
 }

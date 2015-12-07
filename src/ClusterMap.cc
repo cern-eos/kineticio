@@ -25,7 +25,7 @@ void ClusterMap::reset(
   replClusterCache.clear();
 }
 
-void ClusterMap::fillArgs(const ClusterInformation &ki,
+void ClusterMap::fillArgs(const ClusterInformation& ki, const RedundancyType& rType,
                           std::shared_ptr<RedundancyProvider>& rp,
                           std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>>& cops)
 {
@@ -35,13 +35,13 @@ void ClusterMap::fillArgs(const ClusterInformation &ki,
     cops.push_back(driveInfoMap.at(*wwn));
   }
 
-  auto rtype = utility::Convert::toString(ki.numData, "-", ki.numParity);
-  if(rpCache.count(rtype)){
-    rp = rpCache.at(rtype);
+  auto rpName = utility::Convert::toString((rType == RedundancyType::ERASURE_CODING) ? ki.numData : 1, "-", ki.numParity);
+  if(rpCache.count(rpName)){
+    rp = rpCache.at(rpName);
   }
   else{
-    rp = std::make_shared<RedundancyProvider>(ki.numData, ki.numParity);
-    rpCache.insert(std::make_pair(rtype, rp));
+    rp = std::make_shared<RedundancyProvider>((rType == RedundancyType::ERASURE_CODING) ? ki.numData : 1, ki.numParity);
+    rpCache.insert(std::make_pair(rpName, rp));
   }
 }
 
@@ -54,7 +54,7 @@ std::unique_ptr<KineticAdminCluster> ClusterMap::getAdminCluster(const std::stri
   std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> cops;
   std::shared_ptr<RedundancyProvider> rp;
   ClusterInformation &ki = clusterInfoMap.at(id);
-  fillArgs(ki, rp, cops);
+  fillArgs(ki, r, rp, cops);
 
   return std::unique_ptr<KineticAdminCluster>(new KineticAdminCluster(
       id, (r == RedundancyType::ERASURE_CODING) ? ki.numData : 1, ki.numParity, ki.blockSize,
@@ -75,7 +75,7 @@ std::shared_ptr<ClusterInterface> ClusterMap::getCluster(const std::string &id, 
     ClusterInformation &ki = clusterInfoMap.at(id);
     std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> cops;
     std::shared_ptr<RedundancyProvider> rp;
-    fillArgs(ki, rp, cops);
+    fillArgs(ki, r, rp, cops);
 
     cache.insert(
       std::make_pair(id, 
