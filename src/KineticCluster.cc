@@ -19,7 +19,7 @@ KineticCluster::KineticCluster(
     std::chrono::seconds op_timeout,
     std::shared_ptr<RedundancyProvider> rp,
     SocketListener& listener
-) : nData(stripe_size), nParity(num_parities), operation_timeout(op_timeout), 
+) : nData(stripe_size), nParity(num_parities), chunkCapacity(block_size), operation_timeout(op_timeout),
     identity(id), instanceIdentity(utility::uuidGenerateString()),
     statistics_snapshot{0,0,0,0,0}, clusterio{0,0,0,0,0}, 
     clustersize{1,0}, dmutex(std::make_shared<DestructionMutex>()), redundancy(rp)
@@ -76,61 +76,6 @@ public:
   ~FFPutCallback() { }
 };
 
-/* Build a stripe vector from the records returned by a get operation. Only
- * accept values with valid CRC. */
-std::vector<shared_ptr<const string> > getOperationToStripe(
-    const std::shared_ptr<const std::string>& key,
-    std::vector<KineticAsyncOperation>& ops,
-    int& count,
-    const std::shared_ptr<const string>& target_version
-)
-{
-  std::vector<shared_ptr<const string> > stripe;
-  count = 0;
-
-  for (int i=0; i<ops.size(); i++) {
-    stripe.push_back(make_shared<const string>());
-    auto& record = std::static_pointer_cast<GetCallback>(ops[i].callback)->getRecord();
-
-    if (record &&
-        *record->version() == *target_version &&
-        record->value() &&
-        record->value()->size()
-        ) {
-
-      auto checksum = crc32c(0, record->value()->c_str(), record->value()->length());
-      auto tag = utility::Convert::toString(checksum);
-      if (tag == *record->tag()) {
-        stripe.back() = record->value();
-        count++;
-      }
-      /* In case of crc verification failure, schedule a put operation to the subchunk so it will version
-         mismatch in future gets and can be easily identified for repair */
-      else{
-        kio_warning("subchunk ", i, " of stripe ", *key, " failed crc verification.");
-        std::string cor_string("crc failed");
-        auto cor_crc = crc32c(0, cor_string.c_str(), cor_string.length());
-        auto corrupt = std::make_shared<const KineticRecord>(
-            cor_string, cor_string, utility::Convert::toString(cor_crc), record->algorithm()
-        );        
-        try{
-          auto con = ops[i].connection->get(); 
-          con->Put(key,
-              record->version(), 
-              kinetic::WriteMode::REQUIRE_SAME_VERSION, 
-              corrupt, 
-              std::make_shared<FFPutCallback>()
-          );
-        }catch(const std::exception& e){
-          kio_warning("Failed scheduling overwrite after detecting corrupt data for subchunk ", i, " of stripe ", *key, ": ", e.what());
-        }
-      }
-    }
-  }
-  return stripe;
-}
-
-
 void KineticCluster::putIndicatorKey(const std::shared_ptr<const std::string>& key, const std::vector<KineticAsyncOperation>& ops)
 {
     /* Obtain an operation index where the execution succeeded. */
@@ -162,6 +107,60 @@ void KineticCluster::putIndicatorKey(const std::shared_ptr<const std::string>& k
     };
 }
 
+std::shared_ptr<const string> KineticCluster::getOperationToValue(
+    const std::vector<KineticAsyncOperation>& ops,
+    const std::shared_ptr<const string>& key,
+    const std::shared_ptr<const string>& version
+)
+{
+  auto size = (int) utility::uuidDecodeSize(version);
+  if(!size)
+    return make_shared<string>();
+
+  bool need_recovery = false;
+  auto empty = make_shared<string>();
+  empty->resize(chunkCapacity);
+
+  /* Step 1) re-construct stripe */
+  std::vector<shared_ptr<const string>> stripe;
+  for (int i=0; i<ops.size(); i++) {
+    stripe.push_back(make_shared<const string>());
+
+    auto& record = std::static_pointer_cast<GetCallback>(ops[i].callback)->getRecord();
+    if (record && *record->version() == *version && record->value() && record->value()->size()) {
+      auto checksum = crc32c(0, record->value()->c_str(), record->value()->length());
+      auto tag = utility::Convert::toString(checksum);
+      if (tag == *record->tag()) {
+        stripe.back() = record->value();
+      }
+      else {
+        kio_warning("Chunk ", i, " of key ", *key, " failed crc verification.");
+        putIndicatorKey(key, ops);
+      }
+    }
+    else if (i < nData && i * chunkCapacity > size)
+      stripe.back() = empty;
+
+    if(!stripe.back()->size())
+      need_recovery = true;
+  }
+
+  if(need_recovery)
+    redundancy->compute(stripe);
+
+  /* Step 2) merge data chunks into single value */
+  auto value = make_shared<string>();
+  value->reserve(size);
+  for (auto it = stripe.cbegin(); it != stripe.cend(); it++){
+    if(value->size() + chunkCapacity <= size)
+      *value += **it;
+    else {
+      value->append(**it, 0, size - value->size());
+      break;
+    }
+  }
+  return value;
+}
 
 KineticStatus KineticCluster::get(
     const shared_ptr<const string>& key,
@@ -170,8 +169,8 @@ KineticStatus KineticCluster::get(
     shared_ptr<const string>& value
 )
 {
-  /* Try to get the value without parities, unless the cluster has been switched into parity mode in the last 5 
-   * minutes. */
+  /* Try to get the value without parities for erasure coded stripes, unless the cluster has been switched into parity
+   * mode in the last 5 minutes. */
   bool getParities = true;
   if(nData > nParity) {
     std::lock_guard<std::mutex> lock(mutex);
@@ -185,58 +184,31 @@ KineticStatus KineticCluster::get(
   auto rmap = execute(ops, *sync);
 
   auto target_version = skip_value ? asyncops::mostFrequentVersion(ops) : asyncops::mostFrequentRecordVersion(ops);
+
+  /* Put down an indicator if chunk versions of this stripe are not aligned */
+  if(rmap[StatusCode::OK] > target_version.frequency)
+    putIndicatorKey(key, ops);
   rmap[StatusCode::OK] = target_version.frequency;
 
   /* Any status code encountered at least nData times is valid. If operation was a success, set return values. */
   for (auto it = rmap.begin(); it != rmap.end(); it++) {
     if (it->second >= nData) {
       if (it->first == StatusCode::OK){        
-        /* set value */
-        if(!skip_value){
-          auto stripe_values = 0;
-          auto stripe = getOperationToStripe(key, ops, stripe_values, target_version.version);
 
-          /* stripe_values 0 -> empty value for key. */
-          if (stripe_values == 0) {
-            value = make_shared<const string>();
-          }
-          else{
-            /* adjust the StatusCode::OK count if chunks fail crc or version tests. */
-            if(stripe_values < it->second)
-              it->second = stripe_values;
-            
-            /* missing blocks -> recover from redundancy */
-            if (stripe_values < stripe.size()){
-              /*  If we skipped reading parities, we have to abort. */  
-              if(!getParities)
-                break;                             
-              try {
-                redundancy->compute(stripe);
-              } catch (const std::exception& e) {
-                putIndicatorKey(key, ops);
-                return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
-              }
-            }
-
-            /* Create a single value from stripe values, around 0.5 ms per data subchunk. */
-            auto v = make_shared<string>();
-            v->reserve(stripe.front()->size() * nData);
-            for (int i = 0; i < nData; i++) {
-              *v += *stripe[i];
-            }
-
-            /* Resize value to size encoded in version (to support unaligned value sizes). */
-            v->resize(utility::uuidDecodeSize(target_version.version));
-            value = std::move(v);
+        if(!skip_value) {  /* set value */
+          try {
+            value = getOperationToValue(ops, key, target_version.version);
+          } catch (const std::exception& e) {
+            /* If we didn't get parities, retry operation. */
+            if(!getParities)
+              break;
+            return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
           }
         }
         /* set version */
         version = target_version.version;
       }
-      /* Put down an indicator if there is anything wrong with this stripe. */  
-      if(it->second < nData+nParity && getParities)
-        putIndicatorKey(key, ops);
-      
+
       kio_debug("Get", skip_value ? "Version" : "Data", " request for key ", *key, " completed with status: ", it->first);
       return KineticStatus(it->first, "");
     }
@@ -306,6 +278,30 @@ bool KineticCluster::mayForce(const shared_ptr<const string>& key, const shared_
   return true;
 }
 
+
+namespace {
+std::vector<std::shared_ptr<const std::string>> valueToStripe(
+    int nData, int nParity, const std::string& value, size_t max_chunk_size,
+    const std::shared_ptr<kio::RedundancyProvider>& redundancy
+)
+{
+  if(!value.length())
+    return std::vector<std::shared_ptr<const string>>(nData+nParity);
+
+  std::vector<std::shared_ptr<const std::string> > stripe;
+  for (int i = 0; i < nData + nParity; i++) {
+    auto chunk = std::make_shared<std::string>();
+    if (i * max_chunk_size < value.length())
+      chunk->assign(value.substr(i * max_chunk_size, max_chunk_size));
+    if (i < nData)
+      chunk->resize(max_chunk_size);
+    stripe.push_back(chunk);
+  }
+  redundancy->compute(stripe);
+  return stripe;
+}
+}
+
 KineticStatus KineticCluster::put(
     const shared_ptr<const string>& key,
     const shared_ptr<const string>& version_in,
@@ -313,34 +309,16 @@ KineticStatus KineticCluster::put(
     bool force,
     shared_ptr<const string>& version_out)
 {
-  /* Create a stripe vector by chunking up the value into nData data chunks
-     and computing nParity parity chunks. */
-  std::vector<shared_ptr<const string> > stripe;
-  auto chunk_size = (value->size() + nData - 1) / (nData);
-
-  for (int i = 0; i < nData + nParity; i++) {
-    auto subchunk = std::make_shared<string>();
-    if (i < nData) {
-      if(i*chunk_size < value->size())
-        subchunk->assign(value->substr(i * chunk_size, chunk_size));
-      subchunk->resize(chunk_size); // ensure that all chunks are the same size
-    }
-    stripe.push_back(std::move(subchunk));
-  }
-
-  try {
-    /*Do not try to compute redundancy if we are putting an empty key. */
-    if (chunk_size) {
-      redundancy->compute(stripe);
-    }
-  } catch (const std::exception& e) {
-    return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
-  }
-
   /* Do not use version_in, version_out variables directly in case the client
      supplies the same pointer for both. */
   auto version_old = version_in ? version_in : make_shared<const string>();
   auto version_new = utility::uuidGenerateEncodeSize(value->size());
+  std::vector<std::shared_ptr<const std::string>> stripe;
+  try {
+    stripe = valueToStripe(nData, nParity, *value, chunkCapacity, redundancy);
+  } catch (const std::exception& e) {
+    return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
+  }
 
   auto ops = initialize(key, nData + nParity);
   auto sync = asyncops::fillPut(

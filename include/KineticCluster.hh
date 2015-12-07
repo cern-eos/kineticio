@@ -175,6 +175,12 @@ protected:
   //--------------------------------------------------------------------------
   void putIndicatorKey(const std::shared_ptr<const std::string>& key, const std::vector<KineticAsyncOperation>& ops);
 
+  std::shared_ptr<const std::string> getOperationToValue(
+      const std::vector<KineticAsyncOperation>& ops,
+      const std::shared_ptr<const std::string>& key,
+      const std::shared_ptr<const std::string>& version
+  );
+
 
 protected:
   //! number of data chunks in a stripe
@@ -182,6 +188,9 @@ protected:
 
   //! number of parities in a stripe
   const std::size_t nParity;
+
+  //! maximum capacity of a single value / parity chunk
+  const std::size_t chunkCapacity;
 
   //! timeout of asynchronous operations
   const std::chrono::seconds operation_timeout;

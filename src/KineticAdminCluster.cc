@@ -97,7 +97,7 @@ void KineticAdminCluster::applyOperation(Operation o, KeyCountsInternal& key_cou
           break;
         }
         case Operation::REPAIR: {
-          if(scanKey(key, key_counts))
+          if(scanKey(key, key_counts) || isIndicatorKey(**it))
             repairKey(key, key_counts); 
 
           if(isIndicatorKey(**it)){
