@@ -175,10 +175,28 @@ protected:
   //--------------------------------------------------------------------------
   void putIndicatorKey(const std::shared_ptr<const std::string>& key, const std::vector<KineticAsyncOperation>& ops);
 
+  //--------------------------------------------------------------------------
+  //! Turn the result of a get operation into a single value 
+  //! 
+  //! @param ops the operation vector containing the results of a get operation
+  //! @param key the key 
+  //! @param version the target version 
+  //! @return the value concatonated from chunks 
+  //--------------------------------------------------------------------------
   std::shared_ptr<const std::string> getOperationToValue(
       const std::vector<KineticAsyncOperation>& ops,
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version
+  );
+
+  //--------------------------------------------------------------------------
+  //! Turn a single value into a stripe, complete with redundancy information
+  //! 
+  //! @param value the value 
+  //! @return the stripe build from the value 
+  //--------------------------------------------------------------------------
+  std::vector<std::shared_ptr<const std::string>> valueToStripe(
+      const std::string& value
   );
 
 

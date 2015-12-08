@@ -76,7 +76,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
       REQUIRE(status.ok());
       REQUIRE(putversion);
 
-      THEN("An indicator key will _not_ have been generated") {
+      THEN("An indicator key will have been generated") {
         std::unique_ptr<std::vector<string>> keys;
         auto status = cluster->range(
             utility::makeIndicatorKey(""),
@@ -90,7 +90,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
     }
 
     WHEN("Putting a key-value pair on a healthy cluster") {
-      auto value = make_shared<string>(cluster->limits().max_value_size, 'v');
+      auto value = make_shared<string>(666, 'v');
 
       shared_ptr<const string> putversion;
       auto status = cluster->put(
@@ -107,11 +107,16 @@ SCENARIO("Cluster integration test.", "[Cluster]")
           c.stop(i);
         
         AND_WHEN("The key is read in again"){
-            std::shared_ptr<const string> value;
+            std::shared_ptr<const string> getvalue;
             std::shared_ptr<const string> version;
             
-            auto status = cluster->get(make_shared<string>("key"), true, version, value);
+            auto status = cluster->get(make_shared<string>("key"), false, version, getvalue);
             REQUIRE(status.ok());
+            REQUIRE(status.ok());
+            REQUIRE(version);
+            REQUIRE(*version == *putversion);
+            REQUIRE(getvalue);
+            REQUIRE(*getvalue == *value);
             
             THEN("An indicator key will _not_ have been generated"){
                 std::unique_ptr<std::vector<string>> keys; 
@@ -124,20 +129,6 @@ SCENARIO("Cluster integration test.", "[Cluster]")
                 REQUIRE(status.ok());
                 REQUIRE(keys->size() == 0);
             }
-        }
-
-        THEN("with > nParity failures") {
-          c.stop(nParity);
-          THEN("It can't be read again") {
-            shared_ptr<const string> version;
-            shared_ptr<const string> readvalue;
-            auto status = cluster->get(
-                make_shared<string>("key"),
-                false,
-                version,
-                readvalue);
-            REQUIRE(status.statusCode() == StatusCode::CLIENT_IO_ERROR);
-          }
         }
 
         THEN("Removing it with the correct version succeeds") {
@@ -199,6 +190,20 @@ SCENARIO("Cluster integration test.", "[Cluster]")
               make_shared<string>("incorrect"),
               false);
           REQUIRE(status.statusCode() == kinetic::StatusCode::REMOTE_VERSION_MISMATCH);
+        }
+
+        THEN("with > nParity failures") {
+          c.stop(nParity);
+          THEN("It can't be read again") {
+            shared_ptr<const string> version;
+            shared_ptr<const string> readvalue;
+            auto status = cluster->get(
+                make_shared<string>("key"),
+                false,
+                version,
+                readvalue);
+            REQUIRE(status.statusCode() == StatusCode::CLIENT_IO_ERROR);
+          }
         }
       }
     }
