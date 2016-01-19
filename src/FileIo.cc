@@ -1,3 +1,18 @@
+/************************************************************************
+ * KineticIo - a file io interface library to kinetic devices.          *
+ *                                                                      *
+ * This Source Code Form is subject to the terms of the Mozilla         *
+ * Public License, v. 2.0. If a copy of the MPL was not                 *
+ * distributed with this file, You can obtain one at                    *
+ * https://mozilla.org/MP:/2.0/.                                        *
+ *                                                                      *
+ * This program is distributed in the hope that it will be useful,      *
+ * but is provided AS-IS, WITHOUT ANY WARRANTY; including without       *
+ * the implied warranty of MERCHANTABILITY, NON-INFRINGEMENT or         *
+ * FITNESS FOR A PARTICULAR PURPOSE. See the Mozilla Public             *
+ * License for more details.                                            *
+ ************************************************************************/
+
 #include "Logging.hh"
 #include "FileIo.hh"
 #include "ClusterMap.hh"
@@ -31,10 +46,6 @@ FileIo::~FileIo()
 
 void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t timeout)
 {
-  if (opened) {
-    kio_warning("Calling open on already opened file io object: ", path);
-  }
-
   auto mdkey = utility::makeMetadataKey(mdCluster->id(), path);
 
   KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "");
@@ -320,9 +331,9 @@ void FileIo::Remove(uint16_t timeout)
 
 void FileIo::Stat(struct stat* buf, uint16_t timeout)
 {
+  /* We allow stating unopened files... */
   if (!opened) {
-    kio_error("Stat operation not permitted on non-opened object.");
-    throw std::system_error(std::make_error_code(std::errc::operation_not_permitted));
+    Open(0);
   }
 
   lastBlockNumber.verify();
@@ -334,77 +345,39 @@ void FileIo::Stat(struct stat* buf, uint16_t timeout)
   buf->st_size = lastBlockNumber.get() * buf->st_blksize + last_block->size();
 }
 
-enum class RequestType {
-  STANDARD, READ_OPS, READ_BW, WRITE_OPS, WRITE_BW, MAX_BW
-};
-
-RequestType getRequestType(const char* name)
-{
-  if (strcmp(name, "sys.iostats.max-bw") == 0) {
-    return RequestType::MAX_BW;
-  }
-  if (strcmp(name, "sys.iostats.read-bw") == 0) {
-    return RequestType::READ_BW;
-  }
-  if (strcmp(name, "sys.iostats.read-ops") == 0) {
-    return RequestType::READ_OPS;
-  }
-  if (strcmp(name, "sys.iostats.write-bw") == 0) {
-    return RequestType::WRITE_BW;
-  }
-  if (strcmp(name, "sys.iostats.write-ops") == 0) {
-    return RequestType::WRITE_OPS;
-  }
-  return RequestType::STANDARD;
-}
-
 std::string FileIo::attrGet(std::string name)
 {
-  auto type = getRequestType(name.c_str());
+  /* Client may be requesting iostats instead of normal attributes */
+  if (name == "sys.iostats") {
+    auto stats = mdCluster->iostats();
+    double MB = 1024 * 1024;
 
-  if (type == RequestType::STANDARD) {
-    std::shared_ptr<const string> value;
-    std::shared_ptr<const string> version;
-    auto status = mdCluster->get(
-        utility::makeAttributeKey(mdCluster->id(), path, name),
-        false, version, value);
+    return utility::Convert::toString(
+        "max-bw=", stats.number_drives * 50 * MB, ",",
+        "read-bw=", stats.read_bytes / MB, ",",
+        "read-ops=", stats.read_ops, ",",
+        "write-bw=", stats.write_bytes / MB, ",",
+        "write-ops=", stats.write_ops
+    );
+  }
 
-    /* Requested attribute doesn't exist or there was connection problem. */
-    if (status.statusCode() == kinetic::StatusCode::REMOTE_NOT_FOUND) {
-      kio_debug("Requested attribute ", name, " does not exist");
-      throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
-    }
-    if (!status.ok()) {
-      kio_error("Error attempting to access attribute ", name, ": ", status);
-      throw std::system_error(std::make_error_code(std::errc::io_error));
-    }
+  std::shared_ptr<const string> value;
+  std::shared_ptr<const string> version;
+  auto status = mdCluster->get(
+      utility::makeAttributeKey(mdCluster->id(), path, name),
+      false, version, value);
+  if (status.ok()) {
     return *value;
   }
 
-  auto stats = mdCluster->iostats();
-  double MB = 1024 * 1024;
-  double result = 0;
-  switch (type) {
-    case RequestType::MAX_BW:
-      result = stats.number_drives * 50 * MB;
-      break;
-    case RequestType::READ_BW:
-      result = stats.read_bytes / MB;
-      break;
-    case RequestType::READ_OPS:
-      result = stats.read_ops;
-      break;
-    case RequestType::WRITE_BW:
-      result = stats.write_bytes / MB;
-      break;
-    case RequestType::WRITE_OPS:
-      result = stats.write_ops;
-      break;
-    default:
-      kio_error("Invalid request type.");
-      throw std::system_error(std::make_error_code(std::errc::invalid_argument));
+  /* Requested attribute doesn't exist or there was connection problem. */
+  if (status.statusCode() == kinetic::StatusCode::REMOTE_NOT_FOUND) {
+    kio_debug("Requested attribute ", name, " does not exist");
+    throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
   }
-  return utility::Convert::toString(result);
+
+  kio_error("Error attempting to access attribute ", name, ": ", status);
+  throw std::system_error(std::make_error_code(std::errc::io_error));
 }
 
 void FileIo::attrSet(std::string name, std::string value)

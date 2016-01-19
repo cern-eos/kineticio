@@ -3,6 +3,22 @@
 //! @author Paul Hermann Lensing
 //! @brief epoll listener for asynchronous kinetic I/O
 //------------------------------------------------------------------------------
+
+/************************************************************************
+ * KineticIo - a file io interface library to kinetic devices.          *
+ *                                                                      *
+ * This Source Code Form is subject to the terms of the Mozilla         *
+ * Public License, v. 2.0. If a copy of the MPL was not                 *
+ * distributed with this file, You can obtain one at                    *
+ * https://mozilla.org/MP:/2.0/.                                        *
+ *                                                                      *
+ * This program is distributed in the hope that it will be useful,      *
+ * but is provided AS-IS, WITHOUT ANY WARRANTY; including without       *
+ * the implied warranty of MERCHANTABILITY, NON-INFRINGEMENT or         *
+ * FITNESS FOR A PARTICULAR PURPOSE. See the Mozilla Public             *
+ * License for more details.                                            *
+ ************************************************************************/
+
 #ifndef KINETICIO_SOCKETLISTENER_HH
 #define	KINETICIO_SOCKETLISTENER_HH
 
