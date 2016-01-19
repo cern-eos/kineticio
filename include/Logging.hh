@@ -5,7 +5,6 @@
 //------------------------------------------------------------------------------
 #ifndef KINETICIO_LOGGING_HH
 #define KINETICIO_LOGGING_HH
-#include "LoggingException.hh"
 #include "KineticIoFactory.hh"
 #include "Utility.hh"
 #include <mutex>
@@ -36,14 +35,14 @@ namespace kio {
 
     //--------------------------------------------------------------------------
     //! Log function accepting variadic arguments, log macros can be used
-    //! for convinience instead of calling this function directly. If a call
+    //! for convenience instead of calling this function directly. If a call
     //! actually results in an output depends on set logfunc and shouldlogfunc.
     //!
     //! @param func the name of the func attempting to log
     //! @param file the name of the file containing the call to the log function
     //! @param line the line in the file containing the call to the log function
     //! @param level the log level as defined in syslog.h
-    //! @param args an arbitray number of variable type arguments to actually log
+    //! @param args an arbitrary number of variable type arguments to actually log
     //--------------------------------------------------------------------------
     template<typename...Args>
     void log(const char* func, const char* file, int line, int level, Args&&...args){
@@ -79,15 +78,14 @@ namespace kio {
   };
 }
 
-//! generate a LoggingException, errors are always thrown and can be logged by receiver (thus no kio_error log macro)
-#define kio_exception(err, message...) LoggingException(err, __FUNCTION__, __FILE__, __LINE__, utility::Convert::toString(message));
-
 //! debug macro
 #define kio_debug(message...)   kio::Logger::get().log(__FUNCTION__, __FILE__, __LINE__, LOG_DEBUG, message)
 //! notice macro
 #define kio_notice(message...)  kio::Logger::get().log(__FUNCTION__, __FILE__, __LINE__, LOG_NOTICE, message)
 //! warning macro
 #define kio_warning(message...) kio::Logger::get().log(__FUNCTION__, __FILE__, __LINE__, LOG_WARNING, message)
+//! error macro
+#define kio_error(message...) kio::Logger::get().log(__FUNCTION__, __FILE__, __LINE__, LOG_ERR, message)
 
 
 #endif //KINETICIO_LOGGING_HH

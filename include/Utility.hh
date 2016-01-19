@@ -64,6 +64,15 @@ namespace kio { namespace utility {
   //! @return the fully qualified path 
   //--------------------------------------------------------------------------
   std::string metadataToPath(const std::string& key);
+
+  //--------------------------------------------------------------------------
+  //! Extract the attribute name from any attribute key constructed using the
+  //! utility class.
+  //!
+  //! @param key the attribute key
+  //! @return the attribute name
+  //--------------------------------------------------------------------------
+  std::string extractAttributeName(const std::string& key);
   
   //--------------------------------------------------------------------------
   //! Extract the cluster id from the supplied eos path.

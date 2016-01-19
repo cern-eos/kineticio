@@ -3,125 +3,96 @@
 #include "SimulatorController.h"
 #include <unistd.h>
 #include <fcntl.h>
-#include <LoggingException.hh>
 #include <FileIo.hh>
 
 using namespace kio;
 
-SCENARIO("KineticIo Integration Test", "[Io]"){
+SCENARIO("KineticIo Integration Test", "[Io]")
+{
 
   auto& c = SimulatorController::getInstance();
   c.start(0);
   c.start(1);
   c.start(2);
-  REQUIRE( c.reset(0) );
-  REQUIRE( c.reset(1) );
-  REQUIRE( c.reset(2) );
+  REQUIRE(c.reset(0));
+  REQUIRE(c.reset(1));
+  REQUIRE(c.reset(2));
 
-  auto fileio = KineticIoFactory::makeFileIo();
-
-  int  buf_size = 64;
+  int buf_size = 64;
   char write_buf[] = "rcPOa12L3nhN5Cgvsa6Jlr3gn58VhazjA6oSpKacLFYqZBEu0khRwbWtEjge3BUA";
   char read_buf[buf_size];
   char null_buf[buf_size];
-  memset (read_buf, 0, buf_size);
-  memset (null_buf, 0, buf_size);
+  memset(read_buf, 0, buf_size);
+  memset(null_buf, 0, buf_size);
 
-  GIVEN("An illegally constructed path"){
+  GIVEN("An illegally constructed path") {
     std::string path("path");
 
-    THEN("Open, Statfs and FileAttr creation throw with ENODEV"){
-      REQUIRE_THROWS_AS(fileio->Open(path.c_str(), 0), LoggingException);
-      try{
-        fileio->Open(path.c_str(), 0);
-      }catch(const LoggingException& le){
-        REQUIRE(le.errnum() == ENODEV);
-      }
+    THEN("fileio object creation throws with ENODEV") {
 
-      struct statfs sfs;
-      REQUIRE_THROWS_AS(fileio->Statfs(path.c_str(), &sfs), LoggingException);
-      try{
-        fileio->Statfs(path.c_str(), &sfs);
-      }catch(const LoggingException& le){
-        REQUIRE(le.errnum() == ENODEV);
-      }
-
-      REQUIRE_THROWS_AS(KineticIoFactory::makeFileAttr(path.c_str()), LoggingException);
-      try{
-        KineticIoFactory::makeFileAttr(path.c_str());
-      }catch(const LoggingException& le){
-        REQUIRE(le.errnum() == ENODEV);
+      REQUIRE_THROWS_AS(kio::KineticIoFactory::makeFileIo(path), std::system_error);
+      try {
+        kio::KineticIoFactory::makeFileIo(path);
+      } catch (const std::system_error& e) {
+        REQUIRE(e.code().value() == ENODEV);
       }
     }
   }
 
-  GIVEN ("A valid path, but no existing file."){
+  GIVEN ("A valid path, but no existing file.") {
     std::string base_path("kinetic:Cluster1:");
-    std::string path(base_path+"filename");
+    std::string path(base_path + "filename");
+    auto fileio = kio::KineticIoFactory::makeFileIo(path);
 
-    THEN("All IO operations throw LoggingExceptions"){
-      REQUIRE_THROWS_AS(fileio->Read(0,read_buf,buf_size), LoggingException);
-      REQUIRE_THROWS_AS(fileio->Write(0,write_buf,buf_size), LoggingException);
-      REQUIRE_THROWS_AS(fileio->Truncate(0), LoggingException);
-      REQUIRE_THROWS_AS(fileio->Remove(), LoggingException);
-      REQUIRE_THROWS_AS(fileio->Sync(), LoggingException);
-      REQUIRE_THROWS_AS(fileio->Close(), LoggingException);
+    THEN("All file IO operations throw when attempted on unopened file") {
+      REQUIRE_THROWS_AS(fileio->Read(0, read_buf, buf_size), std::system_error);
+      REQUIRE_THROWS_AS(fileio->Write(0, write_buf, buf_size), std::system_error);
+      REQUIRE_THROWS_AS(fileio->Truncate(0), std::system_error);
+      REQUIRE_THROWS_AS(fileio->Remove(), std::system_error);
+      REQUIRE_THROWS_AS(fileio->Sync(), std::system_error);
+      REQUIRE_THROWS_AS(fileio->Close(), std::system_error);
     }
 
-    THEN("Attempting to open without create flag fails with ENOENT."){
-      try{
-        fileio->Open(path.c_str(), 0);
-      }catch(const LoggingException& le){
-        REQUIRE(le.errnum() == ENOENT);
+    THEN("Attempting to open without create flag fails with ENOENT.") {
+      try {
+        fileio->Open(0);
+      } catch (const std::system_error& e) {
+        REQUIRE(e.code().value() == ENOENT);
       }
     }
 
-    THEN("Statfs succeeds"){
+    THEN("Statfs succeeds") {
       struct statfs sfs;
-      try{
-        fileio->Statfs(path.c_str(), &sfs);
-      }catch(...){}
-      usleep(1000 * 1000);
-      REQUIRE_NOTHROW(fileio->Statfs(path.c_str(), &sfs));
+      try {
+        fileio->Statfs(&sfs);
+      } catch (...) { }
+      usleep(2000 * 1000);
+      REQUIRE_NOTHROW(fileio->Statfs(&sfs));
       REQUIRE(sfs.f_bavail > 0);
     }
 
-    THEN("Factory function for Attribute class returns 0"){
-      auto a = KineticIoFactory::makeFileAttr(path.c_str());
-      REQUIRE_FALSE(a);
-     }
-
-    THEN("ftsRead returns \"\"."){
-      void * handle = fileio->ftsOpen(base_path);
-      REQUIRE(handle != NULL);
-      REQUIRE(fileio->ftsRead(handle) == "");
-      REQUIRE(fileio->ftsClose(handle) == 0);
+    THEN("ListFiles returns an empty vector.") {
+      auto list = fileio->ListFiles(path, 100);
+      REQUIRE(list.empty());
     }
   }
 
-  GIVEN("A file is created."){
+  GIVEN("A file is created.") {
     std::string base_path("kinetic:Cluster2:");
-    std::string path(base_path+"filename");
+    std::string path(base_path + "filename");
+    auto fileio = kio::KineticIoFactory::makeFileIo(path);
 
-    REQUIRE_NOTHROW(fileio->Open(path.c_str(), SFS_O_CREAT));
-    
-    THEN("Trying to open anything again on the non-closed object fails with EPERM"){
-      try{
-        fileio->Open(path.c_str(), SFS_O_CREAT);
-      }catch(const LoggingException& le){
-        REQUIRE(le.errnum() == EPERM);
+    REQUIRE_NOTHROW(fileio->Open(SFS_O_CREAT));
+
+    THEN("Trying to create the same file again fails with EEXIST") {
+      try {
+        KineticIoFactory::makeFileIo(path)->Open(SFS_O_CREAT);
+      } catch (const std::system_error& e) {
+        REQUIRE(e.code().value() == EEXIST);
       }
     }
 
-    THEN("Trying to create the same file again fails with EEXIST"){
-      try{
-        KineticIoFactory::makeFileIo()->Open(path.c_str(), SFS_O_CREAT);
-      }catch(const LoggingException& le){
-        REQUIRE(le.errnum() == EEXIST);
-      }
-    }
-
-    WHEN("A buffer is read into memory"){
+    WHEN("A buffer is read into memory") {
       int size = 20;
       char abuf[size];
       char bbuf[size];
@@ -129,163 +100,195 @@ SCENARIO("KineticIo Integration Test", "[Io]"){
       int fd = open("/dev/random", O_RDONLY);
       read(fd, abuf, size);
       close(fd);
-      abuf[10]=0;
+      abuf[10] = 0;
 
-      THEN("We can write it to the filio object & read it straight away."){
-          REQUIRE(fileio->Write(0,abuf,size) == size);
-          REQUIRE(fileio->Read(0,bbuf,size) == size);
-          REQUIRE(memcmp(abuf,bbuf,size) == 0);
-          fileio->Close();
+      THEN("We can write it to the filio object & read it straight away.") {
+        REQUIRE(fileio->Write(0, abuf, size) == size);
+        REQUIRE(fileio->Read(0, bbuf, size) == size);
+        REQUIRE(memcmp(abuf, bbuf, size) == 0);
+        fileio->Close();
 
-          AND_THEN("We can read it in again after reopening the object."){
-            REQUIRE_NOTHROW(fileio->Open(path.c_str(), 0));
-            REQUIRE(fileio->Read(0,bbuf,size) == size);
-            REQUIRE(memcmp(abuf,bbuf,size) == 0);
-          }
-      }
-    }
-
-    THEN("The first ftsRead returns the full path, the second \"\"."){
-      fileio->Close();
-      void * handle = fileio->ftsOpen(base_path);
-      REQUIRE(handle != NULL);
-      REQUIRE(fileio->ftsRead(handle) == path);
-      REQUIRE(fileio->ftsRead(handle) == "");
-      REQUIRE(fileio->ftsClose(handle) == 0);
-    }
-
-    THEN("Factory function for Attribute class succeeds"){
-      auto a = KineticIoFactory::makeFileAttr(path.c_str());
-      REQUIRE(a);
-
-      AND_THEN("attributes can be set and read-in again."){
-        REQUIRE(a->Set("name", write_buf, buf_size) == true);
-        size_t size = buf_size;
-        REQUIRE(a->Get("name",read_buf,size) == true);
-        REQUIRE(size == buf_size);
-        REQUIRE(memcmp(write_buf,read_buf,buf_size) == 0);
-      
-        AND_THEN("attributes are not returned by by ftsRead"){
-            fileio->Close();
-            void * handle = fileio->ftsOpen(base_path);
-            REQUIRE(handle != NULL);
-            REQUIRE(fileio->ftsRead(handle) == path);
-            REQUIRE(fileio->ftsRead(handle) == "");
-            REQUIRE(fileio->ftsClose(handle) == 0);
+        AND_THEN("We can read it in again after reopening the object.") {
+          REQUIRE_NOTHROW(fileio->Open(0));
+          REQUIRE(fileio->Read(0, bbuf, size) == size);
+          REQUIRE(memcmp(abuf, bbuf, size) == 0);
         }
       }
-      
-      AND_THEN("We can use the attr interface to request io stats"){
-        size_t size = buf_size;
-        REQUIRE(a->Get("sys.iostats.read-ops", read_buf, size) == true);
-        REQUIRE(a->Get("sys.iostats.read-bw", read_buf, size) == true);
-        REQUIRE(a->Get("sys.iostats.write-ops", read_buf, size) == true);
-        REQUIRE(a->Get("sys.iostats.write-bw", read_buf, size) == true);
-        REQUIRE(a->Get("sys.iostats.max-bw", read_buf, size) == true);
-      }
     }
 
-    THEN("Attempting to read an empty file reads 0 bytes."){
-      REQUIRE(fileio->Read(0,read_buf,buf_size) == 0);
+    THEN("ListFiles returns the file name.") {
+      auto list = fileio->ListFiles(path, 100);
+      for(int i=0; i<list.size(); i++)
+        printf("%s \n",list[i].c_str());
+
+      REQUIRE(list.size() == 1);
+      REQUIRE(list.front() == path);
     }
 
-    THEN("Attempting to read an empty file with and offset reads 0 bytes."){
-      REQUIRE(fileio->Read(199,read_buf,buf_size) == 0);
+    THEN("Attempting to read an empty file reads 0 bytes.") {
+      REQUIRE(fileio->Read(0, read_buf, buf_size) == 0);
     }
 
-    THEN("Writing is possible from object start."){
+    THEN("Attempting to read an empty file with and offset reads 0 bytes.") {
+      REQUIRE(fileio->Read(199, read_buf, buf_size) == 0);
+    }
+
+    THEN("Writing is possible from object start.") {
       REQUIRE(fileio->Write(0, write_buf, buf_size) == buf_size);
 
-      AND_THEN("Written data can be read in again."){
+      AND_THEN("Written data can be read in again.") {
         REQUIRE(fileio->Read(0, read_buf, buf_size) == buf_size);
-        REQUIRE(memcmp(write_buf,read_buf,buf_size) == 0);
+        REQUIRE(memcmp(write_buf, read_buf, buf_size) == 0);
       }
     }
 
-    THEN("Writing is possible from an offset."){
-      REQUIRE(fileio->Write(77777777,write_buf,buf_size) == buf_size);
+    THEN("Writing is possible from an offset.") {
+      REQUIRE(fileio->Write(77777777, write_buf, buf_size) == buf_size);
 
-      AND_THEN("Written data can be read in again."){
+      AND_THEN("Written data can be read in again.") {
         REQUIRE(fileio->Read(77777777, read_buf, buf_size) == buf_size);
-        REQUIRE(memcmp(write_buf,read_buf,buf_size) == 0);
+        REQUIRE(memcmp(write_buf, read_buf, buf_size) == 0);
       }
 
-      AND_THEN("Reading with offset < filesize but offset+length > filesize only reads to filesize limits"){
-        REQUIRE(fileio->Read(77777777+buf_size/2, read_buf, buf_size) == buf_size/2);
+      AND_THEN("Reading with offset < filesize but offset+length > filesize only reads to filesize limits") {
+        REQUIRE(fileio->Read(77777777 + buf_size / 2, read_buf, buf_size) == buf_size / 2);
       }
 
-      AND_THEN("Reading data before the offset is possible and returns 0s (file with holes)"){
+      AND_THEN("Reading data before the offset is possible and returns 0s (file with holes)") {
         REQUIRE(fileio->Read(66666666, read_buf, buf_size) == buf_size);
-        REQUIRE(memcmp(null_buf,read_buf,buf_size) == 0);
+        REQUIRE(memcmp(null_buf, read_buf, buf_size) == 0);
       }
     }
 
-    THEN("Stat should succeed and report a file size of 0"){
+    THEN("Stat should succeed and report a file size of 0") {
       struct stat stbuf;
       REQUIRE_NOTHROW(fileio->Stat(&stbuf));
       REQUIRE(stbuf.st_blocks == 1);
-      REQUIRE(stbuf.st_blksize == 1024*1024);
+      REQUIRE(stbuf.st_blksize == 1024 * 1024);
       REQUIRE(stbuf.st_size == 0);
     }
 
-    WHEN("Truncate is called to change the file size."){
-      for(int chunk=3; chunk>=0; chunk--){
-        for(int odd=0; odd<=1; odd++){
-          size_t size = 1024*1024*chunk+odd;
+    WHEN("Truncate is called to change the file size.") {
+      for (int chunk = 3; chunk >= 0; chunk--) {
+        for (int odd = 0; odd <= 1; odd++) {
+          size_t size = 1024 * 1024 * chunk + odd;
           REQUIRE_NOTHROW(fileio->Truncate(size));
-          THEN("stat succeeds and returns the truncated size"){
-              struct stat stbuf;
-              REQUIRE_NOTHROW(fileio->Stat(&stbuf));
-              REQUIRE(stbuf.st_size == size);
+          THEN("stat succeeds and returns the truncated size") {
+            struct stat stbuf;
+            REQUIRE_NOTHROW(fileio->Stat(&stbuf));
+            REQUIRE(stbuf.st_size == size);
           }
         }
       }
     }
-    
-    AND_WHEN("The file is removed via a second io object."){
-      auto fileio_2nd = KineticIoFactory::makeFileIo();
-      REQUIRE_NOTHROW(fileio_2nd->Open(path.c_str(), 0));
+
+    AND_WHEN("The file is removed via a second io object.") {
+      auto fileio_2nd = KineticIoFactory::makeFileIo(path);
+      REQUIRE_NOTHROW(fileio_2nd->Open(0));
       REQUIRE_NOTHROW(fileio_2nd->Remove());
 
-      THEN("The the change will not immediately be visible to the first io object"){
+      THEN("The the change will not immediately be visible to the first io object") {
         struct stat stbuf;
         REQUIRE_NOTHROW(fileio->Stat(&stbuf));
       }
 
-      THEN("Calling stat will fail with ENOENT after expiration time has run out."){
-        usleep(1000*1000);
+      THEN("Calling stat will fail with ENOENT after expiration time has run out.") {
+        usleep(1000 * 1000);
         struct stat stbuf;
         REQUIRE_THROWS(fileio->Stat(&stbuf));
       }
     }
 
-    AND_WHEN("Writing data across multiple chunks."){
-      const size_t capacity = 1024*1024;
-      REQUIRE(fileio->Write(capacity-32, write_buf, buf_size) == buf_size);
+    AND_WHEN("Writing data across multiple chunks.") {
+      const size_t capacity = 1024 * 1024;
+      REQUIRE(fileio->Write(capacity - 32, write_buf, buf_size) == buf_size);
 
-      THEN("IO object can be synced."){
+      THEN("IO object can be synced.") {
         REQUIRE_NOTHROW(fileio->Sync());
       }
 
-      THEN("Stat will return the number of blocks and the filesize."){
+      THEN("Stat will return the number of blocks and the filesize.") {
         struct stat stbuf;
         REQUIRE_NOTHROW(fileio->Stat(&stbuf));
         REQUIRE(stbuf.st_blocks == 2);
         REQUIRE(stbuf.st_blksize == capacity);
-        REQUIRE(stbuf.st_size == stbuf.st_blksize-32+buf_size);
+        REQUIRE(stbuf.st_size == stbuf.st_blksize - 32 + buf_size);
       }
 
-      THEN("The file can can be removed again."){
+      THEN("The file can can be removed again.") {
         REQUIRE_NOTHROW(fileio->Remove());
         REQUIRE_NOTHROW(fileio->Close());
 
-        AND_THEN("ftsRead returns \"\"."){
-          void * handle = fileio->ftsOpen(base_path);
-          REQUIRE(handle != NULL);
-          REQUIRE(fileio->ftsRead(handle) == "");
-          REQUIRE(fileio->ftsClose(handle) == 0);
+        AND_THEN("ListFiles returns an empty list.") {
+          auto list = fileio->ListFiles(path, 10000);
+          REQUIRE(list.empty());
         }
       }
     }
   }
 }
+
+SCENARIO("FileIo Attribute Integration Test", "[Attr]")
+{
+  auto& c = SimulatorController::getInstance();
+  c.start(0);
+  c.start(1);
+  c.start(2);
+  REQUIRE(c.reset(0));
+  REQUIRE(c.reset(1));
+  REQUIRE(c.reset(2));
+
+  GIVEN("A file is created.") {
+    std::string base_path("kinetic:Cluster2:");
+    std::string path(base_path + "filename");
+    auto fileio = KineticIoFactory::makeFileIo(path);
+
+    REQUIRE_NOTHROW(fileio->Open(SFS_O_CREAT));
+
+    THEN("attributes can be set and read-in again.") {
+      std::string write_value = "rcPOa12L3nhN5Cgvsa6Jlr3gn58VhazjA6oSpKacLFYqZBEu0khRwbWtEjge3BUA";
+      REQUIRE_NOTHROW(fileio->attrSet("name", write_value));
+      REQUIRE(write_value == fileio->attrGet("name"));
+
+      AND_THEN("We can overwrite the existing attribute") {
+        std::string owrite_value = "12345";
+        REQUIRE_NOTHROW(fileio->attrSet("name", owrite_value));
+        REQUIRE(owrite_value == fileio->attrGet("name"));
+      }
+
+      AND_THEN("Attribute functionality remains active if the file is closed."){
+        fileio->Close();
+        REQUIRE(write_value == fileio->attrGet("name"));
+      }
+
+      AND_THEN("attribute can be deleted by name.") {
+        REQUIRE_NOTHROW(fileio->attrDelete("name"));
+        AND_THEN("We can't get it anymore.") {
+          REQUIRE_THROWS(fileio->attrGet("name"));
+        }
+      }
+
+      AND_THEN("attributes are not returned by ListFiles") {
+        auto list = fileio->ListFiles(path, 7);
+        REQUIRE(list.size() == 1);
+        REQUIRE(list.front() == path);
+      }
+    }
+
+    THEN("Attempting to read in a non-existing attribute throws.") {
+      REQUIRE_THROWS(fileio->attrGet("nope"));
+    }
+    AND_THEN("Attempting to remove a non-existing attribute name is ok.") {
+      REQUIRE_NOTHROW(fileio->attrDelete("nope"));
+    }
+
+    AND_THEN("We can use the attr interface to request io stats") {
+      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats.read-ops"));
+      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats.read-bw"));
+      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats.write-ops"));
+      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats.write-bw"));
+      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats.max-bw"));
+    }
+  }
+}
+

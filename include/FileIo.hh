@@ -17,26 +17,25 @@
 #include <queue>
 #include <list>
 
-namespace kio{
+namespace kio {
 
 //------------------------------------------------------------------------------
-//! Class used for doing Kinetic IO operations, mirroring FileIo interface
-//! except for using exceptions instead of return codes.
+//! Class used for doing Kinetic IO operations, oriented at EOS FileIo interface
+//! but using exceptions to return error codes.
 //------------------------------------------------------------------------------
 class FileIo : public FileIoInterface {
   friend class DataCache;
+
 public:
-//--------------------------------------------------------------------------
+  //--------------------------------------------------------------------------
   //! Open file
   //!
-  //! @param path file path
   //! @param flags open flags
   //! @param mode open mode
   //! @param opaque opaque information
   //! @param timeout timeout value
   //--------------------------------------------------------------------------
-  void Open (const std::string& path, int flags, mode_t mode = 0,
-    const std::string& opaque = "", uint16_t timeout = 0);
+  void Open(int flags, mode_t mode = 0, const std::string& opaque = "", uint16_t timeout = 0);
 
   //--------------------------------------------------------------------------
   //! Read from file - sync
@@ -47,8 +46,7 @@ public:
   //! @param timeout timeout value
   //! @return number of bytes read
   //--------------------------------------------------------------------------
-  int64_t Read (long long offset, char* buffer, int length,
-      uint16_t timeout = 0);
+  int64_t Read(long long offset, char* buffer, int length, uint16_t timeout = 0);
 
   //--------------------------------------------------------------------------
   //! Write to file - sync
@@ -59,8 +57,7 @@ public:
   //! @param timeout timeout value
   //! @return number of bytes written
   //--------------------------------------------------------------------------
-  int64_t Write (long long offset, const char* buffer,
-      int length, uint16_t timeout = 0);
+  int64_t Write(long long offset, const char* buffer, int length, uint16_t timeout = 0);
 
   //--------------------------------------------------------------------------
   //! Truncate
@@ -68,28 +65,28 @@ public:
   //! @param offset truncate file to this value
   //! @param timeout timeout value
   //--------------------------------------------------------------------------
-  void Truncate (long long offset, uint16_t timeout = 0);
+  void Truncate(long long offset, uint16_t timeout = 0);
 
   //--------------------------------------------------------------------------
   //! Remove file
   //!
   //! @param timeout timeout value
   //--------------------------------------------------------------------------
-  void Remove (uint16_t timeout = 0);
+  void Remove(uint16_t timeout = 0);
 
   //--------------------------------------------------------------------------
   //! Sync file to disk
   //!
   //! @param timeout timeout value
   //--------------------------------------------------------------------------
-  void Sync (uint16_t timeout = 0);
+  void Sync(uint16_t timeout = 0);
 
   //--------------------------------------------------------------------------
   //! Close file
   //!
   //! @param timeout timeout value
   //--------------------------------------------------------------------------
-  void Close (uint16_t timeout = 0);
+  void Close(uint16_t timeout = 0);
 
   //--------------------------------------------------------------------------
   //! Get stats about the file
@@ -97,7 +94,27 @@ public:
   //! @param buf stat buffer
   //! @param timeout timeout value
   //--------------------------------------------------------------------------
-  void Stat (struct stat* buf, uint16_t timeout = 0);
+  void Stat(struct stat* buf, uint16_t timeout = 0);
+
+  //---------------------------------------------------------------------------
+  //! Set an attribute
+  //---------------------------------------------------------------------------
+  void attrSet(std::string name, std::string value);
+
+  //---------------------------------------------------------------------------
+  //! Delete an attribute by name
+  //---------------------------------------------------------------------------
+  void attrDelete(std::string name);
+
+  //---------------------------------------------------------------------------
+  //! Get an attribute by name
+  //---------------------------------------------------------------------------
+  std::string attrGet(std::string name);
+
+  //---------------------------------------------------------------------------
+  //! List all attributes for this file
+  //---------------------------------------------------------------------------
+  std::vector<std::string> attrList();
 
   //----------------------------------------------------------------------------
   //! Plug-in function to fill a statfs structure about the storage filling
@@ -106,47 +123,40 @@ public:
   //! @param path to statfs
   //! @param statfs return struct
   //----------------------------------------------------------------------------
-  void Statfs (const char* path, struct statfs* statFs);
+  void Statfs(struct statfs* statFs);
 
-  //--------------------------------------------------------------------------
-  //! Open a curser to traverse a storage system
-  //! @param subtree where to start traversing
-  //! @return returns implementation dependent handle or 0 in case of error
-  //--------------------------------------------------------------------------
-  void* ftsOpen(std::string subtree);
-
-  //--------------------------------------------------------------------------
-  //! Return the next path related to a traversal cursor obtained with ftsOpen
-  //! @param fts_handle cursor obtained by ftsOpen
-  //! @return returns full path (including mountpoint) for the next path
-  //!         indicated by traversal cursor, empty string if there is no next
-  //--------------------------------------------------------------------------
-  std::string ftsRead(void* fts_handle);
-
-  //--------------------------------------------------------------------------
-  //! Close a traversal cursor
-  //! @param fts_handle cursor to close
-  //! @return 0 if fts_handle was an open cursor, otherwise -1
-  //--------------------------------------------------------------------------
-  int ftsClose(void* fts_handle);
+  //---------------------------------------------------------------------------
+  //! Get list of all files under the specified subtree.
+  //!
+  //! @param subtree start point in the directory tree for listing files
+  //! @param max the maximum number of elements to return, a return of less
+  //!   elements indicates that no more files exists under the subtree.
+  //! @return list of up to max size of elements existing in the subtree
+  //---------------------------------------------------------------------------
+  std::vector<std::string> ListFiles(std::string subtree, size_t max);
 
   //--------------------------------------------------------------------------
   //! Constructor
-  //! @param cache_capacity maximum cache size
+  //! @param path the full path of the fileio object in the form
+  //!   kinetic:clusterId:filepath
   //--------------------------------------------------------------------------
-  explicit FileIo ();
-
-  FileIo (const FileIo&) = delete;
-  FileIo& operator = (const FileIo&) = delete;
+  explicit FileIo(const std::string& path);
 
   //--------------------------------------------------------------------------
   //! Destructor
   //--------------------------------------------------------------------------
-  ~FileIo ();
+  ~FileIo();
+
+  FileIo(const FileIo&) = delete;
+
+  FileIo& operator=(const FileIo&) = delete;
 
 private:
-  enum rw {READ, WRITE};
-  int64_t ReadWrite (long long off, char* buffer, int length, rw mode, uint16_t timeout = 0);
+  enum rw {
+      READ, WRITE
+  };
+
+  int64_t ReadWrite(long long off, char* buffer, int length, rw mode, uint16_t timeout = 0);
 
   //--------------------------------------------------------------------------
   //! Attempt to prefetch blocks based on the provided block number. If no
@@ -177,55 +187,58 @@ private:
   class LastBlockNumber {
 
   public:
-     //--------------------------------------------------------------------------
-     //! Checks if the block number stored in last_block_number is still valid,
-     //! if not it will query the drive to obtain the up-to-date last block and
-     //! store it (so it can get requested with get() by the user).
-     //-------------------------------------------------------------------------
-     void verify();
+    //--------------------------------------------------------------------------
+    //! Checks if the block number stored in last_block_number is still valid,
+    //! if not it will query the drive to obtain the up-to-date last block and
+    //! store it (so it can get requested with get() by the user).
+    //-------------------------------------------------------------------------
+    void verify();
 
-     //-------------------------------------------------------------------------
-     //! Get the block number of the last block.
-     //!
-     //! @return currently set last block number
-     //-------------------------------------------------------------------------
-     int get() const;
+    //-------------------------------------------------------------------------
+    //! Get the block number of the last block.
+    //!
+    //! @return currently set last block number
+    //-------------------------------------------------------------------------
+    int get() const;
 
-     //-------------------------------------------------------------------------
-     //! Set the supplied block number as last block.
-     //!
-     //! @param block_number the block number to be set
-     //-------------------------------------------------------------------------
-     void set(int block_number);
+    //-------------------------------------------------------------------------
+    //! Set the supplied block number as last block.
+    //!
+    //! @param block_number the block number to be set
+    //-------------------------------------------------------------------------
+    void set(int block_number);
 
-     //-------------------------------------------------------------------------
-     //! Constructor
-     //!
-     //! @param parent reference to the enclosing KineticFileIo object
-     //-------------------------------------------------------------------------
-     explicit LastBlockNumber(FileIo & parent);
+    //-------------------------------------------------------------------------
+    //! Constructor
+    //!
+    //! @param parent reference to the enclosing KineticFileIo object
+    //-------------------------------------------------------------------------
+    explicit LastBlockNumber(FileIo& parent);
 
-     //-------------------------------------------------------------------------
-     //! Destructor.
-     //-------------------------------------------------------------------------
-     ~LastBlockNumber();
+    //-------------------------------------------------------------------------
+    //! Destructor.
+    //-------------------------------------------------------------------------
+    ~LastBlockNumber();
 
   private:
-      //! reference to the enclosing KineticFileIo object
-      FileIo & parent;
+    //! reference to the enclosing KineticFileIo object
+    FileIo& parent;
 
-      //! currently set last block number
-      int last_block_number;
+    //! currently set last block number
+    int last_block_number;
 
-      //! time point it was verified that the last_block_number is correct
-      //! (another client might have created a later block)
-      std::chrono::system_clock::time_point last_block_number_timestamp;
+    //! time point it was verified that the last_block_number is correct
+    //! (another client might have created a later block)
+    std::chrono::system_clock::time_point last_block_number_timestamp;
   };
 
   /* protected instead of private to allow mocking in cache performance testing */
 protected:
   //! we don't want to have to look in the drive map for every access...
-  std::shared_ptr<ClusterInterface> cluster;
+  std::shared_ptr<ClusterInterface> dataCluster;
+
+  //! we don't want to have to look in the drive map for every access...
+  std::shared_ptr<ClusterInterface> mdCluster;
 
   //! readahead
   PrefetchOracle prefetchOracle;
@@ -240,7 +253,10 @@ protected:
   //! Thread safety when accessing exceptions
   std::mutex exception_mutex;
 
-  //! extracted from the supplied 'kinetic:clusterId:path' supplied to open()
+  //! true if file has been opened successfully
+  bool opened;
+
+  //! the extracted path from the full path 'kinetic:clusterId:path'
   std::string path;
 };
 

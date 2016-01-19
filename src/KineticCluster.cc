@@ -21,8 +21,8 @@ KineticCluster::KineticCluster(
     SocketListener& listener
 ) : nData(stripe_size), nParity(num_parities), chunkCapacity(block_size), operation_timeout(op_timeout),
     identity(id), instanceIdentity(utility::uuidGenerateString()),
-    statistics_snapshot{0,0,0,0,0}, clusterio{0,0,0,0,0}, 
-    clustersize{1,0}, dmutex(std::make_shared<DestructionMutex>()), redundancy(rp)
+    statistics_snapshot{0, 0, 0, 0, 0}, clusterio{0, 0, 0, 0, 0},
+    clustersize{1, 0}, dmutex(std::make_shared<DestructionMutex>()), redundancy(rp)
 {
   if (nData + nParity > info.size()) {
     throw std::logic_error("Stripe size + parity size cannot exceed cluster size.");
@@ -43,9 +43,10 @@ KineticCluster::KineticCluster(
     auto rmap = execute(ops, *sync);
     if (rmap[StatusCode::OK]) {
       const auto& l = std::static_pointer_cast<GetLogCallback>(ops.front().callback)->getLog()->limits;
-      if(l.max_value_size < block_size) {
-        throw kio_exception(ENXIO, "configured block size of ", block_size,
-                                   "is bigger than maximum drive block size of ", l.max_value_size);
+      if (l.max_value_size < block_size) {
+        kio_error("configured block size of ", block_size, "is bigger than maximum drive block size of ",
+                    l.max_value_size);
+        throw std::system_error(std::make_error_code(std::errc::invalid_argument));
       }
       clusterlimits.max_key_size = l.max_key_size;
       clusterlimits.max_version_size = l.max_version_size;
@@ -54,7 +55,8 @@ KineticCluster::KineticCluster(
     }
   }
   if (!clusterlimits.max_key_size || !clusterlimits.max_value_size || !clusterlimits.max_version_size) {
-    throw kio_exception(ENXIO, "Failed obtaining cluster limits!");
+    kio_error("Failed obtaining cluster limits!");
+    throw std::system_error(std::make_error_code(std::errc::io_error));
   }
   /* Start a bg update of cluster io statistics and capacity */
   kio().threadpool().try_run(std::bind(&KineticCluster::updateStatistics, this, dmutex));
@@ -67,53 +69,60 @@ KineticCluster::~KineticCluster()
 
 
 /* Fire and forget put callback... not doing anything with the result. */
-class FFPutCallback : public kinetic::PutCallbackInterface
-{
+class FFPutCallback : public kinetic::PutCallbackInterface {
 public:
-  void Success() { }
-  void Failure(kinetic::KineticStatus error) { }
-  FFPutCallback() { }
-  ~FFPutCallback() { }
+  void Success()
+  { }
+
+  void Failure(kinetic::KineticStatus error)
+  { }
+
+  FFPutCallback()
+  { }
+
+  ~FFPutCallback()
+  { }
 };
 
-void KineticCluster::putIndicatorKey(const std::shared_ptr<const std::string>& key, const std::vector<KineticAsyncOperation>& ops)
+void KineticCluster::putIndicatorKey(const std::shared_ptr<const std::string>& key,
+                                     const std::vector<KineticAsyncOperation>& ops)
 {
-    /* Obtain an operation index where the execution succeeded. */
-    int i = -1;
-    while(i+1 < ops.size()){
-      if(ops[++i].callback->getResult().statusCode() != StatusCode::CLIENT_IO_ERROR)
-        break;
+  /* Obtain an operation index where the execution succeeded. */
+  int i = -1;
+  while (i + 1 < ops.size()) {
+    if (ops[++i].callback->getResult().statusCode() != StatusCode::CLIENT_IO_ERROR) {
+      break;
     }
-       
-    /* Set up record, version is set to "indicator" so that multiple attempts to write the same indicator key 
-     * fail with VERSION_MISMATCH instead of overwriting every single time. */
-    auto record = std::make_shared<const KineticRecord>(
-            "", "indicator", "", com::seagate::kinetic::client::proto::Command_Algorithm_INVALID_ALGORITHM
-    );
-    
-    /* Schedule a write... we're not sticking around. If something fails, tough luck. */
-    try{
-      auto con = ops[i].connection->get();
-      con->Put(utility::makeIndicatorKey(*key), 
-              make_shared<const string>(), 
-              kinetic::WriteMode::REQUIRE_SAME_VERSION, 
-              record, 
-              std::make_shared<FFPutCallback>());
+  }
 
-      fd_set a;
-      con->Run(&a, &a, &i);
-    }catch(const std::exception& e){
-      kio_warning("Failed scheduling indication-key write for target-key ", *key, ": ", e.what());
-    };
+  /* Set up record, version is set to "indicator" so that multiple attempts to write the same indicator key
+   * fail with VERSION_MISMATCH instead of overwriting every single time. */
+  auto record = std::make_shared<const KineticRecord>(
+      "", "indicator", "", com::seagate::kinetic::client::proto::Command_Algorithm_INVALID_ALGORITHM
+  );
+
+  /* Schedule a write... we're not sticking around. If something fails, tough luck. */
+  try {
+    auto con = ops[i].connection->get();
+    con->Put(utility::makeIndicatorKey(*key),
+             make_shared<const string>(),
+             kinetic::WriteMode::REQUIRE_SAME_VERSION,
+             record,
+             std::make_shared<FFPutCallback>());
+
+    fd_set a;
+    con->Run(&a, &a, &i);
+  } catch (const std::exception& e) {
+    kio_warning("Failed scheduling indication-key write for target-key ", *key, ": ", e.what());
+  };
 }
-
 
 
 std::vector<std::shared_ptr<const std::string>> KineticCluster::valueToStripe(
     const std::string& value
 )
 {
-  if(!value.length()) {
+  if (!value.length()) {
     return std::vector<std::shared_ptr<const string>>(nData + nParity, std::make_shared<const string>());
   }
 
@@ -142,7 +151,7 @@ std::vector<std::shared_ptr<const std::string>> KineticCluster::valueToStripe(
   redundancy->compute(stripe);
 
   /* We don't actually want to write the 0ed data chunks used for redundancy computation. So get rid of them. */
-  for (int index = (value.size() + chunkSize - 1 ) / chunkSize; index < nData; index++)
+  for (int index = (value.size() + chunkSize - 1) / chunkSize; index < nData; index++)
     stripe[index] = std::make_shared<const string>();
 
   return stripe;
@@ -155,8 +164,9 @@ std::shared_ptr<const string> KineticCluster::getOperationToValue(
 )
 {
   auto size = (int) utility::uuidDecodeSize(version);
-  if(!size)
+  if (!size) {
     return make_shared<string>();
+  }
 
   std::vector<shared_ptr<const string>> stripe;
 
@@ -173,7 +183,7 @@ std::shared_ptr<const string> KineticCluster::getOperationToValue(
       auto checksum = crc32c(0, record->value()->c_str(), record->value()->length());
       auto tag = utility::Convert::toString(checksum);
       if (tag == *record->tag()) {
-          stripe.push_back(record->value());
+        stripe.push_back(record->value());
       }
       else {
         putIndicatorKey(key, ops);
@@ -182,14 +192,14 @@ std::shared_ptr<const string> KineticCluster::getOperationToValue(
         need_recovery = true;
       }
     }
-    else{
+    else {
       kio_notice("Chunk ", i, " of key ", *key, " is invalid.");
       stripe.push_back(make_shared<const string>());
       need_recovery = true;
     }
   }
 
-  if(need_recovery){
+  if (need_recovery) {
     /* Add 0ed data chunks as necessary to allow for redundancy computation */
     for (int index = (size + chunkSize - 1) / chunkSize; index < nData; index++)
       stripe[index] = zero;
@@ -199,10 +209,10 @@ std::shared_ptr<const string> KineticCluster::getOperationToValue(
   /* Step 2) merge data chunks into single value */
   auto value = make_shared<string>();
   value->reserve(size);
-  for (auto it = stripe.cbegin(); it != stripe.cend(); it++){
-    if(value->size() + chunkCapacity < size)
+  for (auto it = stripe.cbegin(); it != stripe.cend(); it++) {
+    if (value->size() + chunkCapacity < size) {
       *value += **it;
-    else {
+    } else {
       value->append(**it, 0, size - value->size());
       break;
     }
@@ -220,11 +230,12 @@ KineticStatus KineticCluster::get(
   /* Try to get the value without parities for erasure coded stripes, unless the cluster has been switched into parity
    * mode in the last 5 minutes. */
   bool getParities = true;
-  if(nData > nParity) {
+  if (nData > nParity) {
     std::lock_guard<std::mutex> lock(mutex);
     using namespace std::chrono;
-    if(duration_cast<minutes>(system_clock::now()-parity_required) > minutes(5))
+    if (duration_cast<minutes>(system_clock::now() - parity_required) > minutes(5)) {
       getParities = false;
+    }
   }
 
   auto ops = initialize(key, nData + (getParities ? nParity : 0));
@@ -234,23 +245,25 @@ KineticStatus KineticCluster::get(
   auto target_version = skip_value ? asyncops::mostFrequentVersion(ops) : asyncops::mostFrequentRecordVersion(ops);
 
   /* Put down an indicator if chunk versions of this stripe are not aligned */
-  if(rmap[StatusCode::OK] > target_version.frequency)
+  if (rmap[StatusCode::OK] > target_version.frequency) {
     putIndicatorKey(key, ops);
+  }
   rmap[StatusCode::OK] = target_version.frequency;
 
   /* Any status code encountered at least nData times is valid. If operation was a success, set return values. */
   for (auto it = rmap.begin(); it != rmap.end(); it++) {
     if (it->second >= nData) {
-      if (it->first == StatusCode::OK){        
+      if (it->first == StatusCode::OK) {
 
-        if(!skip_value) {  /* set value */
+        if (!skip_value) {  /* set value */
           try {
             value = getOperationToValue(ops, key, target_version.version);
           } catch (const std::exception& e) {
             /* If we didn't get parities, retry operation. */
-            if(!getParities)
+            if (!getParities) {
               break;
-            kio_warning("Failed reconstructing value for key ", *key, ": ", e.what());
+            }
+            kio_error("Failed reconstructing value for key ", *key, ": ", e.what());
             return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
           }
         }
@@ -258,13 +271,15 @@ KineticStatus KineticCluster::get(
         version = target_version.version;
       }
 
-      kio_debug("Get", skip_value ? "Version" : "Data", " request for key ", *key, " completed with status: ", it->first);
+      kio_debug("Get", skip_value ? "Version" : "Data", " request for key ", *key, " completed with status: ",
+                it->first);
       return KineticStatus(it->first, "");
     }
   }
 
-  if(!getParities){
-    { std::lock_guard<std::mutex> lock(mutex);
+  if (!getParities) {
+    {
+      std::lock_guard<std::mutex> lock(mutex);
       parity_required = std::chrono::system_clock::now();
     }
     return get(key, skip_value, version, value);
@@ -275,10 +290,14 @@ KineticStatus KineticCluster::get(
 
 static int getVersionPosition(const shared_ptr<const string>& version, std::vector<KineticAsyncOperation>& vops)
 {
-  for(int i=0; i<vops.size(); i++){
-    if(vops[i].callback->getResult().ok() || vops[i].callback->getResult().statusCode() == StatusCode::REMOTE_NOT_FOUND)
-      if(std::static_pointer_cast<GetVersionCallback>(vops[i].callback)->getVersion() == *version)
+  for (int i = 0; i < vops.size(); i++) {
+    if (vops[i].callback->getResult().ok() ||
+        vops[i].callback->getResult().statusCode() == StatusCode::REMOTE_NOT_FOUND) {
+      if (
+          std::static_pointer_cast<GetVersionCallback>(vops[i].callback)->getVersion() == *version) {
         return i;
+      }
+    }
   }
   return -1;
 }
@@ -287,42 +306,48 @@ static int getVersionPosition(const shared_ptr<const string>& version, std::vect
 bool KineticCluster::mayForce(const shared_ptr<const string>& key, const shared_ptr<const string>& version,
                               std::map<StatusCode, int, KineticCluster::compareStatusCode> ormap)
 {
-  if (ormap[StatusCode::OK] > (nData + nParity) / 2)
+  if (ormap[StatusCode::OK] > (nData + nParity) / 2) {
     return true;
+  }
 
   auto ops = initialize(key, nData + nParity);
   auto sync = asyncops::fillGetVersion(ops, key);
   auto rmap = execute(ops, *sync);
   auto most_frequent = asyncops::mostFrequentVersion(ops);
 
-  if(rmap[StatusCode::REMOTE_NOT_FOUND] >= nData)
+  if (rmap[StatusCode::REMOTE_NOT_FOUND] >= nData) {
     return version->size() != 0;
+  }
 
-  if (most_frequent.frequency && *version == *most_frequent.version)
+  if (most_frequent.frequency && *version == *most_frequent.version) {
     return true;
+  }
 
-  if(most_frequent.frequency >= nData)
+  if (most_frequent.frequency >= nData) {
     return false;
+  }
 
   /* Super-Corner-Case: It could be that the client that should win the most_frequent match has crashed. For this
    * reason, all competing clients will wait, polling the key versions until a timeout. If the timeout expires
    * without the issue being resolved, overwrite permission will be given. As multiple clients
    * could theoretically be in this loop concurrently, we specify timeout time by the position of the first
    * occurence of the supplied version for a subchunk. */
-  auto timeout_time = std::chrono::system_clock::now() + (getVersionPosition(version, ops)+1) * operation_timeout;
-  do{
+  auto timeout_time = std::chrono::system_clock::now() + (getVersionPosition(version, ops) + 1) * operation_timeout;
+  do {
     usleep(10000);
     ops = initialize(key, nData + nParity);
     sync = asyncops::fillGetVersion(ops, key);
     rmap = execute(ops, *sync);
 
-    if(getVersionPosition(version, ops) < 0)
+    if (getVersionPosition(version, ops) < 0) {
       return false;
+    }
 
     most_frequent = asyncops::mostFrequentVersion(ops);
-    if(most_frequent.frequency >= nData || rmap[StatusCode::REMOTE_NOT_FOUND] >= nData)
+    if (most_frequent.frequency >= nData || rmap[StatusCode::REMOTE_NOT_FOUND] >= nData) {
       return false;
-  }while(std::chrono::system_clock::now() < timeout_time);
+    }
+  } while (std::chrono::system_clock::now() < timeout_time);
 
   return true;
 }
@@ -343,7 +368,7 @@ KineticStatus KineticCluster::put(
   try {
     stripe = valueToStripe(*value);
   } catch (const std::exception& e) {
-    kio_warning("Failed building data stripe for key ", *key, ": ", e.what());
+    kio_error("Failed building data stripe for key ", *key, ": ", e.what());
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
   }
 
@@ -372,14 +397,15 @@ KineticStatus KineticCluster::put(
       if (it->first == StatusCode::OK) {
         version_out = version_new;
       }
-      if(it->second < nData+nParity)
+      if (it->second < nData + nParity) {
         putIndicatorKey(key, ops);
-      
+      }
+
       kio_debug("Put request for key ", *key, " completed with status: ", it->first);
       return KineticStatus(it->first, "");
     }
   }
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR,  "Key" + *key + "not accessible.");
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key" + *key + "not accessible.");
 }
 
 
@@ -407,7 +433,7 @@ KineticStatus KineticCluster::remove(
       auto forcesync = asyncops::fillRemove(ops, key, version, WriteMode::IGNORE_VERSION);
       rmap = execute(ops, *forcesync);
 
-      rmap[StatusCode::OK]+=rmap[StatusCode::REMOTE_NOT_FOUND];
+      rmap[StatusCode::OK] += rmap[StatusCode::REMOTE_NOT_FOUND];
       rmap[StatusCode::REMOTE_NOT_FOUND] = 0;
     }
     else {
@@ -416,16 +442,17 @@ KineticStatus KineticCluster::remove(
     }
   }
 
-  for (auto it = rmap.cbegin(); it != rmap.cend(); it++){
-    if (it->second >= nData){
-      if(it->second < nData+nParity)
+  for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
+    if (it->second >= nData) {
+      if (it->second < nData + nParity) {
         putIndicatorKey(key, ops);
-      
+      }
+
       kio_debug("Remove request for key ", *key, " completed with status: ", it->first);
       return KineticStatus(it->first, "");
     }
   }
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR,  "Key" + *key + "not accessible.");
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key" + *key + "not accessible.");
 }
 
 KineticStatus KineticCluster::range(
@@ -443,8 +470,9 @@ KineticStatus KineticCluster::range(
     std::set<std::string> set;
     for (auto o = ops.cbegin(); o != ops.cend(); o++) {
       auto& opkeys = std::static_pointer_cast<RangeCallback>(o->callback)->getKeys();
-      if(opkeys)
+      if (opkeys) {
         set.insert(opkeys->begin(), opkeys->end());
+      }
     }
 
     /* assign to output parameter and cut excess results */
@@ -456,7 +484,7 @@ KineticStatus KineticCluster::range(
 
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
     if (it->second > connections.size() - nData - nParity) {
-      kio_debug("Range request from key ", *start_key, " to ", *end_key," completed with status: ", it->first);
+      kio_debug("Range request from key ", *start_key, " to ", *end_key, " completed with status: ", it->first);
       return KineticStatus(it->first, "");
     }
   }
@@ -468,22 +496,24 @@ KineticStatus KineticCluster::range(
 
 
 void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
-{ 
+{
   std::lock_guard<DestructionMutex> dlock(*dm);
-  
+
   auto ops = initialize(make_shared<string>("all"), connections.size());
-  auto sync = asyncops::fillLog(ops, 
-    {Command_GetLog_Type::Command_GetLog_Type_CAPACITIES, Command_GetLog_Type::Command_GetLog_Type_STATISTICS}
+  auto sync = asyncops::fillLog(ops,
+                                {Command_GetLog_Type::Command_GetLog_Type_CAPACITIES,
+                                 Command_GetLog_Type::Command_GetLog_Type_STATISTICS
+                                }
   );
   execute(ops, *sync);
 
   /* Set up temporary variables */
   using namespace std::chrono;
   auto timep = system_clock::now();
-  auto period = duration_cast<milliseconds>(timep-statistics_timepoint).count(); 
-  ClusterSize size{0,0}; 
-  ClusterIo io{0,0,0,0,0}; 
-  
+  auto period = duration_cast<milliseconds>(timep - statistics_timepoint).count();
+  ClusterSize size{0, 0};
+  ClusterIo io{0, 0, 0, 0, 0};
+
   /* Evaluate Operation Results. */
   for (auto o = ops.begin(); o != ops.end(); o++) {
     if (!o->callback->getResult().ok()) {
@@ -491,36 +521,36 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
       continue;
     }
     const auto& log = std::static_pointer_cast<GetLogCallback>(o->callback)->getLog();
-    
+
     uint64_t bytes_used = log->capacity.nominal_capacity_in_bytes * log->capacity.portion_full;
     size.bytes_total += log->capacity.nominal_capacity_in_bytes;
-    size.bytes_free  += log->capacity.nominal_capacity_in_bytes - bytes_used; 
-    
-    for(auto it = log->operation_statistics.cbegin(); it != log->operation_statistics.cend(); it++){
-      if(it->name == "GET_RESPONSE"){
+    size.bytes_free += log->capacity.nominal_capacity_in_bytes - bytes_used;
+
+    for (auto it = log->operation_statistics.cbegin(); it != log->operation_statistics.cend(); it++) {
+      if (it->name == "GET_RESPONSE") {
         io.read_ops += it->count;
         io.read_bytes += it->bytes;
       }
-      else if(it->name == "PUT"){
-        io.write_ops += it->count; 
+      else if (it->name == "PUT") {
+        io.write_ops += it->count;
         io.write_bytes += it->bytes;
       }
     }
-    io.number_drives++; 
+    io.number_drives++;
   }
-    
+
   /* update cluster variables */
   std::lock_guard<std::mutex> lock(mutex);
-  
+
   clusterio.read_ops = ((io.read_ops - statistics_snapshot.read_ops) * 1000) / period;
-  clusterio.read_bytes = ((io.read_bytes - statistics_snapshot.read_bytes) *1000) / period;
-  clusterio.write_ops = ((io.write_ops - statistics_snapshot.write_ops) *1000) / period;
-  clusterio.write_bytes = ((io.write_bytes - statistics_snapshot.write_bytes) *1000) / period; 
-  clusterio.number_drives = io.number_drives; 
-  
+  clusterio.read_bytes = ((io.read_bytes - statistics_snapshot.read_bytes) * 1000) / period;
+  clusterio.write_ops = ((io.write_ops - statistics_snapshot.write_ops) * 1000) / period;
+  clusterio.write_bytes = ((io.write_bytes - statistics_snapshot.write_bytes) * 1000) / period;
+  clusterio.number_drives = io.number_drives;
+
   statistics_timepoint = timep;
   statistics_snapshot = io;
-  
+
   clustersize = size;
 }
 
@@ -543,9 +573,10 @@ ClusterSize KineticCluster::size()
 {
   std::lock_guard<std::mutex> lock(mutex);
   using namespace std::chrono;
-  if(duration_cast<seconds>(system_clock::now()-statistics_scheduled) > seconds(2)) {
-    if(kio().threadpool().try_run(std::bind(&KineticCluster::updateStatistics, this, dmutex)))
+  if (duration_cast<seconds>(system_clock::now() - statistics_scheduled) > seconds(2)) {
+    if (kio().threadpool().try_run(std::bind(&KineticCluster::updateStatistics, this, dmutex))) {
       statistics_scheduled = system_clock::now();
+    }
   }
   return clustersize;
 }
@@ -554,9 +585,10 @@ ClusterIo KineticCluster::iostats()
 {
   std::lock_guard<std::mutex> lock(mutex);
   using namespace std::chrono;
-  if(duration_cast<seconds>(system_clock::now()-statistics_scheduled) > seconds(2)) {
-    if(kio().threadpool().try_run(std::bind(&KineticCluster::updateStatistics, this, dmutex)))
+  if (duration_cast<seconds>(system_clock::now() - statistics_scheduled) > seconds(2)) {
+    if (kio().threadpool().try_run(std::bind(&KineticCluster::updateStatistics, this, dmutex))) {
       statistics_scheduled = system_clock::now();
+    }
   }
   return clusterio;
 }
@@ -566,7 +598,7 @@ std::vector<KineticAsyncOperation> KineticCluster::initialize(
     size_t size, off_t offset)
 {
   std::uint32_t index;
-  MurmurHash3_x86_32(key->c_str(),key->length(), 0, &index);
+  MurmurHash3_x86_32(key->c_str(), key->length(), 0, &index);
   index += offset;
   std::vector<KineticAsyncOperation> ops;
 
@@ -615,7 +647,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
         ops[i].callback->OnResult(status);
         ops[i].connection->setError();
-        kio_notice("Failed executing async operation ", status);
+        kio_notice("Failed executing async operation for connection ", ops[i].connection->getName(), status);
       }
     }
 
@@ -630,7 +662,7 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
         try {
           ops[i].connection->get()->RemoveHandler(hkeys[i]);
         } catch (const std::exception& e) {
-          kio_warning("Failed removing handle from connection ", ops[i].connection->getName(), "due to: ", e.what());   
+          kio_warning("Failed removing handle from connection ", ops[i].connection->getName(), "due to: ", e.what());
           ops[i].connection->setError();
         }
         kio_warning("Network timeout for operation ", ops[i].connection->getName(), " for sync-point", &sync);
@@ -647,8 +679,8 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
     }
   } while (need_retry && rounds_left);
 
-  kio_debug("Finished execution for sync-point", &sync);
-  
+  kio_debug("Finished execution for sync-point ", &sync);
+
   std::map<kinetic::StatusCode, int, KineticCluster::compareStatusCode> map;
   for (auto it = ops.begin(); it != ops.end(); it++) {
     map[it->callback->getResult().statusCode()]++;

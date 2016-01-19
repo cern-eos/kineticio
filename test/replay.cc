@@ -52,8 +52,8 @@ int main(int argc, char** argv)
     
   
   kio::KineticIoFactory::registerLogFunction(mlog, mshouldLog);
-  auto fio = kio::KineticIoFactory::makeFileIo();
-  fio->Open(config.kineticfile, config.write ? SFS_O_CREAT : 0);
+  auto fio = kio::KineticIoFactory::makeFileIo(config.kineticfile);
+  fio->Open(config.write ? SFS_O_CREAT : 0);
   
   struct stat s; 
   fio->Stat(&s);

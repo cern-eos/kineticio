@@ -195,13 +195,14 @@ void replication(std::vector<std::shared_ptr<const std::string> > &stripe, std::
 
 void RedundancyProvider::compute(std::vector<std::shared_ptr<const std::string> > &stripe)
 {
+  /* throws if stripe is not recoverable */
   std::string pattern = getErrorPattern(stripe);
   
   /* nothing to do if there are no parity blocks. */
   if (!nParity)
     return;
   
-  /* In case of a single data block use replication */
+  /* in case of a single data block use replication */
   if (nData == 1)
     return replication(stripe, pattern);
   
@@ -233,7 +234,6 @@ void RedundancyProvider::compute(std::vector<std::shared_ptr<const std::string> 
   int e = 0;
   for (int i = 0; i < nData + nParity; i++) {
     if (pattern[i]) {
-      //printf("Repairing error %d (stripe index %d)\n",e,i);
       stripe[i] = make_shared<const string>(
           (const char *) outbuf[e], blockSize
       );

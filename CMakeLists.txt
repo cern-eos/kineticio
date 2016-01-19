@@ -55,7 +55,6 @@ include_directories(
 )
 set(kineticio_SRC
     src/FileIo.cc
-    src/FileAttr.cc
     src/KineticIoFactory.cc
     src/DataBlock.cc
     src/DataCache.cc
@@ -137,7 +136,7 @@ if(BUILD_TEST)
         test/LoggingTest.cc
         test/KineticAdminClusterTest.cc
         test/DataCacheTest.cc
-    )
+        )
     target_link_libraries(kio-test
         ${Z_LIBRARIES}
         ${kineticio_LIB}

@@ -59,7 +59,7 @@ unique_ptr<CallbackSynchronization> asyncops::fillPut(
   for (int i = 0; i < ops.size(); i++) {
     auto &v = stripe[i];
 
-    /* Generate Checksum, computing takes ~1ms per checksum */
+    /* Generate Checksum */
     auto checksum = crc32c(0, v->c_str(), v->length());
     auto tag = std::make_shared<string>(
         std::to_string((long long unsigned int) checksum)

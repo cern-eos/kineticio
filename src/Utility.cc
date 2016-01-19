@@ -103,6 +103,14 @@ std::shared_ptr<const std::string> utility::makeAttributeKey(const std::string& 
   return std::make_shared<const std::string>(clusterId + ":attribute:"+ base + ":" + attribute_name);
 }
 
+std::string utility::extractAttributeName(const std::string& attrkey)
+{
+  auto pos = 0;
+  for(int i=0; i<3; i++)
+    attrkey.find_first_of(':',pos+1);
+  return attrkey.substr(pos);
+}
+
 std::shared_ptr<const std::string> utility::makeIndicatorKey(const std::string& key)
 {
   return std::make_shared<const std::string>("indicator:" + key);

@@ -87,7 +87,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
         REQUIRE(status.ok());
         REQUIRE(keys->size() == 1);
       }
-    }
+     }
 
     WHEN("Putting a key-value pair on a healthy cluster") {
       auto value = make_shared<string>(666, 'v');
@@ -209,71 +209,3 @@ SCENARIO("Cluster integration test.", "[Cluster]")
     }
   }
 }
-
-//
-//SCENARIO("Cluster integration test.", "[Cluster]")
-//{
-//
-//  SocketListener listener;
-//  GIVEN ("A valid drive cluster") {
-//
-//
-//    auto ember1 = ConnectionOptions{"it-ember1", 8123, false, 1, "ember123"};
-//    auto ember2 = ConnectionOptions{"it-ember2", 8123, false, 1, "ember123"};
-//    auto ember3 = ConnectionOptions{"it-ember3", 8123, false, 1, "ember123"};
-//    auto ember4 = ConnectionOptions{"it-ember4", 8123, false, 1, "ember123"};
-//    std::vector<std::pair<ConnectionOptions, ConnectionOptions> > info{
-//        std::pair<ConnectionOptions, ConnectionOptions>(ember1, ember1),
-//        std::pair<ConnectionOptions, ConnectionOptions>(ember2, ember2),
-//        std::pair<ConnectionOptions, ConnectionOptions>(ember3, ember3),
-//        std::pair<ConnectionOptions, ConnectionOptions>(ember4, ember4)
-//    };
-//
-//    std::size_t nData = 2;
-//    std::size_t nParity = 1;
-//    auto cluster = make_shared<KineticCluster>(nData, nParity, info,
-//                                               std::chrono::seconds(2),
-//                                               std::chrono::seconds(2),
-//                                               std::make_shared<ErasureCoding>(nData, nParity),
-//                                               listener
-//    );
-//
-//
-//    THEN("Cluster size is reported as long as a single drive is alive.") {
-//
-//      ClusterSize s;
-//      REQUIRE(cluster->size(s).ok());
-//      // sleep 500 ms to let cluster size update in bg
-//      usleep(1000 * 10000);
-//      REQUIRE(cluster->size(s).ok());
-//      REQUIRE(s.bytes_total > 0);
-//    }
-//
-//    WHEN("Putting a key-value pair") {
-//
-//      printf("put start\n");
-//      auto value = make_shared<string>(cluster->limits().max_value_size, 'v');
-//
-//      shared_ptr<const string> putversion;
-//      auto status = cluster->put(
-//          make_shared<string>("key"),
-//          make_shared<string>("version"),
-//          value,
-//          true,
-//          putversion);
-//      REQUIRE(status.ok());
-//      REQUIRE(putversion);
-//      printf("put done\n");
-//
-//      THEN("With == nParity drive failures.") {
-//        THEN("Removing it with the correct version succeeds") {
-//          auto status = cluster->remove(
-//              make_shared<string>("key"),
-//              putversion,
-//              false);
-//          REQUIRE(status.ok());
-//        }
-//      }
-//    }
-//  }
-//}

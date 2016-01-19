@@ -10,4 +10,4 @@ Providing a file interface (byterange read / write access) to kinetic hardware. 
 The **KINETIC\_DRIVE\_LOCATION**, **KINETIC\_DRIVE\_SECURITY** and **KINETIC\_CLUSTER\_DEFINITION** environment variables have to be set and specify drive location, login details and the cluster configuration (as well as library-wide configuration options) respectively. The environment variables may either contain the information themselves, or point to one or multiple json files containing the respective information. See [localhost.json](test/localhost.json) as an example.  
 
 ### EOS support
-When this library is installed, kinetic support will automatically be enabled when compiling the kinetic branch of the [EOS repository](https://gitlab.cern.ch/dss/eos/tree/kinetic).
+When this library is installed, kinetic support will automatically be enabled when compiling the beryl_aquamarine_kinetic branch of the [EOS repository](https://gitlab.cern.ch/dss/eos/tree/beryl_aquamarine_kinetic).

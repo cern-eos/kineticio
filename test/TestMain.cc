@@ -1,7 +1,9 @@
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 #include <thread>
+#include <sys/syslog.h>
 #include "SimulatorController.h"
+#include "KineticIoFactory.hh"
 
 /* Tests assume that location and security json file(s) exists and they contain information for
  * serial numbers SN1 and SN2, where SN1 is correct and SN2 is incorrect.
@@ -11,6 +13,31 @@
 #define KINETIC_DRIVE_SECURITY KINETIC_DRIVE_LOCATION
 #define KINETIC_CLUSTER_DEFINITION KINETIC_DRIVE_LOCATION
 
+
+bool tshouldLog(const char *name, int level){
+  return true;
+}
+
+static void tlog(const char* func, const char* file, int line, int priority, const char *msg)
+{
+  switch(priority) {
+    case LOG_DEBUG:
+      printf("DEBUG: ");
+      break;
+    case LOG_NOTICE:
+      printf("NOTICE: ");
+      break;
+    case LOG_WARNING:
+      printf("WARNING: ");
+      break;
+    case LOG_ERR:
+      printf("ERROR: ");
+      break;
+    default:
+      printf("Unknown Log Level! ");
+  }
+  printf("%s /// %s (%s:%d)\n",msg,func,file,line);
+}
 
 int main( int argc, char* const argv[] )
 {
@@ -26,6 +53,13 @@ int main( int argc, char* const argv[] )
 
   /* Ignore sigpipe, so we don't die if a simulator is shut down. */
   signal(SIGPIPE, SIG_IGN);
+
+
+  /* set logging to stdout if requested */
+  if(strcmp(argv[argc-1], "-debug") == 0){
+    kio::KineticIoFactory::registerLogFunction(tlog, tshouldLog);
+    argc--;
+  }
 
   int result = Catch::Session().run( argc, argv );
 
