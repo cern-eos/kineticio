@@ -101,19 +101,19 @@ void KineticIoSingleton::loadConfiguration()
 {
   const char* location = getenv("KINETIC_DRIVE_LOCATION");
   if (!location) {
-    kio_error( "KINETIC_DRIVE_LOCATION not set.");
+    kio_error("KINETIC_DRIVE_LOCATION not set.");
     throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
 
   const char* security = getenv("KINETIC_DRIVE_SECURITY");
   if (!security) {
-    kio_error( "KINETIC_DRIVE_SECURITY not set.");
+    kio_error("KINETIC_DRIVE_SECURITY not set.");
     throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
 
   const char* cluster = getenv("KINETIC_CLUSTER_DEFINITION");
   if (!cluster) {
-    kio_error( "KINETIC_CLUSTER_DEFINITION not set.");
+    kio_error("KINETIC_CLUSTER_DEFINITION not set.");
     throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
 
@@ -128,7 +128,8 @@ void KineticIoSingleton::loadConfiguration()
   unique_json_ptr cluster_root(json_tokener_parse(cluster_data.c_str()), &put_json);
 
   if (!location_root || !security_root || !cluster_root) {
-    throw std::runtime_error("Failed initializing json token parser.");
+    kio_error("Failed initializing json token parser.");
+    throw std::system_error(std::make_error_code(std::errc::executable_format_error));
   }
 
   struct json_object* o1 = NULL;
@@ -191,7 +192,8 @@ std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::C
     host = json_object_array_get_idx(tmp, 1);
     if (host) {
       kops.second.host = json_object_get_string(host);
-    } else {
+    }
+    else {
       kops.second.host = kops.first.host;
     }
 

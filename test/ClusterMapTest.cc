@@ -28,12 +28,11 @@ SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
   
   GIVEN("A valid path."){
     auto& kcm = kio::kio().cmap();
-    auto r = kio::RedundancyType::REPLICATION;
     THEN("An existing id returns a cluster."){
-        REQUIRE_NOTHROW(kcm.getCluster("Cluster1", r));
+        REQUIRE_NOTHROW(kcm.getCluster("Cluster1"));
     }
     THEN("A nonexisting cluster id returns ENODEV."){
-        REQUIRE_THROWS(kcm.getCluster("nonExistingID", r));
+        REQUIRE_THROWS(kcm.getCluster("nonExistingID"));
     }
   }
 }

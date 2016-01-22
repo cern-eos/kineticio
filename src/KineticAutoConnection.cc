@@ -77,6 +77,10 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
               duration, " seconds ago. ratelimit is ", ratelimit, " seconds ", logstring);
 
   }
+  else {
+    kio_debug("Not attempting background reconnect. Last reconnect attempt has been ",
+              duration, " seconds ago. ratelimit is ", ratelimit, " seconds ", logstring);
+  }
   kio_warning("No valid connection ", logstring);
   throw std::system_error(std::make_error_code(std::errc::not_connected));
 }

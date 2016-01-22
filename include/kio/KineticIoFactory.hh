@@ -30,14 +30,6 @@ namespace kio {
 typedef std::function<void(const char* func, const char* file, int line, int level, const char* msg)> logfunc_t;
 typedef std::function<bool(const char* func, int level)> shouldlogfunc_t;
 
-//--------------------------------------------------------------------------
-//! Clusters can be requested to have erasure coded stripes or replication
-//! to provide redundancy.
-//--------------------------------------------------------------------------
-enum class RedundancyType {
-  ERASURE_CODING, REPLICATION
-};
-
 //----------------------------------------------------------------------------
 //! The only way for clients of the public library interface to construct
 //! FileIo and FileAttr objects. Returns unique_ptr as the caller will
@@ -61,9 +53,7 @@ public:
   //! @param redundancy erasure coding or replication mode
   //! @return unique pointer to constructed AdminCluster object
   //--------------------------------------------------------------------------
-  static std::unique_ptr<AdminClusterInterface> makeAdminCluster(
-      const std::string& cluster_id, RedundancyType redundancy
-  );
+  static std::shared_ptr<AdminClusterInterface> makeAdminCluster(const std::string& cluster_id);
 
   //--------------------------------------------------------------------------
   //! The client may register a log function that will be used for debug and

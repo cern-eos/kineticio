@@ -21,22 +21,27 @@
 
 using namespace kio;
 
-SCENARIO("Chunk integration test.", "[Chunk]"){
+SCENARIO("DataBlock integration test.", "[Data]"){
   auto& c = SimulatorController::getInstance();
   c.start(0);
   REQUIRE( c.reset(0) );
 
   SocketListener listener;
-  std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > info;
-  info.push_back(std::pair<kinetic::ConnectionOptions,kinetic::ConnectionOptions>(c.get(0),c.get(0)));
   int nData = 1;
   int nParity = 0;
   int blocksize = 1024*1024;
-  auto cluster = std::make_shared<KineticCluster>("testcluster", nData, nParity, blocksize, info,
-                                                  std::chrono::seconds(20),
-                                                  std::chrono::seconds(10),
+
+  std::vector<std::unique_ptr<KineticAutoConnection>> connections;
+    std::unique_ptr<KineticAutoConnection> autocon(
+        new KineticAutoConnection(listener, std::make_pair(c.get(0),c.get(0)), std::chrono::seconds(10))
+    );
+    connections.push_back(std::move(autocon));
+
+
+  auto cluster = std::make_shared<KineticCluster>("testcluster", blocksize, std::chrono::seconds(10),
+                                                  std::move(connections),
                                                   std::make_shared<RedundancyProvider>(nData,nParity),
-                                                  listener
+                                                  std::make_shared<RedundancyProvider>(nData,nParity)
   );
 
   GIVEN ("An empty block with create flag set."){
@@ -45,9 +50,9 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
     THEN("Illegal writes fail."){
       char buf[10];
       /* nullpointer */
-      REQUIRE_THROWS_AS(data.write(NULL, 0, 0), std::invalid_argument);
+      REQUIRE_THROWS_AS(data.write(NULL, 0, 0), std::system_error);
       /* writing past block size limit. */
-      REQUIRE_THROWS_AS(data.write(buf, cluster->limits().max_value_size+1, 1), std::invalid_argument);
+      REQUIRE_THROWS_AS(data.write(buf, cluster->limits(KeyType::Data).max_value_size+1, 1), std::system_error);
     }
 
     THEN("The data is dirty."){
@@ -84,7 +89,6 @@ SCENARIO("Chunk integration test.", "[Chunk]"){
           char compare[10];
           memset(compare,0,10);
 
-          REQUIRE(cluster->limits().max_value_size > 0);
           REQUIRE_NOTHROW(data.read(out,0,10));
           REQUIRE(memcmp(compare,out,10) == 0);
         }

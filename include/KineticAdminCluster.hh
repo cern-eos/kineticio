@@ -103,7 +103,8 @@ private:
   void applyOperation(
     Operation o, 
     KeyCountsInternal& key_counts, 
-    std::vector<std::shared_ptr<const std::string>> keys
+    std::vector<std::shared_ptr<const std::string>> keys,
+    KeyType keyType
   );
 
   //--------------------------------------------------------------------------
@@ -117,7 +118,8 @@ private:
   //! either fine or nothing can be done due to unreachable drives.
   //--------------------------------------------------------------------------
   bool scanKey(
-    const std::shared_ptr<const std::string>& key, 
+    const std::shared_ptr<const std::string>& key,
+    KeyType keyType,
     KeyCountsInternal& key_counts
   );
   
@@ -128,7 +130,8 @@ private:
   //! @param key_counts  keep statistics current by increasing repaired / removed counts.
   //--------------------------------------------------------------------------
   void repairKey(
-    const std::shared_ptr<const std::string>& key, 
+    const std::shared_ptr<const std::string>& key,
+    KeyType keyType,
     KeyCountsInternal& key_counts
   );
 

@@ -251,10 +251,7 @@ private:
   /* protected instead of private to allow mocking in cache performance testing */
 protected:
   //! we don't want to have to look in the drive map for every access...
-  std::shared_ptr<ClusterInterface> dataCluster;
-
-  //! we don't want to have to look in the drive map for every access...
-  std::shared_ptr<ClusterInterface> mdCluster;
+  std::shared_ptr<ClusterInterface> cluster;
 
   //! readahead
   PrefetchOracle prefetchOracle;
@@ -264,7 +261,7 @@ protected:
 
   //! Exceptions occurring during background execution are stored and thrown at
   //! the next request.
-  std::queue<std::exception> exceptions;
+  std::queue<std::system_error> exceptions;
 
   //! Thread safety when accessing exceptions
   std::mutex exception_mutex;

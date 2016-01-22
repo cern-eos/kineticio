@@ -40,33 +40,36 @@ SCENARIO("Cluster integration test.", "[Cluster]")
     REQUIRE(c.reset(1));
     REQUIRE(c.reset(2));
 
-    std::vector<std::pair<ConnectionOptions, ConnectionOptions> > info;
-    info.push_back(std::pair<ConnectionOptions, ConnectionOptions>(c.get(0), c.get(0)));
-    info.push_back(std::pair<ConnectionOptions, ConnectionOptions>(c.get(1), c.get(1)));
-    info.push_back(std::pair<ConnectionOptions, ConnectionOptions>(c.get(2), c.get(2)));
-
     std::size_t nData = 2;
     std::size_t nParity = 1;
-    std::size_t blocksize = 1024*1024;
+    std::size_t blocksize = 1024 * 1024;
 
-    auto cluster = make_shared<KineticCluster>("testcluster", nData, nParity, blocksize, info,
-                                               std::chrono::seconds(20),
-                                               std::chrono::seconds(2),
-                                               std::make_shared<RedundancyProvider>(nData, nParity),
-                                               listener
+    std::vector<std::unique_ptr<KineticAutoConnection>> connections;
+    for(int i=0; i<3; i++) {
+      std::unique_ptr<KineticAutoConnection> autocon(
+          new KineticAutoConnection(listener, std::make_pair(c.get(i), c.get(i)), std::chrono::seconds(10))
+      );
+      connections.push_back(std::move(autocon));
+    }
+    auto cluster = std::make_shared<KineticCluster>("testcluster",  blocksize, std::chrono::seconds(10),
+                                                         std::move(connections),
+                                                         std::make_shared<RedundancyProvider>(nData,nParity),
+                                                         std::make_shared<RedundancyProvider>(1,nParity)
     );
 
     THEN("cluster limits reflect kinetic-drive limits") {
-      REQUIRE(cluster->limits().max_key_size == 4096);
-      REQUIRE(cluster->limits().max_value_size == nData * 1024 * 1024);
+      REQUIRE(cluster->limits(KeyType::Data).max_key_size == 4096);
+      REQUIRE(cluster->limits(KeyType::Metadata).max_key_size == 4096);
+      REQUIRE(cluster->limits(KeyType::Data).max_value_size == nData * 1024 * 1024);
+      REQUIRE(cluster->limits(KeyType::Metadata).max_value_size == 1024 * 1024);
     }
 
     THEN("Cluster size is reported as long as a single drive is alive.") {
       for (int i = 0; i < nData + nParity + 1; i++) {
-        cluster->size();
+        cluster->stats();
         // sleep so that previous cluster->size background thread may finish
         usleep(2500 * 1000);
-        ClusterSize s = cluster->size();
+        ClusterStats s = cluster->stats();
         if (i == nData + nParity) {
           REQUIRE(s.bytes_total == 0);
         }
@@ -78,16 +81,15 @@ SCENARIO("Cluster integration test.", "[Cluster]")
     }
 
     WHEN("Putting a key-value pair on a cluster with 1 drive failure") {
-      auto value = make_shared<string>(cluster->limits().max_value_size, 'v');
+      auto value = make_shared<string>(cluster->limits(KeyType::Data).max_value_size, 'v');
       c.stop(0);
 
       shared_ptr<const string> putversion;
       auto status = cluster->put(
           make_shared<string>("key"),
-          make_shared<string>("version"),
           value,
-          true,
-          putversion);
+          putversion,
+          KeyType::Data);
       REQUIRE(status.ok());
       REQUIRE(putversion);
 
@@ -96,13 +98,12 @@ SCENARIO("Cluster integration test.", "[Cluster]")
         auto status = cluster->range(
             utility::makeIndicatorKey(""),
             utility::makeIndicatorKey("~"),
-            100,
-            keys
-        );
+            keys,
+            KeyType::Data);
         REQUIRE(status.ok());
         REQUIRE(keys->size() == 1);
       }
-     }
+    }
 
     WHEN("Putting a key-value pair on a healthy cluster") {
       auto value = make_shared<string>(666, 'v');
@@ -110,75 +111,76 @@ SCENARIO("Cluster integration test.", "[Cluster]")
       shared_ptr<const string> putversion;
       auto status = cluster->put(
           make_shared<string>("key"),
-          make_shared<string>("version"),
           value,
-          true,
-          putversion);
+          putversion,
+          KeyType::Data);
       REQUIRE(status.ok());
       REQUIRE(putversion);
 
       THEN("After nParity drive failures.") {
-        for (int i = 0; i < nParity; i++)
+        for (int i = 0; i < nParity; i++) {
           c.stop(i);
-        
-        AND_WHEN("The key is read in again"){
-            std::shared_ptr<const string> getvalue;
-            std::shared_ptr<const string> version;
-            
-            auto status = cluster->get(make_shared<string>("key"), false, version, getvalue);
+        }
+
+        AND_WHEN("The key is read in again") {
+          std::shared_ptr<const string> getvalue;
+          std::shared_ptr<const string> version;
+
+          auto status = cluster->get(make_shared<string>("key"), version, getvalue, KeyType::Data);
+          REQUIRE(status.ok());
+          REQUIRE(status.ok());
+          REQUIRE(version);
+          REQUIRE(*version == *putversion);
+          REQUIRE(getvalue);
+          REQUIRE(*getvalue == *value);
+
+          THEN("An indicator key will _not_ have been generated") {
+            std::unique_ptr<std::vector<string>> keys;
+            auto status = cluster->range(
+                utility::makeIndicatorKey(""),
+                utility::makeIndicatorKey("~"),
+                keys,
+                KeyType::Data
+            );
             REQUIRE(status.ok());
-            REQUIRE(status.ok());
-            REQUIRE(version);
-            REQUIRE(*version == *putversion);
-            REQUIRE(getvalue);
-            REQUIRE(*getvalue == *value);
-            
-            THEN("An indicator key will _not_ have been generated"){
-                std::unique_ptr<std::vector<string>> keys; 
-                auto status = cluster->range(
-                  utility::makeIndicatorKey(""),
-                  utility::makeIndicatorKey("~"),
-                  100,
-                  keys
-                );
-                REQUIRE(status.ok());
-                REQUIRE(keys->size() == 0);
-            }
+            REQUIRE(keys->size() == 0);
+          }
         }
 
         THEN("Removing it with the correct version succeeds") {
           auto status = cluster->remove(
               make_shared<string>("key"),
               putversion,
-              false);
+              KeyType::Data);
           REQUIRE(status.ok());
 
           AND_WHEN("The missing drives are available again.") {
-            for (int i = 0; i < nParity; i++)
+            for (int i = 0; i < nParity; i++) {
               c.start(i);
+            }
 
             THEN("The key is still considered not available.") {
               shared_ptr<const string> version;
               shared_ptr<const string> readvalue;
               auto status = cluster->get(
                   make_shared<string>("key"),
-                  false,
                   version,
-                  readvalue);
+                  readvalue,
+                  KeyType::Data);
               REQUIRE(status.statusCode() == StatusCode::REMOTE_NOT_FOUND);
             }
           }
         }
 
         THEN("It can be overwritten.") {
-          auto newval = make_shared<string>(cluster->limits().max_value_size, 'x');
+          auto newval = make_shared<string>(cluster->limits(KeyType::Data).max_value_size, 'x');
           shared_ptr<const string> newver;
           auto status = cluster->put(
               make_shared<string>("key"),
               putversion,
               newval,
-              false,
-              newver);
+              newver,
+          KeyType::Data);
           REQUIRE(status.ok());
           REQUIRE(newver);
         }
@@ -189,9 +191,9 @@ SCENARIO("Cluster integration test.", "[Cluster]")
           shared_ptr<const string> readvalue;
           auto status = cluster->get(
               make_shared<string>("key"),
-              false,
               version,
-              readvalue);
+              readvalue,
+          KeyType::Data);
           REQUIRE(status.ok());
           REQUIRE(version);
           REQUIRE(*version == *putversion);
@@ -203,7 +205,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
           auto status = cluster->remove(
               make_shared<string>("key"),
               make_shared<string>("incorrect"),
-              false);
+              KeyType::Data);
           REQUIRE(status.statusCode() == kinetic::StatusCode::REMOTE_VERSION_MISMATCH);
         }
 
@@ -214,9 +216,9 @@ SCENARIO("Cluster integration test.", "[Cluster]")
             shared_ptr<const string> readvalue;
             auto status = cluster->get(
                 make_shared<string>("key"),
-                false,
                 version,
-                readvalue);
+                readvalue,
+                KeyType::Data);
             REQUIRE(status.statusCode() == StatusCode::CLIENT_IO_ERROR);
           }
         }

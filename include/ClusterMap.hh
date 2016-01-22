@@ -71,7 +71,7 @@ public:
   //! @param id the unique identifier for the cluster
   //! @return a valid cluster object
   //--------------------------------------------------------------------------
-  std::shared_ptr<ClusterInterface> getCluster(const std::string& id, RedundancyType redundancy);
+  std::shared_ptr<ClusterInterface> getCluster(const std::string& id);
 
   //--------------------------------------------------------------------------
   //! Obtain an admin cluster instance for the supplied identifier.
@@ -81,7 +81,7 @@ public:
   //! @param numthreads number of background io threads during scan operations
   //! @return a valid admin cluster object
   //--------------------------------------------------------------------------
-  std::unique_ptr<KineticAdminCluster> getAdminCluster(const std::string& id, RedundancyType redundancy);
+  std::shared_ptr<AdminClusterInterface> getAdminCluster(const std::string& id);
 
   //--------------------------------------------------------------------------
   //! Reset the object with supplied configuration
@@ -106,11 +106,8 @@ private:
   //! the drive map id <-> connection info
   std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>> driveInfoMap;
   
-  //! the cluster cache for erasure coding clusters
-  std::unordered_map<std::string,  std::shared_ptr<ClusterInterface> > ecClusterCache;
-  
-  //! the cluster cache for replication clusters
-  std::unordered_map<std::string,  std::shared_ptr<ClusterInterface> > replClusterCache;
+  //! the cluster cache
+  std::unordered_map<std::string, std::shared_ptr<KineticAdminCluster>> clusterCache;
 
   //! RedundancyProvider instances of the same type (nData,nParity) can be shared
   //! among multiple cluster instances
@@ -121,19 +118,6 @@ private:
   
   //! concurrency control
   std::mutex mutex;
-
-private:
-  //--------------------------------------------------------------------------
-  //! Set redundancy provider and connection options based on the
-  //! information available in the supplied ClusterInfo structure.
-  //!
-  //! @param cinfo Cluster Information
-  //! @param rp redundancy provider instance to set
-  //! @param cops Connection Options to fill
-  //--------------------------------------------------------------------------
-  void fillArgs(const ClusterInformation& cinfo, const RedundancyType& rType,
-                std::shared_ptr<RedundancyProvider>& rp,
-                std::vector<std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions>>& cops);
 };
 
 }

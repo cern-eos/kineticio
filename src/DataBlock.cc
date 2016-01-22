@@ -33,7 +33,10 @@ DataBlock::DataBlock(std::shared_ptr<ClusterInterface> c, const std::shared_ptr<
     mode(m), cluster(c), key(k), version(), remote_value(), local_value(), value_size(0), updates(),
     timestamp(), mutex()
 {
-  if (!cluster) throw std::invalid_argument("no cluster supplied");
+  if (!cluster){
+    kio_error("no cluster supplied");
+    throw std::system_error(std::make_error_code(std::errc::io_error));
+  }
 }
 
 DataBlock::~DataBlock()
@@ -45,7 +48,10 @@ DataBlock::~DataBlock()
 
 void DataBlock::reassign(std::shared_ptr<ClusterInterface> c, std::shared_ptr<const std::string> k, Mode m)
 {
-  if (!cluster) throw std::invalid_argument("no cluster supplied");
+  if (!cluster){
+    kio_error("no cluster supplied");
+    throw std::system_error(std::make_error_code(std::errc::io_error));
+  }
 
   key = k;
   mode = m;
@@ -81,8 +87,7 @@ bool DataBlock::validateVersion()
 
   /* Check remote version & compare it to in-memory version. */
   shared_ptr<const string> remote_version;
-  shared_ptr<const string> empty;
-  KineticStatus status = cluster->get(key, true, remote_version, empty);
+  KineticStatus status = cluster->get(key, remote_version, KeyType::Data);
 
   /*If no version is set, the entry has never been flushed. In this case,
     not finding an entry with that key in the cluster is expected. */
@@ -99,7 +104,7 @@ bool DataBlock::validateVersion()
  * to avoid / minimize memory allocations and copies as much as possible */
 void DataBlock::getRemoteValue()
 {
-  auto status = cluster->get(key, false, version, remote_value);
+  auto status = cluster->get(key, version, remote_value, KeyType::Data);
 
   if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND) {
     kio_error("Attempting to read key '", *key, "' from cluster returned error ", status);
@@ -156,11 +161,9 @@ void DataBlock::getRemoteValue()
 void DataBlock::read(char* const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
-
-  if (buffer == NULL) throw std::invalid_argument("null buffer supplied");
-  if (offset < 0) throw std::invalid_argument("negative offset");
-  if (offset + length > cluster->limits().max_value_size) {
-    throw std::invalid_argument("attempting to read past cluster limits");
+  if (buffer == NULL || offset < 0 || offset + length > cluster->limits(KeyType::Data).max_value_size){
+    kio_warning("Invalid argument. buffer=",buffer, " offset=", offset, " length=", length);
+    throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
 
   /*Ensure data is not too stale to read.*/
@@ -186,11 +189,9 @@ void DataBlock::read(char* const buffer, off_t offset, size_t length)
 void DataBlock::write(const char* const buffer, off_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
-
-  if (buffer == NULL) throw std::invalid_argument("null buffer supplied");
-  if (offset < 0) throw std::invalid_argument("negative offset");
-  if (offset + length > cluster->limits().max_value_size) {
-    throw std::invalid_argument("attempting to write past cluster limits");
+  if (buffer == NULL || offset < 0 || offset + length > cluster->limits(KeyType::Data).max_value_size){
+    kio_warning("Invalid argument. buffer=",buffer, " offset=", offset, " length=", length);
+    throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
 
   /* Set new entry size. */
@@ -219,10 +220,9 @@ void DataBlock::write(const char* const buffer, off_t offset, size_t length)
 void DataBlock::truncate(off_t offset)
 {
   std::lock_guard<std::mutex> lock(mutex);
-
-  if (offset < 0) throw std::invalid_argument("negative offset");
-  if (offset > cluster->limits().max_value_size) {
-    throw std::invalid_argument("attempting to truncate past cluster limits");
+  if (offset < 0 || offset > cluster->limits(KeyType::Data).max_value_size){
+    kio_warning("Invalid argument offset=", offset);
+    throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
 
   value_size = (size_t) offset;
@@ -243,13 +243,13 @@ void DataBlock::flush()
       if (value_size != local_value->size()) {
         local_value->resize(value_size);
       }
-      status = cluster->put(key, version, local_value, false, version);
+      status = cluster->put(key, version, local_value, version, KeyType::Data);
     }
     else {
       if (!remote_value) {
         remote_value = std::make_shared<const string>();
       }
-      status = cluster->put(key, version, remote_value, false, version);
+      status = cluster->put(key, version, remote_value, version, KeyType::Data);
     }
   } while (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH);
 
@@ -282,7 +282,7 @@ bool DataBlock::dirty() const
 
 size_t DataBlock::capacity() const
 {
-  return cluster->limits().max_value_size;
+  return cluster->limits(KeyType::Data).max_value_size;
 }
 
 size_t DataBlock::size()

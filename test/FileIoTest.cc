@@ -298,11 +298,7 @@ SCENARIO("FileIo Attribute Integration Test", "[Attr]")
     }
 
     AND_THEN("We can use the attr interface to request io stats") {
-      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats.read-ops"));
-      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats.read-bw"));
-      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats.write-ops"));
-      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats.write-bw"));
-      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats.max-bw"));
+      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats"));
     }
   }
 }

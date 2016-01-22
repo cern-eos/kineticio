@@ -32,9 +32,9 @@ void KineticIoFactory::registerLogFunction(logfunc_t log, shouldlogfunc_t should
   Logger::get().registerLogFunction(std::move(log), std::move(shouldLog));
 }
 
-std::unique_ptr<AdminClusterInterface> KineticIoFactory::makeAdminCluster(const std::string& cluster_id, RedundancyType redundancy)
+std::shared_ptr<AdminClusterInterface> KineticIoFactory::makeAdminCluster(const std::string& cluster_id)
 {
-  return kio().cmap().getAdminCluster(cluster_id, redundancy);
+  return kio().cmap().getAdminCluster(cluster_id);
 }
 
 void KineticIoFactory::reloadConfiguration()

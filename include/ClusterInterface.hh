@@ -20,7 +20,7 @@
  ************************************************************************/
 
 #ifndef KINETICIO_CLUSTERINTERFACE_HH
-#define	KINETICIO_CLUSTERINTERFACE_HH
+#define  KINETICIO_CLUSTERINTERFACE_HH
 
 #include <vector>
 #include <string>
@@ -32,91 +32,192 @@
  * represent cluster error states. Would also allow to decouple ClusterInterface
  * from kinetic/kinetic.h
  *
-enum class KineticClusterStatus{
-  OK,
-  VERSION_MISSMATCH,
-  NOT_FOUND,
-  NOT_AUTHORIZED,
-  NO_SPACE,
-  SERVICE_BUSY,
-  CLUSTER_OFFLINE
-};
  */
 
-namespace kio{
+namespace kio {
 
-struct ClusterSize{
-  uint64_t bytes_total;
-  uint64_t bytes_free;
+struct ClusterLimits {
+    uint32_t max_key_size;
+    uint32_t max_version_size;
+    uint32_t max_value_size;
+    uint32_t max_range_elements;
 };
 
-struct ClusterLimits{
-  uint32_t max_key_size;
-  uint32_t max_version_size;
-  uint32_t max_value_size;
+struct ClusterStats {
+    /* Current size values */
+    uint64_t bytes_total;
+    uint64_t bytes_free;
+
+    /* IO stats total */
+    uint64_t read_ops_total;
+    uint64_t read_bytes_total;
+    uint64_t write_ops_total;
+    uint64_t write_bytes_total;
+
+    /* IO stats between io_start and io_end */
+    std::chrono::system_clock::time_point io_start;
+    std::chrono::system_clock::time_point io_end;
+    uint64_t read_ops_period;
+    uint64_t read_bytes_period;
+    uint64_t write_ops_period;
+    uint64_t write_bytes_period;
 };
 
-/* All values per second */
-struct ClusterIo{
-  uint64_t read_ops; 
-  uint64_t read_bytes; 
-  uint64_t write_ops;
-  uint64_t write_bytes; 
-  uint32_t number_drives;
+struct ClusterHealth {
+    uint32_t redundancy_factor;
+    uint32_t drives_total;
+    uint32_t drives_failed;
+    bool data_degraded;
+};
+
+enum class KeyType {
+  Data, Metadata
+};
+
+class CompareEnum {
+public:
+  bool operator()(const KeyType& lhs, const KeyType& rhs) const
+  {
+    return static_cast<int>(lhs) < static_cast<int>(rhs);
+  }
 };
 
 //------------------------------------------------------------------------------
 //! Interface to a cluster, primarily intended to interface with Kinetic
 //! drives.
 //------------------------------------------------------------------------------
-class ClusterInterface{
+class ClusterInterface {
 public:
+  //----------------------------------------------------------------------------
+  //! Obtain identifier of the cluster.
+  //!
+  //! @return the cluster id
+  //----------------------------------------------------------------------------
+  virtual const std::string& id() const = 0;
+
+  //----------------------------------------------------------------------------
+  //! Obtain unique id for cluster instance (changes for different instances of
+  //! the same cluster).
+  //!
+  //! @return the cluster instance-id
+  //----------------------------------------------------------------------------
+  virtual const std::string& instanceId() const = 0;
+
+  //----------------------------------------------------------------------------
+  //! Obtain maximum key / version / value sizes and maximum number of
+  //! elements that can be requested using range().
+  //!
+  //! These limits may drastically differ from standard Kinetic drive limits.
+  //! For example, a value might be split and written to multiple drives. Or
+  //! some of the key-space might be reserved for cluster internal metadata.
+  //! Limits remain constant during the cluster lifetime.
+  //!
+  //! @param type limits may differ for data / metadata keys
+  //! @return cluster limits
+  //----------------------------------------------------------------------------
+  virtual const ClusterLimits& limits(KeyType type) const = 0;
+
+  //----------------------------------------------------------------------------
+  //! Obtain maximum key / version / value sizes and maximum number of
+  //! elements that can be requested using range().
+  //!
+  //! These limits may drastically differ from standard Kinetic drive limits.
+  //! For example, a value might be split and written to multiple drives. Or
+  //! some of the key-space might be reserved for cluster internal metadata.
+  //! Limits remain constant during the cluster lifetime.
+  //!
+  //! @return cluster limits
+  //----------------------------------------------------------------------------
+  virtual ClusterStats stats() = 0;
+
   //----------------------------------------------------------------------------
   //! Get the value and version associated with the supplied key.
   //
   //! @param key the key
-  //! @param skip_value doesn't request the value from the backend if set.
   //! @param version stores the version upon success, not modified on error
   //! @param value stores the value upon success, not modified on error
+  //! @param type cluster may handle key types differently (e.g. redundancy)
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus get(
-    const std::shared_ptr<const std::string>& key,
-    bool skip_value,
-    std::shared_ptr<const std::string>& version,
-    std::shared_ptr<const std::string>& value) = 0;
+      const std::shared_ptr<const std::string>& key,
+      std::shared_ptr<const std::string>& version,
+      std::shared_ptr<const std::string>& value,
+      KeyType type) = 0;
 
   //----------------------------------------------------------------------------
-  //! Write the supplied key-value pair to the Kinetic cluster.
+  //! Get the version associated with the supplied key. Value will not be
+  //! read in from the backend.
+  //
+  //! @param key the key
+  //! @param version stores the version upon success, not modified on error
+  //! @param type cluster may handle key types differently (e.g. redundancy)
+  //! @return status of operation
+  //----------------------------------------------------------------------------
+  virtual kinetic::KineticStatus get(
+      const std::shared_ptr<const std::string>& key,
+      std::shared_ptr<const std::string>& version,
+      KeyType type) = 0;
+
+  //----------------------------------------------------------------------------
+  //! Write the supplied key-value pair to the cluster. Put is conditional on
+  //! the supplied version existing on the cluster.
   //!
   //! @param key the key
-  //! @param version existing version expected in the cluster, empty for none
+  //! @param version existing version expected in the cluster, empty for none.
   //! @param value value to store
-  //! @param force if set, possibly existing version in the cluster will be
-  //!   overwritten without checking if supplied version is correct
-  //! @param version_out stores cluster generated new version upon success
+  //! @param version_out contains new key version on success
+  //! @param type cluster may handle key types differently (e.g. redundancy)
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus put(
-    const std::shared_ptr<const std::string>& key,
-    const std::shared_ptr<const std::string>& version,
-    const std::shared_ptr<const std::string>& value,
-    bool force,
-    std::shared_ptr<const std::string>& version_out) = 0;
+      const std::shared_ptr<const std::string>& key,
+      const std::shared_ptr<const std::string>& version,
+      const std::shared_ptr<const std::string>& value,
+      std::shared_ptr<const std::string>& version_out,
+      KeyType type) = 0;
+
 
   //----------------------------------------------------------------------------
-  //! Delete the key on the cluster.
+  //! Write the supplied key-value pair to the cluster. Put is not conditional,
+  //! will always overwrite potentially existing data.
+  //!
+  //! @param key the key
+  //! @param value value to store
+  //! @param version_out contains new key version on success
+  //! @param type cluster may handle key types differently (e.g. redundancy)
+  //! @return status of operation
+  //----------------------------------------------------------------------------
+  virtual kinetic::KineticStatus put(
+      const std::shared_ptr<const std::string>& key,
+      const std::shared_ptr<const std::string>& value,
+      std::shared_ptr<const std::string>& version_out,
+      KeyType type) = 0;
+
+  //----------------------------------------------------------------------------
+  //! Delete the key on the cluster, conditional on supplied version matching
+  //! the key version existing on the cluster.
   //!
   //! @param key     the key
   //! @param version existing version expected in the cluster
-  //! @param force   if set to true, possibly existing version in the cluster
-  //!   will not be verified against supplied version.
+  //! @param type cluster may handle key types differently (e.g. redundancy)
   //! @return status of operation
-   //---------------------------------------------------------------------------
+  //---------------------------------------------------------------------------
   virtual kinetic::KineticStatus remove(
-    const std::shared_ptr<const std::string>& key,
-    const std::shared_ptr<const std::string>& version,
-    bool force) = 0;
+      const std::shared_ptr<const std::string>& key,
+      const std::shared_ptr<const std::string>& version,
+      KeyType type) = 0;
+
+  //----------------------------------------------------------------------------
+  //! Force delete the key on the cluster.
+  //!
+  //! @param key     the key
+  //! @param type cluster may handle key types differently (e.g. redundancy)
+  //! @return status of operation
+  //---------------------------------------------------------------------------
+  virtual kinetic::KineticStatus remove(
+      const std::shared_ptr<const std::string>& key,
+      KeyType type) = 0;
 
   //----------------------------------------------------------------------------
   //! Obtain keys in the supplied range [start,...,end]
@@ -125,68 +226,28 @@ public:
   //!   is included in the range
   //! @param end    the end point of the requested key range, supplied key is
   //!   included in the range
-  //! @param maxRequested the maximum number of keys requested (cannot be higher
-  //!   than limits allow)
-  //! @param keys   on success, contains existing key names in supplied range
+  //! @param keys   on success, contains existing key names in supplied range.
+  //!   if a vector is supplied, the vector capacity will be respected. Otherwise
+  //!   a new vector with a capacity of max_range_elements will be returned. If
+  //!   returned vector size is below capacity, no more elements exist in the
+  //!   cluster.
+  //! @param type cluster may handle key types differently (e.g. redundancy)
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus range(
-    const std::shared_ptr<const std::string>& start_key,
-    const std::shared_ptr<const std::string>& end_key,
-    size_t maxRequested,
-    std::unique_ptr< std::vector<std::string> >& keys) = 0;
-  
-  //----------------------------------------------------------------------------
-  //! Obtain maximum key / version / value sizes.
-  //! These limits may drastically differ from standard Kinetic drive limits.
-  //! For example, a value might be split and written to multiple drives. Or
-  //! some of the key-space might be reserved for cluster internal metadata.
-  //! Limits remain constant during the cluster lifetime.
-  //!
-  //! @return cluster limits
-  //----------------------------------------------------------------------------
-  virtual const ClusterLimits& limits() const = 0;
+      const std::shared_ptr<const std::string>& start_key,
+      const std::shared_ptr<const std::string>& end_key,
+      std::unique_ptr<std::vector<std::string>>& keys,
+      KeyType type) = 0;
 
-  //----------------------------------------------------------------------------
-  //! Check the maximum size of the Cluster. Function will not block but
-  //! might return outdated values.
-  //!
-  //! @return cluster size
-  //----------------------------------------------------------------------------
-  virtual ClusterSize size() = 0;
-  
-  //----------------------------------------------------------------------------
-  //! Report usage as ops / bandwidth per second. Equivalent to size(), the 
-  //! function will update values asynchronously and might return outdated 
-  //! values. 
-  //!
-  //! @return cluster io statistics
-  //----------------------------------------------------------------------------
-  virtual ClusterIo iostats() = 0;
-  
-  //----------------------------------------------------------------------------
-  //! Obtain unique id for cluster instance (changes for different instances of
-  //! the same cluster).
-  //! 
-  //! @return the cluster instance-id 
-  //----------------------------------------------------------------------------
-  virtual const std::string& instanceId() const = 0;
-  
-  //----------------------------------------------------------------------------
-  //! Obtain identifier of the cluster.
-  //! 
-  //! @return the cluster id 
-  //----------------------------------------------------------------------------
-  virtual const std::string& id() const = 0;
-  
   //----------------------------------------------------------------------------
   //! Destructor.
   //----------------------------------------------------------------------------
-  virtual ~ClusterInterface(){};
+  virtual ~ClusterInterface()
+  { };
 };
 
 }
-
 
 
 #endif

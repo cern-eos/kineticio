@@ -26,11 +26,11 @@ using namespace kio;
 /* This function is (almost) completely ripped from the erasure_code_test.cc file
    distributed with the isa-l library. */
 static int gf_gen_decode_matrix(
-    unsigned char *encode_matrix, // in: encode matrix
-    unsigned char *decode_matrix, // in: buffer, out: generated decode matrix
-    unsigned int *decode_index,  // out: order of healthy blocks used for decoding [data#1, data#3, ..., parity#1... ]
-    unsigned char *src_err_list,  // in: array of #nerrs size [index error #1, index error #2, ... ]
-    unsigned char *src_in_err,    // in: array of #data size > [1,0,0,0,1,0...] -> 0 == no error, 1 == error
+    unsigned char* encode_matrix, // in: encode matrix
+    unsigned char* decode_matrix, // in: buffer, out: generated decode matrix
+    unsigned int* decode_index,  // out: order of healthy blocks used for decoding [data#1, data#3, ..., parity#1... ]
+    unsigned char* src_err_list,  // in: array of #nerrs size [index error #1, index error #2, ... ]
+    unsigned char* src_in_err,    // in: array of #data size > [1,0,0,0,1,0...] -> 0 == no error, 1 == error
     int nerrs,                    // #total errors
     int nsrcerrs,                 // #data errors
     int k,                        // #data
@@ -39,18 +39,19 @@ static int gf_gen_decode_matrix(
 {
   int i, j, p;
   int r;
-  unsigned char *invert_matrix, *backup, *b, s;
+  unsigned char* invert_matrix, * backup, * b, s;
   int incr = 0;
-  
+
   std::vector<unsigned char> memory((size_t) (m * k * 3));
-  b = &memory[0]; 
-  backup = &memory[m*k];
-  invert_matrix = &memory[2*m*k];
-  
+  b = &memory[0];
+  backup = &memory[m * k];
+  invert_matrix = &memory[2 * m * k];
+
   // Construct matrix b by removing error rows
   for (i = 0, r = 0; i < k; i++, r++) {
-    while (src_in_err[r])
+    while (src_in_err[r]) {
       r++;
+    }
     for (j = 0; j < k; j++) {
       b[k * i + j] = encode_matrix[k * r + j];
       backup[k * i + j] = encode_matrix[k * r + j];
@@ -75,8 +76,9 @@ static int gf_gen_decode_matrix(
       return -1;
     }
     decode_index[k - 1] += incr;
-    for (j = 0; j < k; j++)
+    for (j = 0; j < k; j++) {
       b[k * (k - 1) + j] = encode_matrix[k * decode_index[k - 1] + j];
+    }
 
   };
 
@@ -89,9 +91,10 @@ static int gf_gen_decode_matrix(
   for (p = nsrcerrs; p < nerrs; p++) {
     for (i = 0; i < k; i++) {
       s = 0;
-      for (j = 0; j < k; j++)
+      for (j = 0; j < k; j++) {
         s ^= gf_mul(invert_matrix[j * k + i],
                     encode_matrix[k * src_err_list[p] + j]);
+      }
 
       decode_matrix[k * p + i] = s;
     }
@@ -108,15 +111,16 @@ RedundancyProvider::RedundancyProvider(std::size_t data, std::size_t parity) :
 }
 
 std::string RedundancyProvider::getErrorPattern(
-    const std::vector<std::shared_ptr<const std::string> > &stripe
+    const std::vector<std::shared_ptr<const std::string> >& stripe
 ) const
 {
   using utility::Convert;
 
-  if (stripe.size() != nData + nParity)
-    throw std::invalid_argument( Convert::toString(
+  if (stripe.size() != nData + nParity) {
+    throw std::invalid_argument(Convert::toString(
         "ErasureCoding: Illegal stripe size. Expected ", nData + nParity, ", observed ", stripe.size()
     ));
+  }
 
   std::string pattern(nData + nParity, '0');
   int blockSize = 0;
@@ -129,39 +133,42 @@ std::string RedundancyProvider::getErrorPattern(
     }
     else {
       pattern[i] = 0;
-      if (!blockSize)
+      if (!blockSize) {
         blockSize = stripe[i]->size();
-      if (blockSize != stripe[i]->size())
-        throw std::invalid_argument( Convert::toString(
+      }
+      if (blockSize != stripe[i]->size()) {
+        throw std::invalid_argument(Convert::toString(
             "ErasureCoding: Non-static block sizes, observed one block with a size of ", blockSize, " bytes "
             "and another with a size of ", stripe[i]->size(), " bytes."
         ));
+      }
     }
   }
-  if (nErrs > nParity)
-    throw std::invalid_argument( Convert::toString(
+  if (nErrs > nParity) {
+    throw std::invalid_argument(Convert::toString(
         "ErasureCoding: More errors than parity blocks. ", nErrs, " errors, ", nParity, " parities."
     ));
+  }
 
   return pattern;
 }
 
 RedundancyProvider::CodingTable& RedundancyProvider::getCodingTable(
-    const std::string &pattern
+    const std::string& pattern
 )
 {
   std::lock_guard<std::mutex> lock(mutex);
-  
+
   /* If decode matrix is not already cached we have to construct it. */
-  if(!cache.count(pattern)){
-    
+  if (!cache.count(pattern)) {
+
     /* Expand pattern */
     int nerrs = 0, nsrcerrs = 0;
     unsigned char err_indx_list[nParity];
     for (int i = 0; i < pattern.size(); i++) {
       if (pattern[i]) {
         err_indx_list[nerrs++] = i;
-        if (i < nData) nsrcerrs++;
+        if (i < nData) { nsrcerrs++; }
       }
     }
 
@@ -179,60 +186,66 @@ RedundancyProvider::CodingTable& RedundancyProvider::getCodingTable(
         decode_matrix.data(),
         dd.blockIndices.data(),
         err_indx_list,
-        (unsigned char *) pattern.c_str(),
+        (unsigned char*) pattern.c_str(),
         nerrs,
         nsrcerrs,
         static_cast<int>(nData),
         static_cast<int>(nParity + nData))
-        )
+        ) {
       throw std::runtime_error("ErasureCoding: Failed computing decode matrix");
+    }
 
     /* Compute Tables. */
     ec_init_tables(nData, nerrs, decode_matrix.data(), dd.table.data());
-    cache.insert(std::make_pair(pattern,dd));
+    cache.insert(std::make_pair(pattern, dd));
   }
   return cache.at(pattern);
 }
 
-void replication(std::vector<std::shared_ptr<const std::string> > &stripe, std::string& pattern)
+void replication(std::vector<std::shared_ptr<const std::string> >& stripe, std::string& pattern)
 {
-  int valid; 
+  int valid;
   /* get valid index */
-  for (valid = 0; valid < pattern.size(); valid++)
-    if (!pattern[valid]) 
+  for (valid = 0; valid < pattern.size(); valid++) {
+    if (!pattern[valid]) {
       break;
-  
-  for(int i=0; i<pattern.size(); i++){
-    if(pattern[i])
+    }
+  }
+
+  for (int i = 0; i < pattern.size(); i++) {
+    if (pattern[i]) {
       stripe[i] = stripe[valid];
-  }  
+    }
+  }
 }
 
-void RedundancyProvider::compute(std::vector<std::shared_ptr<const std::string> > &stripe)
+void RedundancyProvider::compute(std::vector<std::shared_ptr<const std::string> >& stripe)
 {
   /* throws if stripe is not recoverable */
   std::string pattern = getErrorPattern(stripe);
-  
-  /* nothing to do if there are no parity blocks. */
-  if (!nParity)
-    return;
-  
-  /* in case of a single data block use replication */
-  if (nData == 1)
-    return replication(stripe, pattern);
-  
-  /* normal operation: erasure coding */
-  auto &dd = getCodingTable(pattern);
 
-  unsigned char *inbuf[nData];
+  /* nothing to do if there are no parity blocks. */
+  if (!nParity) {
+    return;
+  }
+
+  /* in case of a single data block use replication */
+  if (nData == 1) {
+    return replication(stripe, pattern);
+  }
+
+  /* normal operation: erasure coding */
+  auto& dd = getCodingTable(pattern);
+
+  unsigned char* inbuf[nData];
   for (int i = 0; i < nData; i++) {
-    inbuf[i] = (unsigned char *) stripe[dd.blockIndices[i]]->c_str();
+    inbuf[i] = (unsigned char*) stripe[dd.blockIndices[i]]->c_str();
   }
 
   auto blockSize = stripe[dd.blockIndices[0]]->size();
   std::vector<unsigned char> memory(dd.nErrors * blockSize);
 
-  unsigned char *outbuf[dd.nErrors];
+  unsigned char* outbuf[dd.nErrors];
   for (int i = 0; i < dd.nErrors; i++) {
     outbuf[i] = &memory[i * blockSize];
   }
@@ -250,9 +263,24 @@ void RedundancyProvider::compute(std::vector<std::shared_ptr<const std::string> 
   for (int i = 0; i < nData + nParity; i++) {
     if (pattern[i]) {
       stripe[i] = make_shared<const string>(
-          (const char *) outbuf[e], blockSize
+          (const char*) outbuf[e], blockSize
       );
       e++;
     }
   }
+}
+
+const std::size_t& RedundancyProvider::numData() const
+{
+  return nData;
+}
+
+const std::size_t& RedundancyProvider::numParity() const
+{
+  return nParity;
+}
+
+std::size_t RedundancyProvider::size() const
+{
+  return nData + nParity;
 }

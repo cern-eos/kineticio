@@ -136,8 +136,8 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
 {
   /* We cannot use the block key directly for cache lookups, as reloading the configuration will create
      different cluster objects and we have to avoid FileIo objects being associated with multiple clusters */
-  auto data_key = utility::makeDataKey(owner->dataCluster->id(), owner->path, blocknumber);
-  std::string cache_key = *data_key + owner->dataCluster->instanceId();
+  auto data_key = utility::makeDataKey(owner->cluster->id(), owner->path, blocknumber);
+  std::string cache_key = *data_key + owner->cluster->instanceId();
 
   std::lock_guard<std::mutex> cachelock(cache_mutex);
   /* If the requested block is already cached, we can return it without IO. */
@@ -166,14 +166,14 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
     unused_size -= it->data->capacity();
     it->owners.clear();
     it->owners.insert(owner);
-    it->data->reassign(owner->dataCluster, data_key, mode);
+    it->data->reassign(owner->cluster, data_key, mode);
     it->last_access = std::chrono::system_clock::now();
     cache.splice(cache.begin(), unused_items, it);
   }
   else{
     cache.push_front(
       CacheItem{ std::set<kio:: FileIo*>{owner}, 
-                 std::make_shared<DataBlock>(owner->dataCluster, data_key, mode),
+                 std::make_shared<DataBlock>(owner->cluster, data_key, mode),
                  std::chrono::system_clock::now()
       }
     );

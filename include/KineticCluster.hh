@@ -20,7 +20,7 @@
  ************************************************************************/
 
 #ifndef KINETICIO_KINETICCLUSTER_HH
-#define	KINETICIO_KINETICCLUSTER_HH
+#define  KINETICIO_KINETICCLUSTER_HH
 
 #include "ClusterInterface.hh"
 #include "KineticAutoConnection.hh"
@@ -32,7 +32,7 @@
 #include <chrono>
 #include <mutex>
 
-namespace kio{
+namespace kio {
 
 //------------------------------------------------------------------------------
 //! Implementation of cluster interface for arbitrarily sized cluster & stripe
@@ -41,62 +41,77 @@ namespace kio{
 class KineticCluster : public ClusterInterface {
 public:
   //! See documentation in superclass.
-  const std::string& id() const; 
+  const std::string& id() const;
+
   //! See documentation in superclass.
-  const std::string& instanceId() const; 
+  const std::string& instanceId() const;
+
   //! See documentation in superclass.
-  const ClusterLimits& limits() const;
+  const ClusterLimits& limits(KeyType type) const;
+
   //! See documentation in superclass.
-  ClusterSize size();
-  //! See documentation in superclass.
-  ClusterIo iostats(); 
+  ClusterStats stats();
+
   //! See documentation in superclass.
   kinetic::KineticStatus get(
       const std::shared_ptr<const std::string>& key,
-      bool skip_value,
       std::shared_ptr<const std::string>& version,
-      std::shared_ptr<const std::string>& value
-  );
+      std::shared_ptr<const std::string>& value,
+      KeyType type);
+
   //! See documentation in superclass.
-  kinetic::KineticStatus  put(
+  kinetic::KineticStatus get(
+      const std::shared_ptr<const std::string>& key,
+      std::shared_ptr<const std::string>& version,
+      KeyType type);
+
+  //! See documentation in superclass.
+  kinetic::KineticStatus put(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
       const std::shared_ptr<const std::string>& value,
-      bool force,
-      std::shared_ptr<const std::string>& version_out
-  );
+      std::shared_ptr<const std::string>& version_out,
+      KeyType type);
+
+  //! See documentation in superclass.
+  kinetic::KineticStatus put(
+      const std::shared_ptr<const std::string>& key,
+      const std::shared_ptr<const std::string>& value,
+      std::shared_ptr<const std::string>& version_out,
+      KeyType type);
+
   //! See documentation in superclass.
   kinetic::KineticStatus remove(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
-      bool force
-  );
+      KeyType type);
+
+  //! See documentation in superclass.
+  kinetic::KineticStatus remove(
+      const std::shared_ptr<const std::string>& key,
+      KeyType type);
+
   //! See documentation in superclass.
   kinetic::KineticStatus range(
       const std::shared_ptr<const std::string>& start_key,
       const std::shared_ptr<const std::string>& end_key,
-      size_t maxRequested,
-      std::unique_ptr< std::vector<std::string> >& keys
-  );
+      std::unique_ptr<std::vector<std::string>>& keys,
+      KeyType type);
 
   //--------------------------------------------------------------------------
   //! Constructor.
   //!
-  //! @param num_data the number of data chunks generated for a single value
-  //! @param num_parities the number of parities to be computed for a stripe
+  //! @param id the cluster name
   //! @param block_size the size of a single data / parity block in bytes
-  //! @param targets host / port / key of target kinetic drives
-  //! @param min_reconnect_interval minimum time between reconnection attempts
   //! @param operation_timeout the maximum interval an operation is allowed
-  //! @param erasure pointer to an ErasureCoding object
+  //! @param rp_data RedundancyProvider to be used for data keys
+  //! @param rp_metadata RedundancyProvider to be used for metadata keys
   //--------------------------------------------------------------------------
   explicit KineticCluster(
-    std::string id, std::size_t num_data, std::size_t num_parities, std::size_t block_size,
-    std::vector< std::pair < kinetic::ConnectionOptions, kinetic::ConnectionOptions > > targets,
-    std::chrono::seconds min_reconnect_interval,
-    std::chrono::seconds operation_timeout,
-    std::shared_ptr<RedundancyProvider> rp,
-    SocketListener& sockwatch
+      std::string id, std::size_t block_size, std::chrono::seconds operation_timeout,
+      std::vector<std::unique_ptr<KineticAutoConnection>> connections,
+      std::shared_ptr<RedundancyProvider> rp_data,
+      std::shared_ptr<RedundancyProvider> rp_metadata
   );
 
   //--------------------------------------------------------------------------
@@ -116,7 +131,7 @@ protected:
   //--------------------------------------------------------------------------
   std::vector<KineticAsyncOperation> initialize(
       std::shared_ptr<const std::string> key,
-      std::size_t size, off_t offset=0
+      std::size_t size, off_t offset = 0
   );
 
   //--------------------------------------------------------------------------
@@ -124,22 +139,22 @@ protected:
   //! than error codes. Needed in any case, as gcc 4.4 cannot automatically
   //! compare enum class instances.
   //--------------------------------------------------------------------------
-  struct compareStatusCode{
+  class compareStatusCode {
+  private:
+    int toInt(const kinetic::StatusCode& code) const
+    {
+      if (code != kinetic::StatusCode::OK &&
+          code != kinetic::StatusCode::REMOTE_NOT_FOUND &&
+          code != kinetic::StatusCode::REMOTE_VERSION_MISMATCH) {
+        return static_cast<int>(code) + 100;
+      }
+      return static_cast<int>(code);
+    }
+
+  public:
     bool operator()(const kinetic::StatusCode& lhs, const kinetic::StatusCode& rhs) const
     {
-      int l = static_cast<int>(lhs);
-      if( lhs != kinetic::StatusCode::OK &&
-          lhs != kinetic::StatusCode::REMOTE_NOT_FOUND &&
-          lhs != kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
-        l+=100;
-
-      int r = static_cast<int>(rhs);
-      if( rhs != kinetic::StatusCode::OK &&
-          rhs != kinetic::StatusCode::REMOTE_NOT_FOUND &&
-          rhs != kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
-        r+=100;
-
-      return l < r;
+      return toInt(lhs) < toInt(rhs);
     }
   };
 
@@ -157,30 +172,46 @@ protected:
       CallbackSynchronization& sync
   );
 
+  kinetic::KineticStatus do_remove(
+      const std::shared_ptr<const std::string>& key,
+      const std::shared_ptr<const std::string>& version,
+      KeyType type, kinetic::WriteMode mode);
+
+  kinetic::KineticStatus do_get(
+      const std::shared_ptr<const std::string>& key,
+      std::shared_ptr<const std::string>& version,
+      std::shared_ptr<const std::string>& value, KeyType type, bool skip_value);
+
+  kinetic::KineticStatus do_put(
+      const std::shared_ptr<const std::string>& key,
+      const std::shared_ptr<const std::string>& version,
+      const std::shared_ptr<const std::string>& value,
+      std::shared_ptr<const std::string>& version_out,
+      KeyType type, kinetic::WriteMode mode);
+
   //--------------------------------------------------------------------------
   //! Concurrency resolution: In case of partial stripe writes / removes due
   //! to concurrent write accesses, decide which client wins the race based
-  //! on achieved write pattern and using remote versions as a tie braker.
+  //! on achieved write pattern and using remote versions as a tie breaker.
   //!
   //! @param key the key of the stripe
-  //! @param version the version the stripe subchunks should have, empty
+  //! @param version the version the stripe chunks should have, empty
   //!   signifies deleted.
   //! @param rmap the results of the partial put / delete operation causing
   //!   a call to mayForce.
-  //! @return true if client may force-overwrite subchunks that have a
-  //!   different version, false otherwise
+  //! @return true if client may force-overwrite
   //--------------------------------------------------------------------------
   bool mayForce(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
-      std::map<kinetic::StatusCode, int, compareStatusCode> rmap
+      std::map<kinetic::StatusCode, int, compareStatusCode> rmap, KeyType type
   );
 
   //--------------------------------------------------------------------------
   //! Update the clusterio statistics and capacity information.
   //--------------------------------------------------------------------------
   void updateStatistics(std::shared_ptr<DestructionMutex> dm);
-  
+
   //--------------------------------------------------------------------------
   //! In case a get operation notices missing / corrupt / inaccessible chunks,
   //! it may put an indicator key, so that the affected stripe may be looked 
@@ -202,7 +233,8 @@ protected:
   std::shared_ptr<const std::string> getOperationToValue(
       const std::vector<KineticAsyncOperation>& ops,
       const std::shared_ptr<const std::string>& key,
-      const std::shared_ptr<const std::string>& version
+      const std::shared_ptr<const std::string>& version,
+      KeyType type
   );
 
   //--------------------------------------------------------------------------
@@ -212,62 +244,47 @@ protected:
   //! @return the stripe build from the value 
   //--------------------------------------------------------------------------
   std::vector<std::shared_ptr<const std::string>> valueToStripe(
-      const std::string& value
+      const std::string& value, KeyType type
   );
 
 
 protected:
-  //! number of data chunks in a stripe
-  const std::size_t nData;
+  //! cluster id
+  const std::string identity;
 
-  //! number of parities in a stripe
-  const std::size_t nParity;
+  // cluster instance id
+  const std::string instanceIdentity;
 
   //! maximum capacity of a single value / parity chunk
   const std::size_t chunkCapacity;
 
   //! timeout of asynchronous operations
   const std::chrono::seconds operation_timeout;
-  
-  //! cluster id 
-  const std::string identity;
-  
-  // cluster instance id
-  const std::string instanceIdentity; 
-  
+
   //! all connections associated with this cluster
-  std::vector< std::unique_ptr<KineticAutoConnection> > connections;
+  std::vector<std::unique_ptr<KineticAutoConnection> > connections;
+
+  //! cluster limits are constant over cluster lifetime
+  std::map<KeyType, ClusterLimits, CompareEnum> cluster_limits;
+
+  //! erasure coding / replication
+  std::map<KeyType, std::shared_ptr<RedundancyProvider>, CompareEnum> redundancy;
 
   //! time point we last required parity information during a get operation, can be used to enable / disable
   //! reading parities with the data
   std::chrono::system_clock::time_point parity_required;
 
-  //! time point the clusterio statistics have last been updated, used to compute per second values
-  std::chrono::system_clock::time_point statistics_timepoint; 
-  
-  //! time point the clusterio statistics have been last scheduled to be updated 
-  std::chrono::system_clock::time_point statistics_scheduled; 
+  //! time point the clusterio statistics have been last scheduled to be updated
+  std::chrono::system_clock::time_point statistics_scheduled;
 
-  //! the io statistics at time point timep_statistics 
-  ClusterIo statistics_snapshot; 
-  
-  //! io statistics as per second value of cluster
-  ClusterIo clusterio;
-  
-  //! size information of the cluster (total / free bytes)
-  ClusterSize clustersize;
+  //! the cluster statistics
+  ClusterStats statistics_snapshot;
 
-  //! cluster limits are constant over cluster lifetime
-  ClusterLimits clusterlimits;
-   
-  //! concurrency control of cluster io, size and time_point variables
+  //! prevent background threads accessing member variables after destruction
+  std::shared_ptr<DestructionMutex> dmutex;
+
+  //! concurrency control
   std::mutex mutex;
-  
-  //! prevent background thread accessing member variables after destruction
-  std::shared_ptr<DestructionMutex> dmutex; 
-  
-  //! erasure coding / replication 
-  std::shared_ptr<RedundancyProvider> redundancy;
 };
 
 }

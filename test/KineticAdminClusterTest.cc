@@ -39,50 +39,56 @@ SCENARIO("Admin integration test.", "[Admin]")
     REQUIRE(c.reset(1));
     REQUIRE(c.reset(2));
 
-    std::vector<std::pair<ConnectionOptions, ConnectionOptions> > info;
-    info.push_back(std::pair<ConnectionOptions, ConnectionOptions>(c.get(0), c.get(0)));
-    info.push_back(std::pair<ConnectionOptions, ConnectionOptions>(c.get(1), c.get(1)));
-    info.push_back(std::pair<ConnectionOptions, ConnectionOptions>(c.get(2), c.get(2)));
-
     std::string clusterId = "testCluster";
     std::size_t nData = 2;
     std::size_t nParity = 1;
     std::size_t blocksize = 1024*1024;
 
-    auto cluster = make_shared<KineticAdminCluster>(
-            clusterId, nData, nParity, blocksize, info, std::chrono::seconds(1), std::chrono::seconds(1),
-            std::make_shared<RedundancyProvider>(nData, nParity), listener
+    std::vector<std::unique_ptr<KineticAutoConnection>> connections;
+    for(int i=0; i<3; i++) {
+      std::unique_ptr<KineticAutoConnection> autocon(
+          new KineticAutoConnection(listener, std::make_pair(c.get(i), c.get(i)), std::chrono::seconds(1))
+      );
+      connections.push_back(std::move(autocon));
+    }
+
+    auto cluster = std::make_shared<KineticAdminCluster>(clusterId,  blocksize, std::chrono::seconds(10),
+                                                    std::move(connections),
+                                                    std::make_shared<RedundancyProvider>(nData,nParity),
+                                                    std::make_shared<RedundancyProvider>(1,nParity)
     );
-      
+
     WHEN("Putting a key-value pair with one drive down") {
       c.stop(0);
-      auto value = make_shared<const string>(cluster->limits().max_value_size, 'v');
-      
-      
-      
+
       auto target = AdminClusterInterface::OperationTarget::INVALID;
       std::shared_ptr<const std::string> key;
+      KeyType type;
       int i = rand()%3;
+
       if(i==0){
         target = AdminClusterInterface::OperationTarget::DATA;
         key = utility::makeDataKey(clusterId, "key", 1);
+        type = KeyType::Data;
       }
       else if(i==1){
         target = AdminClusterInterface::OperationTarget::ATTRIBUTE;
         key = utility::makeAttributeKey(clusterId, "key", "attribute");
+        type = KeyType::Metadata;
       }
       else if(i==2){
         target = AdminClusterInterface::OperationTarget::METADATA;
         key = utility::makeMetadataKey(clusterId, "key");
+        KeyType::Metadata;
       }
+
 
       shared_ptr<const string> putversion;
       auto status = cluster->put(
           key,
-          make_shared<string>("version"),
-          value,
-          true,
-          putversion);
+          make_shared<const string>(cluster->limits(KeyType::Data).max_value_size, 'v'),
+          putversion,
+      type);
       REQUIRE(status.ok());
       REQUIRE(putversion);
 
@@ -107,7 +113,7 @@ SCENARIO("Admin integration test.", "[Admin]")
       AND_WHEN("The drive comes up again."){
         c.start(0);
         // trigger a random operation so that the cluster connection will be re-established 
-        cluster->remove(std::make_shared<const string>(""), std::make_shared<const string>(""), true);
+        cluster->remove(std::make_shared<const string>(""), KeyType::Data);
         // wait for connection to reconnect
         sleep(2);
 
