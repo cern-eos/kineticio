@@ -63,13 +63,6 @@ struct ClusterStats {
     uint64_t write_bytes_period;
 };
 
-struct ClusterHealth {
-    uint32_t redundancy_factor;
-    uint32_t drives_total;
-    uint32_t drives_failed;
-    bool data_degraded;
-};
-
 enum class KeyType {
   Data, Metadata
 };

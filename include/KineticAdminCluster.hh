@@ -25,7 +25,7 @@
 #include "KineticCluster.hh"
 #include "AdminClusterInterface.hh"
 
-namespace kio{
+namespace kio {
 
 //------------------------------------------------------------------------------
 //! Implementation class of interface for cluster status and key scan & repair.
@@ -45,11 +45,12 @@ public:
   KeyCounts reset(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1);
 
   //! See documentation of public interface in AdminClusterInterface
-  std::vector<std::pair<bool, std::string>> status();
+  ClusterStatus status();
 
   //! Perfect forwarding is nice, and I am lazy. Look in KineticCluster.hh for the correct arguments
   template<typename... Args>
-  KineticAdminCluster(Args&& ... args) : KineticCluster(std::forward<Args>(args)...) {};
+  KineticAdminCluster(Args&& ... args) : KineticCluster(std::forward<Args>(args)...)
+  { };
 
   //! Destructor
   ~KineticAdminCluster();
@@ -58,22 +59,24 @@ private:
   //--------------------------------------------------------------------------
   //! The different types of admin cluster operations
   //--------------------------------------------------------------------------
-  enum class Operation{
-      COUNT, SCAN, REPAIR, RESET
+  enum class Operation {
+    COUNT, SCAN, REPAIR, RESET
   };
 
   //--------------------------------------------------------------------------
   //! The only difference of this struct to AdminClusterInterface::KeyCounts
   //! is the use of atomics to allow for lockless multithreading.
   //--------------------------------------------------------------------------
-  struct KeyCountsInternal{
+  struct KeyCountsInternal {
       std::atomic<int> total;
       std::atomic<int> incomplete;
       std::atomic<int> need_action;
       std::atomic<int> repaired;
       std::atomic<int> removed;
       std::atomic<int> unrepairable;
-      KeyCountsInternal() : total(0), incomplete(0), need_action(0), repaired(0), removed(0), unrepairable(0) {};
+
+      KeyCountsInternal() : total(0), incomplete(0), need_action(0), repaired(0), removed(0), unrepairable(0)
+      { };
   };
 
   //--------------------------------------------------------------------------
@@ -87,10 +90,10 @@ private:
   //! @return statistics of keys
   //--------------------------------------------------------------------------
   KeyCounts doOperation(
-    Operation o, 
-    OperationTarget t, 
-    std::function<void(int)> callback, 
-    int numthreads
+      Operation o,
+      OperationTarget t,
+      std::function<void(int)> callback,
+      int numthreads
   );
 
   //--------------------------------------------------------------------------
@@ -101,10 +104,10 @@ private:
   //! @param keys a set of keys apply the requested operation on
   //--------------------------------------------------------------------------
   void applyOperation(
-    Operation o, 
-    KeyCountsInternal& key_counts, 
-    std::vector<std::shared_ptr<const std::string>> keys,
-    KeyType keyType
+      Operation o,
+      KeyCountsInternal& key_counts,
+      std::vector<std::shared_ptr<const std::string>> keys,
+      KeyType keyType
   );
 
   //--------------------------------------------------------------------------
@@ -118,11 +121,11 @@ private:
   //! either fine or nothing can be done due to unreachable drives.
   //--------------------------------------------------------------------------
   bool scanKey(
-    const std::shared_ptr<const std::string>& key,
-    KeyType keyType,
-    KeyCountsInternal& key_counts
+      const std::shared_ptr<const std::string>& key,
+      KeyType keyType,
+      KeyCountsInternal& key_counts
   );
-  
+
   //--------------------------------------------------------------------------
   //! Repairs stripe key.
   //!
@@ -130,9 +133,9 @@ private:
   //! @param key_counts  keep statistics current by increasing repaired / removed counts.
   //--------------------------------------------------------------------------
   void repairKey(
-    const std::shared_ptr<const std::string>& key,
-    KeyType keyType,
-    KeyCountsInternal& key_counts
+      const std::shared_ptr<const std::string>& key,
+      KeyType keyType,
+      KeyCountsInternal& key_counts
   );
 
   //--------------------------------------------------------------------------
@@ -143,9 +146,9 @@ private:
   //! @param end_key end_key for range request
   //--------------------------------------------------------------------------
   void initRangeKeys(
-    OperationTarget t, 
-    std::shared_ptr<const std::string>& start_key, 
-    std::shared_ptr<const std::string>& end_key
+      OperationTarget t,
+      std::shared_ptr<const std::string>& start_key,
+      std::shared_ptr<const std::string>& end_key
   );
 };
 

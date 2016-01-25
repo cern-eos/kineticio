@@ -298,7 +298,9 @@ SCENARIO("FileIo Attribute Integration Test", "[Attr]")
     }
 
     AND_THEN("We can use the attr interface to request io stats") {
-      REQUIRE_NOTHROW(fileio->attrGet("sys.iostats"));
+      auto stats = fileio->attrGet("sys.iostats");
+      REQUIRE(stats.size());
+      printf("Stats: %s\n",stats.c_str());
     }
   }
 }

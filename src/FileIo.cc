@@ -342,30 +342,20 @@ std::string FileIo::attrGet(std::string name)
   /* Client may be requesting iostats instead of normal attributes */
   if (name == "sys.iostats") {
     auto stats = cluster->stats();
-    double MB = 1024 * 1024;
-
     using namespace std::chrono;
     double time = duration_cast<seconds>(stats.io_end - stats.io_start).count();
+    double MB = 1024 * 1024;
 
     return utility::Convert::toString(
-        "read-bw=", (stats.read_bytes_period / time) / MB, ",",
-        "read-ops=", stats.read_ops_period / time, ",",
-        "write-bw=", (stats.write_bytes_period / time) / MB, ",",
-        "write-ops=", stats.write_ops_period / time
+        "read-mb-total=", stats.read_bytes_total / MB,
+        ",read-ops-total=", stats.read_ops_total,
+        ",write-mb-total=", stats.write_bytes_total / MB,
+        ",write-ops-total=", stats.write_ops_total,
+        ",read-mb-second=", (stats.read_bytes_period / time) / MB,
+        ",read-ops-second=", stats.read_ops_period / time,
+        ",write-mb-second=", (stats.write_bytes_period / time) / MB,
+        ",write-ops-second=", stats.write_ops_period / time
     );
-  }
-  if (name == "sys.health") {
-    // TODO: Implement
-    throw std::system_error(std::make_error_code(std::errc::operation_not_supported));
-    /*
-    auto health = dataCluster->health();
-
-    return utility::Convert::toString(
-        "redundancy=", "4", // number of cluster parity
-        "failures=", "1",   // number of drive / connection failures
-        "degraded=", "1"    // 1 if indicator keys exists, 0 if none exist
-    );
-    */
   }
 
   std::shared_ptr<const string> value;

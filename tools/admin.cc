@@ -246,18 +246,25 @@ int main(int argc, char** argv)
 
     switch (config.op) {
       case Operation::STATUS: {
-        if (!config.monitoring) {
-          fprintf(stdout, "# ------------------------------------------------------------------------\n");
-          fprintf(stdout, "# Cluster Status: \n");
-          fprintf(stdout, "# ------------------------------------------------------------------------\n");
-        }
         auto v = ac->status();
-        for (size_t i = 0; i < v.size(); i++) {
-          if (config.monitoring) {
-            fprintf(stdout, "kinetic.drive.index=%lu kinetic.drive.status=%s\n", i, v[i].first ? "OK" : "FAILED");
+        if (config.monitoring) {
+          fprintf(stdout, "kinetic.connections.total=%u kinetic.connections.failed=%u\n", v.drives_total,
+                  v.drives_failed);
+          fprintf(stdout, "kinetic.redundancy_factor=%u\n",v.redundancy_factor);
+          fprintf(stdout, "kinetic.indicator_exist=%s\n", v.indicator_exist ? "YES" : "NO");
+          for (size_t i = 0; i < v.connected.size(); i++) {
+            fprintf(stdout, "kinetic.drive.index=%lu kinetic.drive.status=%s\n", i, v.connected[i] ? "OK" : "FAILED");
           }
-          else {
-            fprintf(stdout, "# drive %2d : %s %s\n", (int) i, v[i].first ? "OK" : "FAILED", v[i].second.c_str());
+        }
+        else {
+          fprintf(stdout, "# ------------------------------------------------------------------------\n");
+          fprintf(stdout, "# Cluster Status\n");
+          fprintf(stdout, "# \tConnections Failed: %u of %u \n", v.drives_failed, v.drives_total);
+          fprintf(stdout, "# \tRedundancy Factor: %u\n", v.redundancy_factor);
+          fprintf(stdout, "# \tIndicator keys: %s \n", v.indicator_exist ? "EXIST" : "NONE");
+          fprintf(stdout, "# ------------------------------------------------------------------------\n");
+          for (size_t i = 0; i < v.connected.size(); i++) {
+            fprintf(stdout, "# drive %2d : %s %s\n", (int) i, v.connected[i] ? "OK" : "FAILED", v.location[i].c_str());
           }
         }
         break;

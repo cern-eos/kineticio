@@ -24,20 +24,39 @@ KineticAdminCluster::~KineticAdminCluster()
 {
 }
 
-std::vector<std::pair<bool, std::string>> KineticAdminCluster::status()
+ClusterStatus KineticAdminCluster::status()
 {
-  std::vector<std::pair<bool, std::string>> statusVector;
+  ClusterStatus clusterStatus;
 
+  clusterStatus.redundancy_factor = redundancy[KeyType::Data]->numParity();
+  clusterStatus.drives_total = redundancy[KeyType::Data]->size();
+  clusterStatus.drives_failed = 0;
+
+  /* Set indicator existance */
+  std::shared_ptr<const string> indicator_start;
+  std::shared_ptr<const string> indicator_end;
+  initRangeKeys(OperationTarget::INDICATOR, indicator_start, indicator_end);
+
+  std::unique_ptr<std::vector<string>> keys(new std::vector<string>());
+  keys->reserve(1);
+  auto status = range(indicator_start, indicator_end, keys, KeyType::Data);
+
+  clusterStatus.indicator_exist = keys->size() > 0;
+
+  /* Set individual connection info */
   for (auto it = connections.cbegin(); it != connections.cend(); it++) {
     auto& con = *it;
-    statusVector.push_back(std::make_pair(true, con->getName()));
+    clusterStatus.location.push_back(con->getName());
     try {
       con->get();
+      clusterStatus.connected.push_back(true);
     } catch (std::exception& e) {
-      statusVector.back().first = false;
+      clusterStatus.connected.push_back(false);
+      clusterStatus.drives_failed++;
     }
   }
-  return statusVector;
+
+  return clusterStatus;
 }
 
 bool isIndicatorKey(const string& key)

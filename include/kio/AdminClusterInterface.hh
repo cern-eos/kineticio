@@ -26,6 +26,15 @@
 #include <functional>
 
 namespace kio {
+
+struct ClusterStatus{
+    bool indicator_exist;
+    uint32_t redundancy_factor;
+    uint32_t drives_total;
+    uint32_t drives_failed;
+    std::vector<bool> connected;
+    std::vector<std::string> location;
+};
   
 //------------------------------------------------------------------------------
 //! Interface class for cluster status and key scan & repair.
@@ -107,10 +116,11 @@ public:
   //! Obtain the current status of connections to all drives attached to this
   //! cluster.
   //!
-  //! @return a boolean representation of the connection states and location
-  //!   information for the drives associated with the connection
+  //! @return a ClusterStatus structure containing the name and status of each
+  //!   connection associated with the cluster, as well as if indicator keys
+  //!   have been detected on any healthy connection.
   //--------------------------------------------------------------------------
-  virtual std::vector<std::pair<bool, std::string>> status() = 0;
+  virtual ClusterStatus status() = 0;
 
   virtual ~AdminClusterInterface(){};
 };
