@@ -41,7 +41,9 @@ void ClusterMap::reset(
 
 std::shared_ptr<AdminClusterInterface> ClusterMap::getAdminCluster(const std::string& id)
 {
-
+  /* will throw if cluster does not exist */
+  getCluster(id);
+  return clusterCache.at(id);
 }
 
 std::shared_ptr<ClusterInterface> ClusterMap::getCluster(const std::string& id)
