@@ -105,9 +105,9 @@ private:
   //--------------------------------------------------------------------------
   void applyOperation(
       Operation o,
+      OperationTarget t,
       KeyCountsInternal& key_counts,
-      std::vector<std::shared_ptr<const std::string>> keys,
-      KeyType keyType
+      std::vector<std::shared_ptr<const std::string>> keys
   );
 
   //--------------------------------------------------------------------------
@@ -150,6 +150,14 @@ private:
       std::shared_ptr<const std::string>& start_key,
       std::shared_ptr<const std::string>& end_key
   );
+
+  //--------------------------------------------------------------------------
+  //! Remove the supplied indicator key.
+  //!
+  //! @param key the indicator key
+  //! @return true on success, false on error
+  //--------------------------------------------------------------------------
+  bool removeIndicatorKey(const std::shared_ptr<const std::string>& key);
 };
 
 }

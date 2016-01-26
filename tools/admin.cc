@@ -217,7 +217,7 @@ bool parseArguments(int argc, char** argv, Configuration& config)
 
 void printinc(int value)
 {
-  fprintf(stdout, "\r\t %d", value);
+  fprintf(stdout, "\t %d\r", value);
   fflush(stdout);
 }
 

@@ -72,7 +72,7 @@ unique_ptr<CallbackSynchronization> asyncops::fillPut(
   auto sync = std::unique_ptr<CallbackSynchronization>(new CallbackSynchronization());
 
   for (int i = 0; i < ops.size(); i++) {
-    auto &v = stripe[i];
+    auto v = stripe[i];
 
     /* Generate Checksum */
     auto checksum = crc32c(0, v->c_str(), v->length());

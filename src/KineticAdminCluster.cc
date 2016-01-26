@@ -59,10 +59,19 @@ ClusterStatus KineticAdminCluster::status()
   return clusterStatus;
 }
 
-bool isIndicatorKey(const string& key)
+bool KineticAdminCluster::removeIndicatorKey(const std::shared_ptr<const string>& key)
 {
-  auto empty_indicator = utility::makeIndicatorKey("");
-  return key.compare(0, empty_indicator->length(), *empty_indicator) == 0;
+  auto version = std::make_shared<const string>();
+  auto ops = initialize(key, connections.size());
+  auto sync = asyncops::fillRemove(ops, key, version, WriteMode::IGNORE_VERSION);
+  auto rmap = execute(ops, *sync);
+
+  if (rmap[StatusCode::OK]) {
+    kio_debug("Succesfully removed indicator key ", *key);
+    return true;
+  }
+  kio_notice("Failed removing indicator key ", *key);
+  return false;
 }
 
 bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyType keyType,
@@ -91,12 +100,12 @@ bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyT
     return true;
   }
 
-  throw std::runtime_error(utility::Convert::toString(
-      "Key ", *key, " is unfixable. We succeeded to read from ", valid_results, " of ", redundancy[keyType]->size(),
-      " drives. ", rmap[StatusCode::REMOTE_NOT_FOUND], " drives do not store the key. ", rmap[StatusCode::OK],
-      " drives store they key, ", target_version.frequency, " of which have an equivalent version (",
-      redundancy[keyType]->numData(), ") needed."
-  ));
+  kio_error(
+      "Key ", *key, " is unfixable. ", valid_results, " of ", redundancy[keyType]->size(),
+      " drives returned a result. Key is available on ",  rmap[StatusCode::OK], " drives. ",
+      target_version.frequency, " drives have an equivalent version (", redundancy[keyType]->numData(), ") needed."
+  );
+  throw std::runtime_error("unfixable");
 }
 
 void KineticAdminCluster::repairKey(const std::shared_ptr<const string>& key, KeyType keyType,
@@ -116,7 +125,7 @@ void KineticAdminCluster::repairKey(const std::shared_ptr<const string>& key, Ke
   }
 
   else if (getstatus.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
-    auto rmstatus = this->remove(key, version, keyType);
+    auto rmstatus = this->remove(key, keyType);
     if (!rmstatus.ok()) {
       kio_warning("Failed remove operation on target-key \"", *key, "\" ", rmstatus);
       throw std::system_error(std::make_error_code(std::errc::io_error));
@@ -130,36 +139,64 @@ void KineticAdminCluster::repairKey(const std::shared_ptr<const string>& key, Ke
   };
 }
 
+bool isDataKey(const string& clusterId, const string& key)
+{
+  std::string prefix = clusterId + ":data:";
+  return key.compare(0, prefix.length(), prefix) == 0;
+}
+
 void KineticAdminCluster::applyOperation(
-    Operation o, KeyCountsInternal& key_counts, std::vector<std::shared_ptr<const string>> keys, KeyType keyType
+    Operation operation, OperationTarget target, KeyCountsInternal& key_counts,
+    std::vector<std::shared_ptr<const string>> keys
 )
 {
-  for (auto it = keys.cbegin(); it != keys.cend(); it++) {
-    auto& key = isIndicatorKey(**it) ? utility::indicatorToKey(**it) : *it;
+  auto keyType = target == OperationTarget::DATA ? KeyType::Data : KeyType::Metadata;
+
+  for (auto it = keys.begin(); it != keys.end(); it++) {
+    std::shared_ptr<const string> key = *it;
+
+    /* Special consideration applies when traversing indicator keys... as they can indicate both data and
+     * metadata keys */
+    if (target == OperationTarget::INDICATOR) {
+      key = utility::indicatorToKey(*key);
+      if (isDataKey(id(), *key)) {
+        keyType = KeyType::Data;
+        kio_debug("Indicator key ", **it, " points to DATA key ", *key);
+      }
+      else {
+        keyType = KeyType::Metadata;
+        kio_debug("Indicator key ", **it, " points to NON-DATA key ", *key);
+      }
+    }
+
     try {
-      switch (o) {
+      switch (operation) {
         case Operation::SCAN: {
           scanKey(key, keyType, key_counts);
           break;
         }
         case Operation::REPAIR: {
-          if (scanKey(key, keyType, key_counts) || isIndicatorKey(**it)) {
+          if (scanKey(key, keyType, key_counts) || target == OperationTarget::INDICATOR) {
             repairKey(key, keyType, key_counts);
           }
-
-          if (isIndicatorKey(**it)) {
-            auto istatus = remove(*it, KeyType::Data);
-            if (!istatus.ok())
-              kio_warning("Failed removing indicator key after repair for target-key \"", *key, "\" ", istatus);
+          if (target == OperationTarget::INDICATOR) {
+            removeIndicatorKey(*it);
           }
           break;
         }
         case Operation::RESET: {
-          auto rmstatus = remove(*it, KeyType::Data);
-          if (!rmstatus.ok()) {
-            kio_warning("Failed remove operation on target-key \"", **it, "\" ", rmstatus);
-            throw std::system_error(std::make_error_code(std::errc::io_error));
-          };
+          if (target == OperationTarget::INDICATOR) {
+            if (!removeIndicatorKey(*it)) {
+              throw std::system_error(std::make_error_code(std::errc::io_error));
+            }
+          }
+          else {
+            auto rmstatus = remove(key, KeyType::Data);
+            if (!rmstatus.ok()) {
+              kio_warning("Failed remove operation on target-key \"", *key, "\" ", rmstatus);
+              throw std::system_error(std::make_error_code(std::errc::io_error));
+            };
+          }
           key_counts.removed++;
           break;
         }
@@ -195,6 +232,8 @@ void KineticAdminCluster::initRangeKeys(
       end_key = utility::makeIndicatorKey(id + "~");
       break;
   }
+  kio_debug("Start key=", *start_key);
+  kio_debug("End key=", *end_key);
 }
 
 kio::AdminClusterInterface::KeyCounts KineticAdminCluster::doOperation(
@@ -205,7 +244,6 @@ kio::AdminClusterInterface::KeyCounts KineticAdminCluster::doOperation(
 )
 {
   KeyCountsInternal key_counts;
-  KeyType keyType = t == OperationTarget::DATA ? KeyType::Data : KeyType::Metadata;
 
   std::shared_ptr<const string> start_key;
   std::shared_ptr<const string> end_key;
@@ -215,7 +253,8 @@ kio::AdminClusterInterface::KeyCounts KineticAdminCluster::doOperation(
     BackgroundOperationHandler bg(numthreads, numthreads);
     std::unique_ptr<std::vector<string>> keys;
     do {
-      auto status = range(start_key, end_key, keys, keyType);
+      /* KeyType for range requests does not matter at the moment */
+      auto status = range(start_key, end_key, keys, KeyType::Data);
       if (!status.ok()) {
         kio_warning("range(", *start_key, " - ", *end_key, ") failed on cluster. Cannot proceed. ", status);
         break;
@@ -229,7 +268,7 @@ kio::AdminClusterInterface::KeyCounts KineticAdminCluster::doOperation(
           for (auto it = keys->cbegin(); it != keys->cend(); it++) {
             out.push_back(std::make_shared<const string>(std::move(*it)));
           }
-          bg.run(std::bind(&KineticAdminCluster::applyOperation, this, o, std::ref(key_counts), out, keyType));
+          bg.run(std::bind(&KineticAdminCluster::applyOperation, this, o, t, std::ref(key_counts), out));
         }
       }
       if (callback) {

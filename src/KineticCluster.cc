@@ -115,6 +115,9 @@ KineticStatus KineticCluster::range(const std::shared_ptr<const std::string>& st
                                     const std::shared_ptr<const std::string>& end_key,
                                     std::unique_ptr<std::vector<std::string>>& keys, KeyType type)
 {
+  if(!start_key || !end_key)
+    return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
+
   int max_keys = cluster_limits[type].max_range_elements;
   if (keys && keys->capacity() > 0 && keys->capacity() < max_keys) {
     max_keys = keys->capacity();
@@ -157,6 +160,10 @@ KineticStatus KineticCluster::do_remove(const std::shared_ptr<const std::string>
                                         const std::shared_ptr<const std::string>& version,
                                         KeyType type, WriteMode wmode)
 {
+  if(!key || !version) {
+    return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
+  }
+
   auto ops = initialize(key, redundancy[type]->size());
   auto sync = asyncops::fillRemove(ops, key, version, wmode);
   auto rmap = execute(ops, *sync);
@@ -193,7 +200,7 @@ KineticStatus KineticCluster::do_remove(const std::shared_ptr<const std::string>
       return KineticStatus(it->first, "");
     }
   }
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key" + *key + "not accessible.");
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key " + *key + " not accessible.");
 
 }
 
@@ -369,6 +376,10 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
                                               std::shared_ptr<const std::string>& version,
                                               std::shared_ptr<const std::string>& value, KeyType type, bool skip_value)
 {
+  if(!key) {
+    return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
+  }
+
   /* Try to get the value without parities for erasure coded stripes, unless the cluster has been switched into parity
    * mode in the last 5 minutes. */
   bool getParities = true;
@@ -518,9 +529,12 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
                                      KeyType type,
                                      kinetic::WriteMode mode)
 {
-  /* Do not use version_in, version_out variables directly in case the client
-     supplies the same pointer for both. */
-  auto version_old = version ? version : make_shared<const string>();
+  if(!key || !version || !value) {
+    return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
+  }
+
+  /* Do not use version_out variable directly in case the client
+     supplies the same pointer for version and version_out. */
   auto version_new = utility::uuidGenerateEncodeSize(value->size());
   std::vector<std::shared_ptr<const string>> stripe;
   try {
@@ -531,7 +545,7 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
   }
 
   auto ops = initialize(key, redundancy[type]->size());
-  auto sync = asyncops::fillPut(ops, stripe, key, version_new, version_old, mode);
+  auto sync = asyncops::fillPut(ops, stripe, key, version_new, version, mode);
   auto rmap = execute(ops, *sync);
 
   /* Partial stripe write has to be resolved. */
