@@ -100,6 +100,11 @@ ClusterStats KineticCluster::stats()
   if (duration_cast<seconds>(system_clock::now() - statistics_scheduled) > seconds(2)) {
     if (kio().threadpool().try_run(std::bind(&KineticCluster::updateStatistics, this, dmutex))) {
       statistics_scheduled = system_clock::now();
+      kio_debug("Scheduled statistics update for cluster ", id());
+    }
+    else {
+      kio_notice("Failed scheduling statistics update for cluster ", id(),
+                 " due to threadpool having no free capacity.");
     }
   }
   return statistics_snapshot;
@@ -367,8 +372,7 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
   /* Try to get the value without parities for erasure coded stripes, unless the cluster has been switched into parity
    * mode in the last 5 minutes. */
   bool getParities = true;
-  if(redundancy[type]->numData() > 1)
-  {
+  if (redundancy[type]->numData() > 1) {
     std::lock_guard<std::mutex> lock(mutex);
     using namespace std::chrono;
     if (duration_cast<minutes>(system_clock::now() - parity_required) > minutes(5)) {
@@ -710,11 +714,11 @@ std::map<StatusCode, int, KineticCluster::compareStatusCode> KineticCluster::exe
           ops[i].connection->get()->RemoveHandler(hkeys[i]);
         } catch (const std::exception& e) {
           kio_warning("Failed removing handle from connection ", ops[i].connection->getName(), "due to: ", e.what());
-          ops[i].connection->setError();
         }
         kio_warning("Network timeout for operation ", ops[i].connection->getName(), " for sync-point", &sync);
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
         ops[i].callback->OnResult(status);
+        ops[i].connection->setError();
       }
 
       /* Retry operations with CLIENT_IO_ERROR code result. Something went wrong with the connection,

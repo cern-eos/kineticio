@@ -60,7 +60,7 @@ public:
   //--------------------------------------------------------------------------
   //! Return human readable name of the auto connection. 
   //--------------------------------------------------------------------------
-  const std::string& getName();
+  const std::string& getName() const;
   
   //--------------------------------------------------------------------------
   //! Constructor.
@@ -81,37 +81,38 @@ public:
   ~KineticAutoConnection();
 
 private:
+  //! the two interfaces of the target drive, first interface will be prioritized
+  const std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > options;
+  //! minimum time between reconnection attempts
+  const std::chrono::seconds ratelimit;
   //! the underlying connection
   std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> connection;
   //! healthy if the underlying connection is believed to be currently working
   bool healthy;
   //! the fd of an open connection
   int fd;
-  //! the two interfaces of the target drive, first interface will be prioritized
-  std::pair< kinetic::ConnectionOptions, kinetic::ConnectionOptions > options;
   //! string representation of connection options for logging purposes
   std::string logstring;
   //! timestamp of the last connection attempt
   std::chrono::system_clock::time_point timestamp;
-  //! minimum time between reconnection attempts
-  std::chrono::seconds ratelimit;
   //! thread safety
   std::mutex mutex;
-  //! prevent background thread accessing member variables after destruction
-  std::shared_ptr<DestructionMutex> dmutex; 
   //! use calling thread for initial connect
   std::once_flag intial_connect;
   //! register connections with epoll listener
   SocketListener& sockwatch;
   //! random number generator
   std::mt19937 mt;
+  //! background operation handler. last initialized, first destructed, guaranteeing that no
+  //! background threads exist past any other member variable destruction
+  BackgroundOperationHandler bg;
 
 private:
   //--------------------------------------------------------------------------
   //! Attempt to connect unless blocked by rate limit. Will attempt both host
   //! names supplied to options and prioritize randomly.
   //--------------------------------------------------------------------------
-  void connect(std::shared_ptr<DestructionMutex> protect);
+  void connect();
 };
 
 }

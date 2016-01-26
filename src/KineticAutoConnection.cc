@@ -25,8 +25,8 @@ KineticAutoConnection::KineticAutoConnection(
     SocketListener& sw,
     std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> o,
     std::chrono::seconds r) :
-    connection(), healthy(false), fd(0), options(o), timestamp(std::chrono::system_clock::now()), ratelimit(r),
-    mutex(), dmutex(std::make_shared<DestructionMutex>()), sockwatch(sw), mt()
+    options(o), ratelimit(r), connection(), healthy(false), fd(0), timestamp(std::chrono::system_clock::now()),
+    mutex(), sockwatch(sw), mt(), bg(1,0)
 {
   std::random_device rd;
   mt.seed(rd());
@@ -37,13 +37,12 @@ KineticAutoConnection::KineticAutoConnection(
 
 KineticAutoConnection::~KineticAutoConnection()
 {
-  dmutex->setDestructed();
   if (fd) {
     sockwatch.unsubscribe(fd);
   }
 }
 
-const std::string& KineticAutoConnection::getName()
+const std::string& KineticAutoConnection::getName() const
 {
   return logstring;
 }
@@ -55,30 +54,35 @@ void KineticAutoConnection::setError()
     sockwatch.unsubscribe(fd);
     fd = 0;
   }
+  kio_notice("Setting connection ", getName(), " into error state.");
   healthy = false;
 }
 
 std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConnection::get()
 {
-  std::call_once(intial_connect, &KineticAutoConnection::connect, this, dmutex);
+  std::call_once(intial_connect, &KineticAutoConnection::connect, this);
 
   std::lock_guard<std::mutex> lock(mutex);
   if (healthy) {
     return connection;
   }
 
-  /* Rate limit connection attempts. */
+  /* Rate limit re-connection attempts. */
   using namespace std::chrono;
   auto duration = duration_cast<seconds>(system_clock::now() - timestamp);
   if (duration > ratelimit) {
-    kio().threadpool().run(std::bind(&KineticAutoConnection::connect, this, dmutex));
-    timestamp = std::chrono::system_clock::now();
-    kio_debug("Attempting background reconnect. Last reconnect attempt has been ",
-              duration, " seconds ago. ratelimit is ", ratelimit, " seconds ", logstring);
-
+    if (bg.try_run(std::bind(&KineticAutoConnection::connect, this))) {
+      timestamp = std::chrono::system_clock::now();
+      kio_debug("Scheduled background reconnect. Last reconnect attempt has been scheduled",
+                duration, " seconds ago. ratelimit is ", ratelimit, " seconds ", logstring);
+    }
+    else {
+      kio_notice("Failed scheduling background reconnect despite last having been scheduled",
+                duration, " seconds ago and a ratelimit of ", ratelimit, " seconds ", logstring);
+    }
   }
   else {
-    kio_debug("Not attempting background reconnect. Last reconnect attempt has been ",
+    kio_debug("Not attempting background reconnect. Last reconnect attempt has been scheduled",
               duration, " seconds ago. ratelimit is ", ratelimit, " seconds ", logstring);
   }
   kio_warning("No valid connection ", logstring);
@@ -112,9 +116,9 @@ private:
 };
 }
 
-void KineticAutoConnection::connect(std::shared_ptr<DestructionMutex> protect)
+void KineticAutoConnection::connect()
 {
-  std::lock_guard<DestructionMutex> dlock(*protect);
+  kio_debug("Starting connection attempt", logstring);
 
   /* Choose connection to prioritize at random. */
   auto r = mt() % 2;

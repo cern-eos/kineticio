@@ -46,7 +46,7 @@ void epoll_listen(int epoll_fd, bool* shutdown)
             throw std::runtime_error("Connection::Run(...) returned false");
           }
         } catch (const std::exception& e) {
-          kio_warning(e.what(), " for ", con->getName());
+          kio_warning("Error ", e.what(), " for ", con->getName());
           con->setError();
         }
       }
