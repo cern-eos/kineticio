@@ -115,8 +115,9 @@ KineticStatus KineticCluster::range(const std::shared_ptr<const std::string>& st
                                     const std::shared_ptr<const std::string>& end_key,
                                     std::unique_ptr<std::vector<std::string>>& keys, KeyType type)
 {
-  if(!start_key || !end_key)
+  if (!start_key || !end_key) {
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
+  }
 
   int max_keys = cluster_limits[type].max_range_elements;
   if (keys && keys->capacity() > 0 && keys->capacity() < max_keys) {
@@ -160,7 +161,7 @@ KineticStatus KineticCluster::do_remove(const std::shared_ptr<const std::string>
                                         const std::shared_ptr<const std::string>& version,
                                         KeyType type, WriteMode wmode)
 {
-  if(!key || !version) {
+  if (!key || !version) {
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
   }
 
@@ -376,7 +377,7 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
                                               std::shared_ptr<const std::string>& version,
                                               std::shared_ptr<const std::string>& value, KeyType type, bool skip_value)
 {
-  if(!key) {
+  if (!key) {
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
   }
 
@@ -529,7 +530,7 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
                                      KeyType type,
                                      kinetic::WriteMode mode)
 {
-  if(!key || !version || !value) {
+  if (!key || !version || !value) {
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
   }
 
@@ -591,7 +592,8 @@ kinetic::KineticStatus KineticCluster::put(const std::shared_ptr<const std::stri
                                            std::shared_ptr<const std::string>& version_out,
                                            KeyType type)
 {
-  return do_put(key, version, value, version_out, type, WriteMode::REQUIRE_SAME_VERSION);
+  return do_put(key, version ? version : make_shared<const string>(), value, version_out, type,
+                WriteMode::REQUIRE_SAME_VERSION);
 }
 
 
