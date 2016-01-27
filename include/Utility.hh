@@ -28,38 +28,55 @@
 #include <kinetic/kinetic.h>
 
 namespace kio { namespace utility {
+
+  //--------------------------------------------------------------------------
+  //! Extract the cluster id from the supplied kinetic url.
+  //!
+  //! @param url kinetic url of the form kinetic://clusterId/path
+  //! @return the extracted cluster id
+  //--------------------------------------------------------------------------
+  std::string urlToClusterId(const std::string& url);
+
+  //--------------------------------------------------------------------------
+  //! Extract the path from the supplied kinetic url
+  //!
+  //! @param path eos kinetic path of the form kinetic://clusterId/path
+  //! @return the extracted path
+  //--------------------------------------------------------------------------
+  std::string urlToPath(const std::string& url);
   
   //--------------------------------------------------------------------------
   //! Create the kinetic block key from the supplied path and block number.
   //!
-  //! @param path base path
+  //! @param path the path
   //! @param block_number the block number
-  //! @return the cluster key for the requested block
+  //! @return the data key for the requested block
   //--------------------------------------------------------------------------
-  std::shared_ptr<const std::string> makeDataKey(const std::string& clusterId, const std::string& base, int block_number);
+  std::shared_ptr<const std::string> makeDataKey(const std::string& clusterId, const std::string& path, int block_number);
   
   //--------------------------------------------------------------------------
   //! Create the kinetic metadata key from the supplied path.
   //!
-  //! @param path base path
+  //! @param path the path
   //! @param block_number the block number
-  //! @return the cluster key for the requested block
+  //! @return the metadata key
   //--------------------------------------------------------------------------
-  std::shared_ptr<const std::string> makeMetadataKey(const std::string& clusterId, const std::string& base);
+  std::shared_ptr<const std::string> makeMetadataKey(const std::string& clusterId, const std::string& path);
   
   //--------------------------------------------------------------------------
   //! Create the kinetic attribute key from the supplied path and name.
   //!
-  //! @param key the main key of the file 
+  //! @param clusterId the cluster id
+  //! @param path the file path
   //! @param attribute_name the name of the attribute 
-  //! @return the cluster key for the requested attribute 
+  //! @return the attribute key
   //--------------------------------------------------------------------------
-  std::shared_ptr<const std::string> makeAttributeKey(const std::string& clusterId, const std::string& base, const std::string& attribute_name);
+  std::shared_ptr<const std::string> makeAttributeKey(const std::string& clusterId, const std::string& path, const std::string& attribute_name);
   
   //--------------------------------------------------------------------------
   //! Create the kinetic indicator key from the supplied key.
   //!
-  //! @param key the key 
+  //! @param key the data / metadata / attribute key
   //! @return the indicator key for the supplied key 
   //--------------------------------------------------------------------------
   std::shared_ptr<const std::string> makeIndicatorKey(const std::string& key);
@@ -73,13 +90,13 @@ namespace kio { namespace utility {
   std::shared_ptr<const std::string> indicatorToKey(const std::string& indicator_key); 
 
   //--------------------------------------------------------------------------
-  //! Reconstruct the fully qualified path 'kinetic:clusterId:path' from 
-  //! any metadata key constructed using the utility class. 
+  //! Reconstruct the url from any metadata key constructed using the utility
+  //! class.
   //!
-  //! @param key the key
-  //! @return the fully qualified path 
+  //! @param metadata_key the key
+  //! @return the kinetic url of the form kinetic://clusterId/path
   //--------------------------------------------------------------------------
-  std::string metadataToPath(const std::string& key);
+  std::string metadataToUrl(const std::string& metadata_key);
 
   //--------------------------------------------------------------------------
   //! Extract the attribute name from any attribute key constructed using the
@@ -88,24 +105,8 @@ namespace kio { namespace utility {
   //! @param key the attribute key
   //! @return the attribute name
   //--------------------------------------------------------------------------
-  std::string extractAttributeName(const std::string& key);
-  
-  //--------------------------------------------------------------------------
-  //! Extract the cluster id from the supplied eos path.
-  //!
-  //! @param path eos kinetic path of the form kinetic:ID:path
-  //! @return the extracted cluster id
-  //--------------------------------------------------------------------------
-  std::string extractClusterID(const std::string& path);
-  
-  //--------------------------------------------------------------------------
-  //! Extract the base path from the supplied eos pah.
-  //!
-  //! @param path eos kinetic path of the form kinetic:ID:path
-  //! @return the extracted path
-  //--------------------------------------------------------------------------
-  std::string extractBasePath(const std::string& path);
-  
+  std::string extractAttributeName(const std::string& attribute_key);
+
   //--------------------------------------------------------------------------
   //! Constructs a uuid string
   //!

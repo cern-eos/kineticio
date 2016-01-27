@@ -166,7 +166,7 @@ SCENARIO("Cache Performance Test.", "[Cache]")
 
         DataCache ccc(capacity * 128);
         std::shared_ptr<ClusterInterface> cluster(new MockCluster());
-        MockFileIo fio("kinetic:Cluster1:thepath", cluster);
+        MockFileIo fio("kinetic://Cluster1/thepath", cluster);
 
         printf("Cache get() performance for a cache with capacity of %d items \n", capacity);
 

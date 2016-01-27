@@ -40,11 +40,18 @@ SCENARIO("KineticIo Integration Test", "[Io]")
   memset(read_buf, 0, buf_size);
   memset(null_buf, 0, buf_size);
 
-  GIVEN("An illegally constructed path") {
-    std::string path("path");
-
-    THEN("fileio object creation throws with ENODEV") {
-
+  GIVEN("Wrong urls") {
+    THEN("fileio object creation throws with EINVAL on illegally constructed urls") {
+      std::string path("path");
+      REQUIRE_THROWS_AS(kio::KineticIoFactory::makeFileIo(path), std::system_error);
+      try {
+        kio::KineticIoFactory::makeFileIo(path);
+      } catch (const std::system_error& e) {
+        REQUIRE(e.code().value() == EINVAL);
+      }
+    }
+    THEN("fileio object creation throws with ENODEV on nonexisting clusters") {
+      std::string path("kinetic://thisdoesntexist/file");
       REQUIRE_THROWS_AS(kio::KineticIoFactory::makeFileIo(path), std::system_error);
       try {
         kio::KineticIoFactory::makeFileIo(path);
@@ -55,9 +62,9 @@ SCENARIO("KineticIo Integration Test", "[Io]")
   }
 
   GIVEN ("A valid path, but no existing file.") {
-    std::string base_path("kinetic:Cluster1:");
-    std::string path(base_path + "filename");
-    auto fileio = kio::KineticIoFactory::makeFileIo(path);
+    std::string base_url("kinetic://Cluster1/");
+    std::string full_url(base_url + "filename");
+    auto fileio = kio::KineticIoFactory::makeFileIo(full_url);
 
     THEN("All file IO operations throw when attempted on unopened file") {
       REQUIRE_THROWS_AS(fileio->Read(0, read_buf, buf_size), std::system_error);
@@ -87,21 +94,21 @@ SCENARIO("KineticIo Integration Test", "[Io]")
     }
 
     THEN("ListFiles returns an empty vector.") {
-      auto list = fileio->ListFiles(path, 100);
+      auto list = fileio->ListFiles(full_url, 100);
       REQUIRE(list.empty());
     }
   }
 
   GIVEN("A file is created.") {
-    std::string base_path("kinetic:Cluster2:");
-    std::string path(base_path + "filename");
-    auto fileio = kio::KineticIoFactory::makeFileIo(path);
+    std::string base_url("kinetic://Cluster2/");
+    std::string full_url(base_url + "filename");
+    auto fileio = kio::KineticIoFactory::makeFileIo(full_url);
 
     REQUIRE_NOTHROW(fileio->Open(SFS_O_CREAT));
 
     THEN("Trying to create the same file again fails with EEXIST") {
       try {
-        KineticIoFactory::makeFileIo(path)->Open(SFS_O_CREAT);
+        KineticIoFactory::makeFileIo(full_url)->Open(SFS_O_CREAT);
       } catch (const std::system_error& e) {
         REQUIRE(e.code().value() == EEXIST);
       }
@@ -132,12 +139,12 @@ SCENARIO("KineticIo Integration Test", "[Io]")
     }
 
     THEN("ListFiles returns the file name.") {
-      auto list = fileio->ListFiles(path, 100);
+      auto list = fileio->ListFiles(full_url, 100);
       for(int i=0; i<list.size(); i++)
         printf("%s \n",list[i].c_str());
 
       REQUIRE(list.size() == 1);
-      REQUIRE(list.front() == path);
+      REQUIRE(list.front() == full_url);
     }
 
     THEN("Attempting to read an empty file reads 0 bytes.") {
@@ -198,7 +205,7 @@ SCENARIO("KineticIo Integration Test", "[Io]")
     }
 
     AND_WHEN("The file is removed via a second io object.") {
-      auto fileio_2nd = KineticIoFactory::makeFileIo(path);
+      auto fileio_2nd = KineticIoFactory::makeFileIo(full_url);
       REQUIRE_NOTHROW(fileio_2nd->Open(0));
       REQUIRE_NOTHROW(fileio_2nd->Remove());
 
@@ -235,7 +242,7 @@ SCENARIO("KineticIo Integration Test", "[Io]")
         REQUIRE_NOTHROW(fileio->Close());
 
         AND_THEN("ListFiles returns an empty list.") {
-          auto list = fileio->ListFiles(path, 10000);
+          auto list = fileio->ListFiles(full_url, 10000);
           REQUIRE(list.empty());
         }
       }
@@ -254,9 +261,9 @@ SCENARIO("FileIo Attribute Integration Test", "[Attr]")
   REQUIRE(c.reset(2));
 
   GIVEN("A file is created.") {
-    std::string base_path("kinetic:Cluster2:");
-    std::string path(base_path + "filename");
-    auto fileio = KineticIoFactory::makeFileIo(path);
+    std::string base_url("kinetic://Cluster2/");
+    std::string full_url(base_url + "filename");
+    auto fileio = KineticIoFactory::makeFileIo(full_url);
 
     REQUIRE_NOTHROW(fileio->Open(SFS_O_CREAT));
 
@@ -284,9 +291,9 @@ SCENARIO("FileIo Attribute Integration Test", "[Attr]")
       }
 
       AND_THEN("attributes are not returned by ListFiles") {
-        auto list = fileio->ListFiles(path, 7);
+        auto list = fileio->ListFiles(full_url, 7);
         REQUIRE(list.size() == 1);
-        REQUIRE(list.front() == path);
+        REQUIRE(list.front() == full_url);
       }
     }
 

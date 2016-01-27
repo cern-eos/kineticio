@@ -153,10 +153,9 @@ public:
 
   //--------------------------------------------------------------------------
   //! Constructor
-  //! @param path the full path of the fileio object in the form
-  //!   kinetic:clusterId:filepath
+  //! @param url the kinetic url of the form kinetic://clusterId/path
   //--------------------------------------------------------------------------
-  explicit FileIo(const std::string& path);
+  explicit FileIo(const std::string& url);
 
   //--------------------------------------------------------------------------
   //! Destructor

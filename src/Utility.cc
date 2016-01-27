@@ -16,13 +16,14 @@
 #include "Utility.hh"
 #include <iomanip>
 #include <uuid/uuid.h>
+#include <Logging.hh>
 
 using namespace kio;
 
 static std::string toString(const kinetic::StatusCode& c)
 {
   using kinetic::StatusCode;
-  switch(c){
+  switch (c) {
     case StatusCode::OK:
       return "OK";
     case StatusCode::CLIENT_IO_ERROR:
@@ -66,24 +67,30 @@ std::ostream& kio::utility::operator<<(std::ostream& os, const std::chrono::seco
   return os;
 }
 
-std::string utility::extractClusterID(const std::string& path)
+std::string utility::urlToClusterId(const std::string& url)
 {
-  size_t id_start = path.find_first_of(':') + 1;
-  size_t id_end   = path.find_first_of(':', id_start);
-  return path.substr(id_start, id_end-id_start);
+  size_t id_start = strlen("kinetic://");
+  size_t id_end = url.find_first_of('/', id_start);
+  return url.substr(id_start, id_end - id_start);
 }
 
-std::string utility::extractBasePath(const std::string& path)
+std::string utility::urlToPath(const std::string& url)
 {
-  auto start = path.find_first_of(':') + 1;
-  return path.substr(path.find_first_of(':', start) + 1);
+  return url.substr(url.find_first_of('/', strlen("kinetic://") + 1) + 1);
+}
+
+std::string utility::metadataToUrl(const std::string& mdkey)
+{
+  auto pos1 = mdkey.find_first_of(':');
+  auto pos2 = mdkey.find_first_of(':', pos1 + 1);
+  return "kinetic://" + mdkey.substr(0, pos1) + "/" + mdkey.substr(pos2 + 1);
 }
 
 std::string utility::uuidGenerateString()
 {
   uuid_t uuid;
   uuid_generate(uuid);
-  return std::string(reinterpret_cast<const char *>(uuid), sizeof(uuid_t));
+  return std::string(reinterpret_cast<const char*>(uuid), sizeof(uuid_t));
 }
 
 std::shared_ptr<const std::string> utility::uuidGenerateEncodeSize(std::size_t size)
@@ -95,13 +102,15 @@ std::shared_ptr<const std::string> utility::uuidGenerateEncodeSize(std::size_t s
 
 std::size_t utility::uuidDecodeSize(const std::shared_ptr<const std::string>& uuid)
 {
-  if(!uuid || uuid->size() != 10 + sizeof(uuid_t))
+  if (!uuid || uuid->size() != 10 + sizeof(uuid_t)) {
     throw std::invalid_argument("invalid version supplied.");
-  std::string size(uuid->substr(0,10));
+  }
+  std::string size(uuid->substr(0, 10));
   return (size_t) atoi(size.c_str());
 }
 
-std::shared_ptr<const std::string> utility::makeDataKey(const std::string& clusterId, const std::string& base, int block_number)
+std::shared_ptr<const std::string> utility::makeDataKey(const std::string& clusterId, const std::string& base,
+                                                        int block_number)
 {
   std::ostringstream ss;
   ss << clusterId << ":data:" << base << "_" << std::setw(10) << std::setfill('0') << block_number;
@@ -113,16 +122,18 @@ std::shared_ptr<const std::string> utility::makeMetadataKey(const std::string& c
   return std::make_shared<const std::string>(clusterId + ":metadata:" + base);
 }
 
-std::shared_ptr<const std::string> utility::makeAttributeKey(const std::string& clusterId, const std::string& base, const std::string& attribute_name)
+std::shared_ptr<const std::string> utility::makeAttributeKey(const std::string& clusterId, const std::string& base,
+                                                             const std::string& attribute_name)
 {
-  return std::make_shared<const std::string>(clusterId + ":attribute:"+ base + ":" + attribute_name);
+  return std::make_shared<const std::string>(clusterId + ":attribute:" + base + ":" + attribute_name);
 }
 
 std::string utility::extractAttributeName(const std::string& attrkey)
 {
   auto pos = 0;
-  for(int i=0; i<3; i++)
-    attrkey.find_first_of(':',pos+1);
+  for (int i = 0; i < 3; i++) {
+    attrkey.find_first_of(':', pos + 1);
+  }
   return attrkey.substr(pos);
 }
 
@@ -133,12 +144,5 @@ std::shared_ptr<const std::string> utility::makeIndicatorKey(const std::string& 
 
 std::shared_ptr<const std::string> utility::indicatorToKey(const std::string& indicator_key)
 {
-  return std::make_shared<const std::string>(indicator_key.substr(sizeof("indicator"),std::string::npos));  
-}
-
-std::string utility::metadataToPath(const std::string& mdkey)
-{
-  auto pos1 = mdkey.find_first_of(':');
-  auto pos2 = mdkey.find_first_of(':', pos1+1);  
-  return "kinetic:" + mdkey.substr(0,pos1) + mdkey.substr(pos2);
+  return std::make_shared<const std::string>(indicator_key.substr(sizeof("indicator"), std::string::npos));
 }

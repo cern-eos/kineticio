@@ -28,11 +28,18 @@ using kinetic::StatusCode;
 using namespace kio;
 
 
-FileIo::FileIo(const std::string& full_path) :
+FileIo::FileIo(const std::string& url) :
     cluster(), lastBlockNumber(*this), prefetchOracle(kio().readaheadWindowSize()), opened(false)
 {
-  path = utility::extractBasePath(full_path);
-  cluster = kio().cmap().getCluster(utility::extractClusterID(full_path));
+  if (url.compare(0, strlen("kinetic://"), "kinetic://") != 0) {
+    kio_error("Invalid url supplied. Required format: kinetic://clusterId/path, supplied: ", url);
+    throw std::system_error(std::make_error_code(std::errc::invalid_argument));
+  }
+
+  path = utility::urlToPath(url);
+  cluster = kio().cmap().getCluster(
+      utility::urlToClusterId(url)
+  );
 }
 
 FileIo::~FileIo()
@@ -467,7 +474,7 @@ std::vector<std::string> FileIo::ListFiles(std::string subtree, size_t max)
 
   std::unique_ptr<std::vector<string>> keys;
   std::vector<std::string> names;
-  auto subtree_base = utility::extractBasePath(subtree);
+  auto subtree_base = utility::urlToPath(subtree);
   auto start = utility::makeMetadataKey(cluster->id(), subtree_base);
   auto end = utility::makeMetadataKey(cluster->id(), subtree_base + "~");
 
@@ -484,7 +491,7 @@ std::vector<std::string> FileIo::ListFiles(std::string subtree, size_t max)
     }
 
     for (auto it = keys->cbegin(); it != keys->cend() && names.size() < max; it++) {
-      names.push_back(utility::metadataToPath(*it));
+      names.push_back(utility::metadataToUrl(*it));
     }
     if (keys->size()) {
       start = std::make_shared<const string>(keys->back() + " ");
