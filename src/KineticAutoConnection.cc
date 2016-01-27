@@ -50,6 +50,18 @@ const std::string& KineticAutoConnection::getName() const
 void KineticAutoConnection::setError()
 {
   std::lock_guard<std::mutex> lock(mutex);
+  if(!healthy)
+    return;
+
+  /* Make the connection invincible for a brief time period after it is (re)established to ensure that outstanding
+   * IO jobs that still used the broken connection do not immediately disable a newly established connection
+   * again. */
+  using namespace std::chrono;
+  if(duration_cast<milliseconds>(system_clock::now() - timestamp) < milliseconds(500)){
+    kio_debug("Disregarding setError on ", getName(), " due to recent reconnection attempt.");
+    return;
+  }
+
   if (fd) {
     sockwatch.unsubscribe(fd);
     fd = 0;
@@ -165,6 +177,7 @@ void KineticAutoConnection::connect()
       fd = tmpfd;
       connection = std::move(tmpcon);
       healthy = true;
+      timestamp = std::chrono::system_clock::now();
       kio_debug("connection attempt succeeded ", logstring);
     }
     else {
