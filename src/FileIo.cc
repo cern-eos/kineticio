@@ -60,7 +60,7 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
       lastBlockNumber.set(0);
     }
     else if (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH) {
-      kio_notice("File ", path, " already exists (O_CREAT flag set).");
+      kio_debug("File ", path, " already exists (O_CREAT flag set).");
       throw std::system_error(std::make_error_code(std::errc::file_exists));
     }
   }
@@ -72,7 +72,7 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
         KeyType::Metadata
     );
     if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
-      kio_notice("File ", path, " does not exist and cannot be opened without O_CREAT flag.");
+      kio_debug("File ", path, " does not exist and cannot be opened without O_CREAT flag.");
       throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
     }
   }

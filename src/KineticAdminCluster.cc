@@ -84,27 +84,29 @@ bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyT
   auto valid_results = rmap[StatusCode::OK] + rmap[StatusCode::REMOTE_NOT_FOUND];
   auto target_version = asyncops::mostFrequentVersion(ops);
 
+  auto debugstring = kio::utility::Convert::toString(
+      valid_results, " of ", redundancy[keyType]->size(), " drives returned a result. Key is available on ",
+      rmap[StatusCode::OK], " drives. ", target_version.frequency, " drives have an equivalent version (",
+      redundancy[keyType]->numData(), ") needed."
+  );
+
   if (valid_results < redundancy[keyType]->size()) {
-    kio_debug("Key \"", *key, "\": Only ", valid_results, " valid results for a stripe size of ",
-              redundancy[keyType]->size());
+    kio_notice("Key \"", *key, "\" is incomplete. Only ", valid_results, " of ", redundancy[keyType]->size(),
+              " drives returned a result");
     key_counts.incomplete++;
   }
   if (target_version.frequency == valid_results && valid_results >= redundancy[keyType]->numData()) {
-    kio_debug("Key \"", *key, "\" does not require action.");
+    kio_debug("Key \"", *key, "\" does not require action. ", debugstring);
     return false;
   }
   else if (target_version.frequency >= redundancy[keyType]->numData() ||
            rmap[StatusCode::REMOTE_NOT_FOUND] >= redundancy[keyType]->numData()) {
-    kio_debug("Key \"", *key, "\" requires repair or removal.");
+    kio_notice("Key \"", *key, "\" requires repair or removal. ", debugstring);
     key_counts.need_action++;
     return true;
   }
 
-  kio_error(
-      "Key ", *key, " is unfixable. ", valid_results, " of ", redundancy[keyType]->size(),
-      " drives returned a result. Key is available on ",  rmap[StatusCode::OK], " drives. ",
-      target_version.frequency, " drives have an equivalent version (", redundancy[keyType]->numData(), ") needed."
-  );
+  kio_error("Key ", *key, " is unfixable. ", debugstring);
   throw std::runtime_error("unfixable");
 }
 
