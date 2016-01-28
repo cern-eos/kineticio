@@ -151,7 +151,8 @@ endif(BUILD_TEST)
 # RPM generation rules 
 
 execute_process(
-  COMMAND git rev-list HEAD --count
+  COMMAND git log --oneline
+  COMMAND wc -l
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE GIT_COMMITS
   OUTPUT_STRIP_TRAILING_WHITESPACE
