@@ -111,7 +111,7 @@ public:
       const std::shared_ptr<const std::string>& start_key,
       const std::shared_ptr<const std::string>& end_key,
       std::unique_ptr<std::vector<std::string>>& keys,
-      KeyType type)
+      KeyType type, size_t elements)
   {
     return KineticStatus(StatusCode::OK, "");
   }

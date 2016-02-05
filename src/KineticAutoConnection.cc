@@ -85,16 +85,16 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
   if (duration > ratelimit) {
     if (bg.try_run(std::bind(&KineticAutoConnection::connect, this))) {
       timestamp = std::chrono::system_clock::now();
-      kio_debug("Scheduled background reconnect. Last reconnect attempt has been scheduled",
+      kio_debug("Scheduled background reconnect. Last reconnect attempt has been scheduled ",
                 duration, " seconds ago. ratelimit is ", ratelimit, " seconds ", logstring);
     }
     else {
-      kio_notice("Failed scheduling background reconnect despite last having been scheduled",
+      kio_notice("Failed scheduling background reconnect despite last having been scheduled ",
                 duration, " seconds ago and a ratelimit of ", ratelimit, " seconds ", logstring);
     }
   }
   else {
-    kio_debug("Not attempting background reconnect. Last reconnect attempt has been scheduled",
+    kio_debug("Not attempting background reconnect. Last reconnect attempt has been scheduled ",
               duration, " seconds ago. ratelimit is ", ratelimit, " seconds ", logstring);
   }
   kio_warning("No valid connection ", logstring);

@@ -61,7 +61,8 @@ set(kineticio_SRC
     src/ClusterMap.cc
     src/KineticIoSingleton.cc
     src/KineticAutoConnection.cc
-    src/KineticAsyncOperation.cc
+    src/ClusterOperation.cc
+    src/StripeOperation.cc
     src/KineticCallbacks.cc
     src/KineticCluster.cc
     src/KineticAdminCluster.cc

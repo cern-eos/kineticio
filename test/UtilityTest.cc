@@ -64,21 +64,21 @@ SCENARIO("Utility Test.", "[Utility]"){
     THEN("We can construct different types of keys"){
       auto mdkey = utility::makeMetadataKey(cid,base);
       REQUIRE(*mdkey == "cluster:metadata:/the/path");
-      
+
       auto attrkey = utility::makeAttributeKey(cid, base, "test-attribute");
       REQUIRE(*attrkey == "cluster:attribute:/the/path:test-attribute");
-      
+
       auto datakey = utility::makeDataKey(cid, base, 12);
       REQUIRE(*datakey == "cluster:data:/the/path_0000000012");
-      
+
       auto indicatorkey = utility::makeIndicatorKey(*datakey);
       REQUIRE(*indicatorkey == "indicator:"+ *datakey);
-      
+
       AND_THEN("we can reconstruct the fully qualified url from the metadata key"){
         REQUIRE(utility::metadataToUrl(*mdkey) == url);
       }
     }
-    
+
   }
 
   GIVEN("a stripe vector"){

@@ -38,8 +38,7 @@ ClusterStatus KineticAdminCluster::status()
   initRangeKeys(OperationTarget::INDICATOR, indicator_start, indicator_end);
 
   std::unique_ptr<std::vector<string>> keys(new std::vector<string>());
-  keys->reserve(1);
-  auto status = range(indicator_start, indicator_end, keys, KeyType::Data);
+  auto status = range(indicator_start, indicator_end, keys, KeyType::Data, 1);
 
   clusterStatus.indicator_exist = keys->size() > 0;
 
@@ -61,28 +60,18 @@ ClusterStatus KineticAdminCluster::status()
 
 bool KineticAdminCluster::removeIndicatorKey(const std::shared_ptr<const string>& key)
 {
-  auto version = std::make_shared<const string>();
-  auto ops = initialize(key, connections.size());
-  auto sync = asyncops::fillRemove(ops, key, version, WriteMode::IGNORE_VERSION);
-  auto rmap = execute(ops, *sync);
-
-  if (rmap[StatusCode::OK]) {
-    kio_debug("Succesfully removed indicator key ", *key);
-    return true;
-  }
-  kio_notice("Failed removing indicator key ", *key);
-  return false;
+  StripeOperation_DEL rm(key, std::make_shared<const string>(), WriteMode::IGNORE_VERSION, connections, connections.size());
+  auto status = rm.execute(operation_timeout, redundancy[KeyType::Data]);
+  return status.ok();
 }
 
 bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyType keyType,
                                   KeyCountsInternal& key_counts)
 {
-  auto ops = initialize(key, redundancy[keyType]->size());
-  auto sync = asyncops::fillGetVersion(ops, key);
-  auto rmap = execute(ops, *sync);
-
+  StripeOperation_GET getV(key, true, connections, redundancy[keyType]->size());
+  auto rmap = getV.executeOperationVector(operation_timeout);
   auto valid_results = rmap[StatusCode::OK] + rmap[StatusCode::REMOTE_NOT_FOUND];
-  auto target_version = asyncops::mostFrequentVersion(ops);
+  auto target_version = getV.mostFrequentVersion();
 
   auto debugstring = kio::utility::Convert::toString(
       valid_results, " of ", redundancy[keyType]->size(), " drives returned a result. Key is available on ",
@@ -107,6 +96,7 @@ bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyT
   }
 
   kio_error("Key ", *key, " is unfixable. ", debugstring);
+
   throw std::runtime_error("unfixable");
 }
 

@@ -296,7 +296,7 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
         throw std::system_error(std::make_error_code(std::errc::io_error));
       }
     }
-  } while (keys->size() == keys->capacity());
+  } while (keys->size() == cluster->limits(KeyType::Data).max_range_elements);
 
   /* Set last block number */
   lastBlockNumber.set(block_number);
@@ -432,7 +432,7 @@ std::vector<std::string> FileIo::attrList()
     if (keys->size()) {
       start = std::make_shared<const string>(keys->back());
     }
-  } while (keys->size() == keys->capacity());
+  } while (keys->size() == cluster->limits(KeyType::Metadata).max_range_elements);
   return names;
 }
 
@@ -478,11 +478,6 @@ std::vector<std::string> FileIo::ListFiles(std::string subtree, size_t max)
   auto start = utility::makeMetadataKey(cluster->id(), subtree_base);
   auto end = utility::makeMetadataKey(cluster->id(), subtree_base + "~");
 
-  if (max < cluster->limits(KeyType::Metadata).max_range_elements) {
-    keys.reset(new std::vector<string>());
-    keys->reserve(max);
-  }
-
   do {
     auto status = cluster->range(start, end, keys, KeyType::Metadata);
     if (!status.ok()) {
@@ -496,7 +491,7 @@ std::vector<std::string> FileIo::ListFiles(std::string subtree, size_t max)
     if (keys->size()) {
       start = std::make_shared<const string>(keys->back() + " ");
     }
-  } while (keys->size() == keys->capacity() && names.size() < max);
+  } while (names.size() < max && keys->size() == cluster->limits(KeyType::Metadata).max_range_elements);
   return names;
 }
 
@@ -536,7 +531,7 @@ void FileIo::LastBlockNumber::verify()
   std::unique_ptr<std::vector<string>> keys;
   do {
     KineticStatus status = parent.cluster->range(
-        keys ? make_shared<const string>(keys->back()) :
+        keys && keys->size() ? make_shared<const string>(keys->back()) :
         utility::makeDataKey(parent.cluster->id(), parent.path, last_block_number),
         utility::makeDataKey(parent.cluster->id(), parent.path, std::numeric_limits<int>::max()),
         keys, KeyType::Data);
@@ -545,7 +540,7 @@ void FileIo::LastBlockNumber::verify()
       kio_error("KeyRange request unexpectedly failed for blocks of path: ", parent.path, ": ", status);
       throw std::system_error(std::make_error_code(std::errc::io_error));
     }
-  } while (keys->size() == keys->capacity());
+  } while (keys->size() == parent.cluster->limits(KeyType::Data).max_range_elements);
 
   /* Success: get block number from last key.*/
   if (keys->size() > 0) {

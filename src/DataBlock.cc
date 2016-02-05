@@ -37,6 +37,8 @@ DataBlock::DataBlock(std::shared_ptr<ClusterInterface> c, const std::shared_ptr<
     kio_error("no cluster supplied");
     throw std::system_error(std::make_error_code(std::errc::io_error));
   }
+  if(m == Mode::CREATE)
+    timestamp = system_clock::now();
 }
 
 DataBlock::~DataBlock()
@@ -88,6 +90,7 @@ bool DataBlock::validateVersion()
   /* Check remote version & compare it to in-memory version. */
   shared_ptr<const string> remote_version;
   KineticStatus status = cluster->get(key, remote_version, KeyType::Data);
+  kio_debug("status: ", status);
 
   /*If no version is set, the entry has never been flushed. In this case,
     not finding an entry with that key in the cluster is expected. */

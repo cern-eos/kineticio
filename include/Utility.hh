@@ -131,7 +131,6 @@ namespace kio { namespace utility {
   //--------------------------------------------------------------------------
   std::size_t uuidDecodeSize(const std::shared_ptr<const std::string>& uuid);
 
-
   //--------------------------------------------------------------------------
   //! Providing operator<< for kinetic::StatusCode
   //!

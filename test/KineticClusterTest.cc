@@ -80,6 +80,32 @@ SCENARIO("Cluster integration test.", "[Cluster]")
       }
     }
 
+    WHEN("Some keys have been put down") {
+
+      shared_ptr<const string> putversion;
+      for(int i=0; i<10; i++) {
+        auto status = cluster->put(
+            make_shared<string>(utility::Convert::toString("key", i)),
+            make_shared<string>("value"),
+            putversion,
+            KeyType::Data);
+        REQUIRE(status.ok());
+      }
+      THEN("range will work and respect max_elements"){
+        std::unique_ptr<std::vector<std::string>> keys;
+        auto status = cluster->range(make_shared<string>("key"), make_shared<string>("key10"), keys, KeyType::Data, 3);
+        REQUIRE(status.ok());
+        REQUIRE(keys->size() == 3);
+        status = cluster->range(make_shared<string>("key"), make_shared<string>("key10"), keys, KeyType::Data);
+        REQUIRE(status.ok());
+        REQUIRE(keys->size() == 10);
+        status = cluster->range(make_shared<string>("key5"), make_shared<string>("key10"), keys, KeyType::Data);
+        REQUIRE(status.ok());
+        REQUIRE(keys->size() == 5);
+      }
+
+    }
+
     WHEN("Putting a key-value pair on a cluster with 1 drive failure") {
       auto value = make_shared<string>(cluster->limits(KeyType::Data).max_value_size, 'v');
       c.stop(0);

@@ -69,7 +69,8 @@ enum class KeyType {
 
 class CompareEnum {
 public:
-  bool operator()(const KeyType& lhs, const KeyType& rhs) const
+  template<typename T>
+  bool operator()(const T& lhs, const T& rhs) const
   {
     return static_cast<int>(lhs) < static_cast<int>(rhs);
   }
@@ -220,18 +221,16 @@ public:
   //! @param end    the end point of the requested key range, supplied key is
   //!   included in the range
   //! @param keys   on success, contains existing key names in supplied range.
-  //!   if a vector is supplied, the vector capacity will be respected. Otherwise
-  //!   a new vector with a capacity of max_range_elements will be returned. If
-  //!   returned vector size is below capacity, no more elements exist in the
-  //!   cluster.
   //! @param type cluster may handle key types differently (e.g. redundancy)
+  //! @param max_elements the maximum number of elements to return. 0 signifies
+  //!   the max_range_elements of the cluster.
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus range(
       const std::shared_ptr<const std::string>& start_key,
       const std::shared_ptr<const std::string>& end_key,
       std::unique_ptr<std::vector<std::string>>& keys,
-      KeyType type) = 0;
+      KeyType type, std::size_t max_elements = 0) = 0;
 
   //----------------------------------------------------------------------------
   //! Destructor.

@@ -144,5 +144,5 @@ std::shared_ptr<const std::string> utility::makeIndicatorKey(const std::string& 
 
 std::shared_ptr<const std::string> utility::indicatorToKey(const std::string& indicator_key)
 {
-  return std::make_shared<const std::string>(indicator_key.substr(sizeof("indicator"), std::string::npos));
+  return std::make_shared<const std::string>(indicator_key.substr(strlen("indicator:"), std::string::npos));
 }

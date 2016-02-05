@@ -24,10 +24,10 @@
 
 #include "ClusterInterface.hh"
 #include "KineticAutoConnection.hh"
-#include "KineticAsyncOperation.hh"
 #include "KineticCallbacks.hh"
 #include "SocketListener.hh"
 #include "RedundancyProvider.hh"
+#include "StripeOperation.hh"
 #include <utility>
 #include <chrono>
 #include <mutex>
@@ -96,7 +96,7 @@ public:
       const std::shared_ptr<const std::string>& start_key,
       const std::shared_ptr<const std::string>& end_key,
       std::unique_ptr<std::vector<std::string>>& keys,
-      KeyType type);
+      KeyType type, size_t max_elements = 0);
 
   //--------------------------------------------------------------------------
   //! Constructor.
@@ -120,62 +120,16 @@ public:
   virtual ~KineticCluster();
 
 protected:
-  //--------------------------------------------------------------------------
-  //! Create a set of AsyncOperations and assign target drives / connections.
-  //!
-  //! @param key the key used to assign connections to AsyncOperations
-  //! @param size the number of KineticAsyncOperations to initialize
-  //! @param offset start vector at offset drive
-  //! @return vector of KineticAsyncOperations of size size with
-  //!         assigned connections
-  //--------------------------------------------------------------------------
-  std::vector<KineticAsyncOperation> initialize(
-      std::shared_ptr<const std::string> key,
-      std::size_t size, off_t offset = 0
-  );
-
-  //--------------------------------------------------------------------------
-  //! Compare kinetic::StatusCode, always evaluating regular results smaller
-  //! than error codes. Needed in any case, as gcc 4.4 cannot automatically
-  //! compare enum class instances.
-  //--------------------------------------------------------------------------
-  class compareStatusCode {
-  private:
-    int toInt(const kinetic::StatusCode& code) const
-    {
-      if (code != kinetic::StatusCode::OK &&
-          code != kinetic::StatusCode::REMOTE_NOT_FOUND &&
-          code != kinetic::StatusCode::REMOTE_VERSION_MISMATCH) {
-        return static_cast<int>(code) + 100;
-      }
-      return static_cast<int>(code);
-    }
-
-  public:
-    bool operator()(const kinetic::StatusCode& lhs, const kinetic::StatusCode& rhs) const
-    {
-      return toInt(lhs) < toInt(rhs);
-    }
-  };
-
-  //--------------------------------------------------------------------------
-  //! Execute the supplied operation, making sure the connection state is valid
-  //! before attempting to execute. This function can be thought as as a
-  //! dispatcher.
-  //!
-  //! @param operations the operations that need to be executed
-  //! @param sync provide wait_until functionality for asynchronous operations
-  //! @return status of operations
-  //--------------------------------------------------------------------------
-  std::map<kinetic::StatusCode, int, compareStatusCode> execute(
-      std::vector<KineticAsyncOperation>& operations,
-      CallbackSynchronization& sync
-  );
-
   kinetic::KineticStatus do_remove(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
       KeyType type, kinetic::WriteMode mode);
+
+  kinetic::KineticStatus execute_get(kio::StripeOperation_GET& op,
+                                       const std::shared_ptr<const std::string>& key,
+                                       std::shared_ptr<const std::string>& version,
+                                       std::shared_ptr<const std::string>& value, KeyType type,
+                                       bool skip_value);
 
   kinetic::KineticStatus do_get(
       const std::shared_ptr<const std::string>& key,
@@ -190,52 +144,9 @@ protected:
       KeyType type, kinetic::WriteMode mode);
 
   //--------------------------------------------------------------------------
-  //! Concurrency resolution: In case of partial stripe writes / removes due
-  //! to concurrent write accesses, decide which client wins the race based
-  //! on achieved write pattern and using remote versions as a tie breaker.
-  //!
-  //! @param key the key of the stripe
-  //! @param version the version the stripe chunks should have, empty
-  //!   signifies deleted.
-  //! @param rmap the results of the partial put / delete operation causing
-  //!   a call to mayForce.
-  //! @return true if client may force-overwrite
-  //--------------------------------------------------------------------------
-  bool mayForce(
-      const std::shared_ptr<const std::string>& key,
-      const std::shared_ptr<const std::string>& version,
-      std::map<kinetic::StatusCode, int, compareStatusCode> rmap, KeyType type
-  );
-
-  //--------------------------------------------------------------------------
   //! Update the clusterio statistics and capacity information.
   //--------------------------------------------------------------------------
   void updateStatistics(std::shared_ptr<DestructionMutex> dm);
-
-  //--------------------------------------------------------------------------
-  //! In case a get operation notices missing / corrupt / inaccessible chunks,
-  //! it may put an indicator key, so that the affected stripe may be looked 
-  //! at by a repair process. This will be done asynchronously. 
-  //! 
-  //! @param key the key of the affected stripe
-  //! @param ops the operation vector containing the failed operation 
-  //--------------------------------------------------------------------------
-  void putIndicatorKey(const std::shared_ptr<const std::string>& key, const std::vector<KineticAsyncOperation>& ops);
-
-  //--------------------------------------------------------------------------
-  //! Turn the result of a get operation into a single value 
-  //! 
-  //! @param ops the operation vector containing the results of a get operation
-  //! @param key the key 
-  //! @param version the target version 
-  //! @return the value concatonated from chunks 
-  //--------------------------------------------------------------------------
-  std::shared_ptr<const std::string> getOperationToValue(
-      const std::vector<KineticAsyncOperation>& ops,
-      const std::shared_ptr<const std::string>& key,
-      const std::shared_ptr<const std::string>& version,
-      KeyType type
-  );
 
   //--------------------------------------------------------------------------
   //! Turn a single value into a stripe, complete with redundancy information
@@ -247,6 +158,19 @@ protected:
       const std::string& value, KeyType type
   );
 
+  //--------------------------------------------------------------------------
+  //! Concurrency resolution: In case of partial stripe writes / removes due
+  //! to concurrent write accesses, decide which client wins the race based
+  //! on achieved write pattern and using remote versions as a tie breaker.
+  //!
+  //! @param key the key of the stripe
+  //! @param version the version the stripe chunks should have, empty
+  //!   signifies deleted.
+  //! @param rmap the results of the partial put / delete operation causing
+  //!   a call to mayForce.
+  //! @return true if client may force-overwrite
+  //--------------------------------------------------------------------------
+  bool mayForce(const std::shared_ptr<const std::string>& key, KeyType type, const std::shared_ptr<const std::string>& version, int counter=0);
 
 protected:
   //! cluster id
@@ -269,10 +193,6 @@ protected:
 
   //! erasure coding / replication
   std::map<KeyType, std::shared_ptr<RedundancyProvider>, CompareEnum> redundancy;
-
-  //! time point we last required parity information during a get operation, can be used to enable / disable
-  //! reading parities with the data
-  std::chrono::system_clock::time_point parity_required;
 
   //! time point the clusterio statistics have been last scheduled to be updated
   std::chrono::system_clock::time_point statistics_scheduled;
