@@ -93,13 +93,13 @@ SCENARIO("Cluster integration test.", "[Cluster]")
       }
       THEN("range will work and respect max_elements"){
         std::unique_ptr<std::vector<std::string>> keys;
-        auto status = cluster->range(make_shared<string>("key"), make_shared<string>("key10"), keys, KeyType::Data, 3);
+        auto status = cluster->range(make_shared<string>("key"), make_shared<string>("key9"), keys, KeyType::Data, 3);
         REQUIRE(status.ok());
         REQUIRE(keys->size() == 3);
-        status = cluster->range(make_shared<string>("key"), make_shared<string>("key10"), keys, KeyType::Data);
+        status = cluster->range(make_shared<string>("key"), make_shared<string>("key9"), keys, KeyType::Data);
         REQUIRE(status.ok());
         REQUIRE(keys->size() == 10);
-        status = cluster->range(make_shared<string>("key5"), make_shared<string>("key10"), keys, KeyType::Data);
+        status = cluster->range(make_shared<string>("key5"), make_shared<string>("key9"), keys, KeyType::Data);
         REQUIRE(status.ok());
         REQUIRE(keys->size() == 5);
       }
