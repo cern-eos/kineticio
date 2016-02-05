@@ -58,17 +58,17 @@ SCENARIO("Utility Test.", "[Utility]"){
   
   GIVEN("a fully qualified path"){
     auto url = "kinetic://cluster//the/path";
-    auto base = utility::urlToPath(url);
-    auto cid  = utility::urlToClusterId(url);
+    auto path = utility::urlToPath(url);
+    auto clusterId = utility::urlToClusterId(url);
     
     THEN("We can construct different types of keys"){
-      auto mdkey = utility::makeMetadataKey(cid,base);
+      auto mdkey = utility::makeMetadataKey(clusterId, path);
       REQUIRE(*mdkey == "cluster:metadata:/the/path");
 
-      auto attrkey = utility::makeAttributeKey(cid, base, "test-attribute");
+      auto attrkey = utility::makeAttributeKey(clusterId, path, "test-attribute");
       REQUIRE(*attrkey == "cluster:attribute:/the/path:test-attribute");
 
-      auto datakey = utility::makeDataKey(cid, base, 12);
+      auto datakey = utility::makeDataKey(clusterId, path, 12);
       REQUIRE(*datakey == "cluster:data:/the/path_0000000012");
 
       auto indicatorkey = utility::makeIndicatorKey(*datakey);
@@ -76,6 +76,9 @@ SCENARIO("Utility Test.", "[Utility]"){
 
       AND_THEN("we can reconstruct the fully qualified url from the metadata key"){
         REQUIRE(utility::metadataToUrl(*mdkey) == url);
+      }
+      AND_THEN("we can extract the attribute name from the attribute key"){
+        REQUIRE(utility::extractAttributeName(clusterId, path, *attrkey) == "test-attribute");
       }
     }
 

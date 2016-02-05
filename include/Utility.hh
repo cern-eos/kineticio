@@ -105,7 +105,8 @@ namespace kio { namespace utility {
   //! @param key the attribute key
   //! @return the attribute name
   //--------------------------------------------------------------------------
-  std::string extractAttributeName(const std::string& attribute_key);
+  std::string extractAttributeName(const std::string& clusterId, const std::string& path,
+                                   const std::string& attribute_key);
 
   //--------------------------------------------------------------------------
   //! Constructs a uuid string

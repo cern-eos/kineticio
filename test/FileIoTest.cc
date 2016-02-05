@@ -295,6 +295,20 @@ SCENARIO("FileIo Attribute Integration Test", "[Attr]")
         REQUIRE(list.size() == 1);
         REQUIRE(list.front() == full_url);
       }
+
+      AND_THEN("attributes can be listed.") {
+        auto list = fileio->attrList();
+        REQUIRE(list.size() == 1);
+        REQUIRE(list.front() == "name");
+
+        AND_WHEN("A file is removed"){
+          REQUIRE_NOTHROW(fileio->Remove());
+          THEN("Attributes are removed along with it..."){
+            auto list = fileio->attrList();
+            REQUIRE(list.size() == 0);
+          }
+        }
+      }
     }
 
     THEN("Attempting to read in a non-existing attribute throws.") {

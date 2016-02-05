@@ -122,19 +122,17 @@ std::shared_ptr<const std::string> utility::makeMetadataKey(const std::string& c
   return std::make_shared<const std::string>(clusterId + ":metadata:" + base);
 }
 
-std::shared_ptr<const std::string> utility::makeAttributeKey(const std::string& clusterId, const std::string& base,
+std::shared_ptr<const std::string> utility::makeAttributeKey(const std::string& clusterId, const std::string& path,
                                                              const std::string& attribute_name)
 {
-  return std::make_shared<const std::string>(clusterId + ":attribute:" + base + ":" + attribute_name);
+  return std::make_shared<const std::string>(clusterId + ":attribute:" + path + ":" + attribute_name);
 }
 
-std::string utility::extractAttributeName(const std::string& attrkey)
+std::string utility::extractAttributeName(const std::string& clusterId, const std::string& path,
+                                          const std::string& attrkey)
 {
-  auto pos = 0;
-  for (int i = 0; i < 3; i++) {
-    attrkey.find_first_of(':', pos + 1);
-  }
-  return attrkey.substr(pos);
+  auto start = clusterId.size() + strlen(":attribute:") + path.size() + 1;
+  return attrkey.substr(start);
 }
 
 std::shared_ptr<const std::string> utility::makeIndicatorKey(const std::string& key)

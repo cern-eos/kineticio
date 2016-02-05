@@ -427,7 +427,7 @@ std::vector<std::string> FileIo::attrList()
       throw std::system_error(std::make_error_code(std::errc::io_error));
     }
     for (auto it = keys->cbegin(); it != keys->cend(); it++) {
-      names.push_back(utility::extractAttributeName(*it));
+      names.push_back(utility::extractAttributeName(cluster->id(), path, *it));
     }
     if (keys->size()) {
       start = std::make_shared<const string>(keys->back());
