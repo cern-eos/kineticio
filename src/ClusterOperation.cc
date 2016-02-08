@@ -41,7 +41,7 @@ void ClusterOperation::expandOperationVector(std::vector<std::unique_ptr<Kinetic
 
 std::map<kinetic::StatusCode, int, CompareStatusCode> ClusterOperation::executeOperationVector(const std::chrono::seconds& timeout)
 {
-  kio_debug("Start execution of ", operations.size(), " operations for sync-point ", &sync);
+ // kio_debug("Start execution of ", operations.size(), " operations for sync-point ", &sync);
   auto need_retry = false;
   auto rounds_left = 2;
   do {
@@ -67,7 +67,7 @@ std::map<kinetic::StatusCode, int, CompareStatusCode> ClusterOperation::executeO
         auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
         operations[i].callback->OnResult(status);
         operations[i].connection->setError();
-        kio_notice("Failed executing async operation for connection ", operations[i].connection->getName(), status);
+        //kio_notice("Failed executing async operation for connection ", operations[i].connection->getName(), status);
       }
     }
 
@@ -100,7 +100,7 @@ std::map<kinetic::StatusCode, int, CompareStatusCode> ClusterOperation::executeO
     }
   } while (need_retry && rounds_left);
 
-  kio_debug("Finished execution for sync-point ", &sync);
+ // kio_debug("Finished execution for sync-point ", &sync);
 
   std::map<kinetic::StatusCode, int, CompareStatusCode> rmap;
   for (auto it = operations.begin(); it != operations.end(); it++) {

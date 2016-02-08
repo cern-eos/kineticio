@@ -133,7 +133,6 @@ KineticStatus KineticCluster::do_remove(const std::shared_ptr<const std::string>
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
   }
 
-
   StripeOperation_DEL delOp(key, version, wmode, connections, redundancy[type]->size());
   try {
     auto status = delOp.execute(operation_timeout, redundancy[type]);
@@ -143,6 +142,10 @@ KineticStatus KineticCluster::do_remove(const std::shared_ptr<const std::string>
     kio_debug("Remove request of key ", *key, " completed with status: ", status);
     return status;
   } catch (std::exception& e) {
+    if (wmode == WriteMode::IGNORE_VERSION) {
+      kio_error("Irrecoverable error in delete operation for key ", *key, " : ", e.what());
+      return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "");
+    }
     if (mayForce(key, type, make_shared<const string>())) {
       return do_remove(key, version, type, WriteMode::IGNORE_VERSION);
     }
@@ -243,15 +246,12 @@ bool KineticCluster::mayForce(const std::shared_ptr<const std::string>& key, Key
 kinetic::KineticStatus KineticCluster::execute_get(kio::StripeOperation_GET& getop,
                                                    const std::shared_ptr<const std::string>& key,
                                                    std::shared_ptr<const std::string>& version,
-                                                   std::shared_ptr<const std::string>& value, KeyType type,
-                                                   bool skip_value)
+                                                   std::shared_ptr<const std::string>& value, KeyType type)
 {
-  auto status = getop.execute(operation_timeout, redundancy[type], chunkCapacity);
+  auto status = getop.execute(operation_timeout, redundancy[type]);
 
   if (status.ok()) {
-    if (!skip_value) {
-      value = getop.getValue();
-    }
+    value = getop.getValue();
     version = getop.getVersion();
   }
 
@@ -274,17 +274,27 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
   /* Skip attempting to read without parities for replicated keys, version verification is required to validate result */
   if (redundancy[type]->numData() > 1) {
     try {
-      return execute_get(getop, key, version, value, type, skip_value);
+      return execute_get(getop, key, version, value, type);
     } catch (std::exception& e) {
-      kio_debug("Failed getting stripe for key", *key, " without parities: ", e.what());
+      kio_debug("Failed getting stripe for key ", *key, " without parities: ", e.what());
     }
   }
 
+  /* Add parity chunks to get request (already obtained chunks will not be refetched). */
   getop.extend(connections, redundancy[type]->numParity());
   try {
-    return execute_get(getop, key, version, value, type, skip_value);
+    return execute_get(getop, key, version, value, type);
   } catch (std::exception& e) {
-    kio_debug("Failed getting stripe for key", *key, " even with parities: ", e.what());
+    kio_debug("Failed getting stripe for key ", *key, " even with parities: ", e.what());
+  }
+
+  /* Try to use handoff chunks if any are available to serve the request */
+  if (getop.insertHandoffChunks(connections)) {
+    try {
+      return execute_get(getop, key, version, value, type);
+    } catch (std::exception& e) {
+      kio_debug("Failed getting stripe for key ", *key, " even with handoff chunks: ", e.what());
+    }
   }
 
   return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key" + *key + "not accessible.");
@@ -331,6 +341,7 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
     auto status = putOp.execute(operation_timeout, redundancy[type]);
     if (putOp.needsIndicator()) {
       putOp.putIndicatorKey(connections);
+      putOp.putHandoffKeys(connections);
     }
     if (status.ok()) {
       version_out = version_new;
@@ -338,6 +349,10 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
     kio_debug("Put request for key ", *key, " completed with status: ", status);
     return status;
   } catch (std::exception& e) {
+    if (mode == WriteMode::IGNORE_VERSION) {
+      kio_error("Irrecoverable error in put operation for key ", *key, " : ", e.what());
+      return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "Invalid.");
+    }
     if (mayForce(key, type, version_new)) {
       return do_put(key, version, value, version_out, type, WriteMode::IGNORE_VERSION);
     }
@@ -369,8 +384,8 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
   std::lock_guard<DestructionMutex> dlock(*dm);
 
   ClusterLogOp logop({Command_GetLog_Type::Command_GetLog_Type_CAPACITIES,
-                    Command_GetLog_Type::Command_GetLog_Type_STATISTICS
-                   }, connections, connections.size());
+                      Command_GetLog_Type::Command_GetLog_Type_STATISTICS
+                     }, connections, connections.size());
   auto cbs = logop.execute(operation_timeout);
 
   /* Set up temporary variables */

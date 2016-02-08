@@ -60,8 +60,28 @@ ClusterStatus KineticAdminCluster::status()
 
 bool KineticAdminCluster::removeIndicatorKey(const std::shared_ptr<const string>& key)
 {
-  StripeOperation_DEL rm(key, std::make_shared<const string>(), WriteMode::IGNORE_VERSION, connections, connections.size());
-  auto status = rm.execute(operation_timeout, redundancy[KeyType::Data]);
+  /* Remove any existing handoff keys */
+  ClusterRangeOp hofs(std::make_shared<const std::string>("handoff=" + *key),
+                      std::make_shared<const std::string>("handoff=" + *key + "~"),
+                      100, connections);
+  auto status = hofs.execute(operation_timeout, redundancy[KeyType::Data]);
+  if(status.ok()) {
+    std::unique_ptr<std::vector<std::string>> keys;
+    hofs.getKeys(keys);
+
+    for(int i=0; i<keys->size(); i++){
+      StripeOperation_DEL rm(std::make_shared<const std::string>(keys->at(i)),
+                             std::make_shared<const string>(),
+                             WriteMode::IGNORE_VERSION,
+                             connections, connections.size());
+      rm.execute(operation_timeout, redundancy[KeyType::Data]);
+    }
+  }
+
+  /* Remove indicator key */
+  StripeOperation_DEL rm(utility::makeIndicatorKey(*key), std::make_shared<const string>(), WriteMode::IGNORE_VERSION,
+                         connections, connections.size());
+  status = rm.execute(operation_timeout, redundancy[KeyType::Data]);
   return status.ok();
 }
 
@@ -81,7 +101,7 @@ bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyT
 
   if (valid_results < redundancy[keyType]->size()) {
     kio_notice("Key \"", *key, "\" is incomplete. Only ", valid_results, " of ", redundancy[keyType]->size(),
-              " drives returned a result");
+               " drives returned a result");
     key_counts.incomplete++;
   }
   if (target_version.frequency == valid_results && valid_results >= redundancy[keyType]->numData()) {
@@ -94,9 +114,18 @@ bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyT
     key_counts.need_action++;
     return true;
   }
+  else if (getV.insertHandoffChunks(connections)) {
+    rmap = getV.executeOperationVector(operation_timeout);
+    valid_results = rmap[StatusCode::OK] + rmap[StatusCode::REMOTE_NOT_FOUND];
+    if (target_version.frequency >= redundancy[keyType]->numData() ||
+        rmap[StatusCode::REMOTE_NOT_FOUND] >= redundancy[keyType]->numData()) {
+      kio_notice("Key \"", *key, "\" requires repair or removal. ", debugstring);
+      key_counts.need_action++;
+      return true;
+    }
+  }
 
   kio_error("Key ", *key, " is unfixable. ", debugstring);
-
   throw std::runtime_error("unfixable");
 }
 
@@ -118,7 +147,7 @@ void KineticAdminCluster::repairKey(const std::shared_ptr<const string>& key, Ke
 
   else if (getstatus.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
     auto rmstatus = this->remove(key, keyType);
-    if (!rmstatus.ok()) {
+    if (!rmstatus.ok() && rmstatus.statusCode() != StatusCode::REMOTE_NOT_FOUND) {
       kio_warning("Failed remove operation on target-key \"", *key, "\" ", rmstatus);
       throw std::system_error(std::make_error_code(std::errc::io_error));
     }
@@ -172,13 +201,13 @@ void KineticAdminCluster::applyOperation(
             repairKey(key, keyType, key_counts);
           }
           if (target == OperationTarget::INDICATOR) {
-            removeIndicatorKey(*it);
+            removeIndicatorKey(key);
           }
           break;
         }
         case Operation::RESET: {
           if (target == OperationTarget::INDICATOR) {
-            if (!removeIndicatorKey(*it)) {
+            if (!removeIndicatorKey(key)) {
               throw std::system_error(std::make_error_code(std::errc::io_error));
             }
           }

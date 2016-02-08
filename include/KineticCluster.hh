@@ -128,8 +128,7 @@ protected:
   kinetic::KineticStatus execute_get(kio::StripeOperation_GET& op,
                                        const std::shared_ptr<const std::string>& key,
                                        std::shared_ptr<const std::string>& version,
-                                       std::shared_ptr<const std::string>& value, KeyType type,
-                                       bool skip_value);
+                                       std::shared_ptr<const std::string>& value, KeyType type);
 
   kinetic::KineticStatus do_get(
       const std::shared_ptr<const std::string>& key,

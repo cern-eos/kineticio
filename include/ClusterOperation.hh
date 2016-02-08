@@ -119,6 +119,9 @@ protected:
 //! A range operation
 //--------------------------------------------------------------------------
 class ClusterRangeOp : public ClusterOperation {
+  /* Allow StripeOperation_GET access to internals in order to identify
+   * connections for handoff keys */
+  friend class StripeOperation_GET;
 public:
   //--------------------------------------------------------------------------
   //! Return the keys

@@ -65,6 +65,7 @@ SCENARIO("KineticIo Integration Test", "[Io]")
     std::string base_url("kinetic://Cluster1/");
     std::string full_url(base_url + "filename");
     auto fileio = kio::KineticIoFactory::makeFileIo(full_url);
+    REQUIRE(fileio);
 
     THEN("All file IO operations throw when attempted on unopened file") {
       REQUIRE_THROWS_AS(fileio->Read(0, read_buf, buf_size), std::system_error);

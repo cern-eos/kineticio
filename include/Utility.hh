@@ -72,7 +72,7 @@ namespace kio { namespace utility {
   //! @return the attribute key
   //--------------------------------------------------------------------------
   std::shared_ptr<const std::string> makeAttributeKey(const std::string& clusterId, const std::string& path, const std::string& attribute_name);
-  
+
   //--------------------------------------------------------------------------
   //! Create the kinetic indicator key from the supplied key.
   //!
@@ -177,6 +177,15 @@ namespace kio { namespace utility {
         std::stringstream s;
         argsToStream(s, std::forward<Args>(args)...);
         return s.str();
+      }
+
+      template<typename...Args>
+      static int toInt(Args&&...args){
+        std::stringstream s;
+        argsToStream(s, std::forward<Args>(args)...);
+        int x = 0;
+        s >> x;
+        return x;
       }
   private:
       //--------------------------------------------------------------------------

@@ -79,7 +79,27 @@ protected:
   //! @param size the number of operations to execute
   //! @param offset the offset to add to the initial connection choice
   //--------------------------------------------------------------------------
-  void expandOperationVector(std::vector<std::unique_ptr<KineticAutoConnection>>& connections, std::size_t size,std::size_t offset);
+  void expandOperationVector(
+      std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
+      std::size_t size,
+      std::size_t offset
+  );
+
+  //--------------------------------------------------------------------------
+  //! Create a single key containing the supplied name/version/value on any
+  //! connection.
+  //! @param name the key name to put
+  //! @param version the version to put ss
+  //! @param value the value to put
+  //! @param connections the connection vector
+  //! @return status of the put operation
+  //--------------------------------------------------------------------------
+  kinetic::KineticStatus createSingleKey(
+      std::shared_ptr<const std::string> name,
+      std::shared_ptr<const std::string> version,
+      std::shared_ptr<const std::string> value,
+      std::vector<std::unique_ptr<KineticAutoConnection>>& connections
+  );
 
   //! the key associated wit this stripe operation
   const std::shared_ptr<const std::string>& key;
@@ -92,6 +112,14 @@ protected:
 //--------------------------------------------------------------------------
 class StripeOperation_PUT : public StripeOperation {
 public:
+  //--------------------------------------------------------------------------
+  //! Write handoff keys
+  //!
+  //! @param connection vector of the cluster the handoff keys are supposed
+  //!   to be placed on
+  //--------------------------------------------------------------------------
+  void putHandoffKeys(std::vector<std::unique_ptr<KineticAutoConnection>>& connections);
+
   //--------------------------------------------------------------------------
   //! Execute the operation vector set up in the constructor and evaluate
   //! results. Will throw if a partial stripe write is detected.
@@ -107,12 +135,19 @@ public:
   //! @params... all the params
   //--------------------------------------------------------------------------
   explicit StripeOperation_PUT(const std::shared_ptr<const std::string>& key,
-                      const std::shared_ptr<const std::string>& version_new,
-                      const std::shared_ptr<const std::string>& version_old,
-                      std::vector<std::shared_ptr<const std::string>>& values,
-                      kinetic::WriteMode writeMode,
-                      std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                      std::size_t size, std::size_t offset = 0);
+                               const std::shared_ptr<const std::string>& version_new,
+                               const std::shared_ptr<const std::string>& version_old,
+                               std::vector<std::shared_ptr<const std::string>>& values,
+                               kinetic::WriteMode writeMode,
+                               std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
+                               std::size_t size, std::size_t offset = 0);
+
+private:
+  //! remember target version in case we need to write handoff keys
+  const std::shared_ptr<const std::string>& version_new;
+  //! remember chunk values in case we need to write handoff keys
+  std::vector<std::shared_ptr<const std::string>>& values;
+
 };
 
 //--------------------------------------------------------------------------
@@ -135,10 +170,10 @@ public:
   //! @params... all the params
   //--------------------------------------------------------------------------
   explicit StripeOperation_DEL(const std::shared_ptr<const std::string>& key,
-                      const std::shared_ptr<const std::string>& version,
-                      kinetic::WriteMode writeMode,
-                      std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                      std::size_t size, std::size_t offset = 0);
+                               const std::shared_ptr<const std::string>& version,
+                               kinetic::WriteMode writeMode,
+                               std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
+                               std::size_t size, std::size_t offset = 0);
 };
 
 //--------------------------------------------------------------------------
@@ -152,8 +187,8 @@ public:
   //! @params... all the params
   //--------------------------------------------------------------------------
   explicit StripeOperation_GET(const std::shared_ptr<const std::string>& key, bool skip_value,
-                      std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                      std::size_t size, std::size_t offset = 0);
+                               std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
+                               std::size_t size, std::size_t offset = 0);
 
   //--------------------------------------------------------------------------
   //! Extend the operation vector set up by the constructor by size elements.
@@ -166,17 +201,26 @@ public:
   void extend(std::vector<std::unique_ptr<KineticAutoConnection>>& connections, std::size_t size);
 
   //--------------------------------------------------------------------------
+  //! Searches all supplied connections for existing handoff keys. If any are
+  //! found for the currently most frequent version, the stripe operation's
+  //! operation vector will be modified so that the next call to execution()
+  //! will access the handoff keys instead of the 'normal' keys for a chunk.
+  //!
+  //! @param connections the connection vector of the calling cluster
+  //! @return true if any operations were modified, false otherwise
+  //--------------------------------------------------------------------------
+  bool insertHandoffChunks(std::vector<std::unique_ptr<KineticAutoConnection>>& connections);
+
+  //--------------------------------------------------------------------------
   //! Execute the operation vector set up in the constructor and evaluate
   //! results. Will throw if version / value can not be read in
   //!
   //! @param timeout the network timeout
   //! @param redundancy nData & nParity information
-  //! @param chunkCapacity Only used in case of skip_value=false to verify
-  //!   chunk size. TODO: recode to not require chunkcapacity
+  //! @return either returns a valid status (ok, not available) or throws
   //--------------------------------------------------------------------------
   kinetic::KineticStatus execute(const std::chrono::seconds& timeout,
-                                 std::shared_ptr<RedundancyProvider>& redundancy,
-                                 std::size_t chunkCapacity);
+                                 std::shared_ptr<RedundancyProvider>& redundancy);
 
   //--------------------------------------------------------------------------
   //! Return the value if execute succeeded
@@ -201,8 +245,8 @@ public:
   };
 
   //--------------------------------------------------------------------------
-  //! Return the most frequent version and its frequency. Does not count
-  //! non-existing values as empty version as kinetic sometimes does.
+  //! Return the most frequent version and its frequency. Does NOT count
+  //! non-existing values as empty version.
   //!
   //! @return the most frequent version and its frequency
   //--------------------------------------------------------------------------
@@ -226,16 +270,21 @@ private:
   void fillOperationVector();
 
   //--------------------------------------------------------------------------
+  //! Fill in function and callback for the supplied operation
+  //--------------------------------------------------------------------------
+  void fillOperation(KineticAsyncOperation& op, std::shared_ptr<const std::string> key);
+
+  //--------------------------------------------------------------------------
   //! Reconstruct the value from the operation vector if possible
   //!
   //! @return redundancy the redundancy object to recompute missing chunks
   //! @return chunkCapacity the chunk capacity
   //--------------------------------------------------------------------------
-  void reconstructValue(std::shared_ptr<RedundancyProvider>& redundancy, std::size_t chunkCapacity);
+  void reconstructValue(std::shared_ptr<RedundancyProvider>& redundancy);
 
   //! metadata only get
   bool skip_value;
-  //! the most frequent version in the opreation vector
+  //! the most frequent version in the operation vector
   VersionCount version;
   //! the reconstructed value
   std::shared_ptr<std::string> value;

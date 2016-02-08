@@ -45,16 +45,16 @@ SCENARIO("Cluster integration test.", "[Cluster]")
     std::size_t blocksize = 1024 * 1024;
 
     std::vector<std::unique_ptr<KineticAutoConnection>> connections;
-    for(int i=0; i<3; i++) {
+    for (int i = 0; i < 3; i++) {
       std::unique_ptr<KineticAutoConnection> autocon(
           new KineticAutoConnection(listener, std::make_pair(c.get(i), c.get(i)), std::chrono::seconds(10))
       );
       connections.push_back(std::move(autocon));
     }
-    auto cluster = std::make_shared<KineticCluster>("testcluster",  blocksize, std::chrono::seconds(10),
-                                                         std::move(connections),
-                                                         std::make_shared<RedundancyProvider>(nData,nParity),
-                                                         std::make_shared<RedundancyProvider>(1,nParity)
+    auto cluster = std::make_shared<KineticCluster>("testcluster", blocksize, std::chrono::seconds(10),
+                                                    std::move(connections),
+                                                    std::make_shared<RedundancyProvider>(nData, nParity),
+                                                    std::make_shared<RedundancyProvider>(1, nParity)
     );
 
     THEN("cluster limits reflect kinetic-drive limits") {
@@ -64,50 +64,8 @@ SCENARIO("Cluster integration test.", "[Cluster]")
       REQUIRE(cluster->limits(KeyType::Metadata).max_value_size == 1024 * 1024);
     }
 
-    THEN("Cluster size is reported as long as a single drive is alive.") {
-      for (int i = 0; i < nData + nParity + 1; i++) {
-        cluster->stats();
-        // sleep so that previous cluster->size background thread may finish
-        usleep(2500 * 1000);
-        ClusterStats s = cluster->stats();
-        if (i == nData + nParity) {
-          REQUIRE(s.bytes_total == 0);
-        }
-        else {
-          REQUIRE(s.bytes_total > 0);
-          c.stop(i);
-        }
-      }
-    }
-
-    WHEN("Some keys have been put down") {
-
-      shared_ptr<const string> putversion;
-      for(int i=0; i<10; i++) {
-        auto status = cluster->put(
-            make_shared<string>(utility::Convert::toString("key", i)),
-            make_shared<string>("value"),
-            putversion,
-            KeyType::Data);
-        REQUIRE(status.ok());
-      }
-      THEN("range will work and respect max_elements"){
-        std::unique_ptr<std::vector<std::string>> keys;
-        auto status = cluster->range(make_shared<string>("key"), make_shared<string>("key9"), keys, KeyType::Data, 3);
-        REQUIRE(status.ok());
-        REQUIRE(keys->size() == 3);
-        status = cluster->range(make_shared<string>("key"), make_shared<string>("key9"), keys, KeyType::Data);
-        REQUIRE(status.ok());
-        REQUIRE(keys->size() == 10);
-        status = cluster->range(make_shared<string>("key5"), make_shared<string>("key9"), keys, KeyType::Data);
-        REQUIRE(status.ok());
-        REQUIRE(keys->size() == 5);
-      }
-
-    }
-
     WHEN("Putting a key-value pair on a cluster with 1 drive failure") {
-      auto value = make_shared<string>(cluster->limits(KeyType::Data).max_value_size, 'v');
+      auto value = make_shared<string>("this is a value");
       c.stop(0);
 
       shared_ptr<const string> putversion;
@@ -129,10 +87,67 @@ SCENARIO("Cluster integration test.", "[Cluster]")
         REQUIRE(status.ok());
         REQUIRE(keys->size() == 1);
       }
+
+      THEN("A handoff key will have been generated") {
+        std::unique_ptr<std::vector<string>> keys;
+        auto status = cluster->range(
+            std::make_shared<const std::string>("hand"),
+            std::make_shared<const std::string>("hand~"),
+            keys,
+            KeyType::Data);
+        REQUIRE(status.ok());
+        REQUIRE(keys->size() == 1);
+
+        AND_THEN("We can read it again") {
+          shared_ptr<const string> getversion;
+          shared_ptr<const string> getvalue;
+          auto status = cluster->get(make_shared<string>("key"), getversion, getvalue, KeyType::Data);
+          REQUIRE(status.ok());
+          REQUIRE(*getversion == *putversion);
+          REQUIRE(*getvalue == *value);
+
+          AND_THEN("We should be able to successfully read in the value even with > nParity drive failures") {
+            /* We know handoff key landed on drive index 1 in this case */
+            c.stop(2);
+            shared_ptr<const string> getversion;
+            shared_ptr<const string> getvalue;
+            auto status = cluster->get(make_shared<string>("key"), getversion, getvalue, KeyType::Data);
+            REQUIRE(status.ok());
+            REQUIRE(*getversion == *putversion);
+            REQUIRE(*getvalue == *value);
+          }
+        }
+      }
+    }
+
+    WHEN("Some keys have been put down") {
+
+      shared_ptr<const string> putversion;
+      for (int i = 0; i < 10; i++) {
+        auto status = cluster->put(
+            make_shared<string>(utility::Convert::toString("key", i)),
+            make_shared<string>("value"),
+            putversion,
+            KeyType::Data);
+        REQUIRE(status.ok());
+      }
+      THEN("range will work and respect max_elements") {
+        std::unique_ptr<std::vector<std::string>> keys;
+        auto status = cluster->range(make_shared<string>("key"), make_shared<string>("key9"), keys, KeyType::Data, 3);
+        REQUIRE(status.ok());
+        REQUIRE(keys->size() == 3);
+        status = cluster->range(make_shared<string>("key"), make_shared<string>("key9"), keys, KeyType::Data);
+        REQUIRE(status.ok());
+        REQUIRE(keys->size() == 10);
+        status = cluster->range(make_shared<string>("key5"), make_shared<string>("key9"), keys, KeyType::Data);
+        REQUIRE(status.ok());
+        REQUIRE(keys->size() == 5);
+      }
+
     }
 
     WHEN("Putting a key-value pair on a healthy cluster") {
-      auto value = make_shared<string>(666, 'v');
+      auto value = make_shared<string>(66, 'v');
 
       shared_ptr<const string> putversion;
       auto status = cluster->put(
@@ -206,7 +221,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
               putversion,
               newval,
               newver,
-          KeyType::Data);
+              KeyType::Data);
           REQUIRE(status.ok());
           REQUIRE(newver);
         }
@@ -219,7 +234,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
               make_shared<string>("key"),
               version,
               readvalue,
-          KeyType::Data);
+              KeyType::Data);
           REQUIRE(status.ok());
           REQUIRE(version);
           REQUIRE(*version == *putversion);
@@ -247,6 +262,22 @@ SCENARIO("Cluster integration test.", "[Cluster]")
                 KeyType::Data);
             REQUIRE(status.statusCode() == StatusCode::CLIENT_IO_ERROR);
           }
+        }
+      }
+    }
+
+    THEN("Cluster size is reported as long as a single drive is alive.") {
+      for (int i = 0; i < nData + nParity + 1; i++) {
+        cluster->stats();
+        // sleep so that previous cluster->size background thread may finish
+        usleep(2500 * 1000);
+        ClusterStats s = cluster->stats();
+        if (i == nData + nParity) {
+          REQUIRE(s.bytes_total == 0);
+        }
+        else {
+          REQUIRE(s.bytes_total > 0);
+          c.stop(i);
         }
       }
     }
