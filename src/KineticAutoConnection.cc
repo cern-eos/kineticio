@@ -26,7 +26,7 @@ KineticAutoConnection::KineticAutoConnection(
     std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> o,
     std::chrono::seconds r) :
     options(o), ratelimit(r), connection(), healthy(false), fd(0), timestamp(std::chrono::system_clock::now()),
-    mutex(), sockwatch(sw), mt(), bg(1,0)
+    mutex(), sockwatch(sw), mt(), bg(1, 0)
 {
   std::random_device rd;
   mt.seed(rd());
@@ -47,18 +47,16 @@ const std::string& KineticAutoConnection::getName() const
   return logstring;
 }
 
-void KineticAutoConnection::setError()
+void KineticAutoConnection::setError(std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>& errorConnection)
 {
   std::lock_guard<std::mutex> lock(mutex);
-  if(!healthy)
+  if (!healthy) {
     return;
+  }
 
-  /* Make the connection invincible for a brief time period after it is (re)established to ensure that outstanding
-   * IO jobs that still used the broken connection do not immediately disable a newly established connection
-   * again. */
-  using namespace std::chrono;
-  if(duration_cast<milliseconds>(system_clock::now() - timestamp) < milliseconds(500)){
-    kio_debug("Disregarding setError on ", getName(), " due to recent reconnection attempt.");
+  if (connection != errorConnection) {
+    kio_debug("Disregarding setError on ", getName(), " as underlying connection does not match the connection that "
+        "showed an error. This indicates that a reconnect attempt has been succesffully completed in the meantime.");
     return;
   }
 
@@ -81,16 +79,16 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
 
   /* Rate limit re-connection attempts. */
   using namespace std::chrono;
-  auto duration = duration_cast<seconds>(system_clock::now() - timestamp);
+  auto duration = duration_cast<seconds>(std::chrono::system_clock::now() - timestamp);
   if (duration > ratelimit) {
     if (bg.try_run(std::bind(&KineticAutoConnection::connect, this))) {
       timestamp = std::chrono::system_clock::now();
-      kio_debug("Scheduled background reconnect. Last reconnect attempt has been scheduled ",
-                duration, " seconds ago. ratelimit is ", ratelimit, " seconds ", logstring);
+      kio_debug(logstring, " Scheduled background reconnect. Last reconnect attempt has been scheduled ",
+                duration, " ago. ratelimit is ", ratelimit);
     }
     else {
-      kio_notice("Failed scheduling background reconnect despite last having been scheduled ",
-                duration, " seconds ago and a ratelimit of ", ratelimit, " seconds ", logstring);
+      kio_notice(logstring, " Failed scheduling background reconnect despite last having been scheduled ",
+                 duration, " ago. ratelimit is ", ratelimit);
     }
   }
   throw std::system_error(std::make_error_code(std::errc::not_connected));
@@ -146,7 +144,7 @@ void KineticAutoConnection::connect()
     int y;
     tmpcon->Run(&x, &x, &tmpfd);
 
-    /* wait on noop reply... we actually don't want to add drives where the connection succeeds 
+    /* wait on noop reply... we actually don't want to add drives where the connection succeeds
      * but requests don't (e.g. drive is in locked state or has an error) */
     while (tmpcon->Run(&x, &x, &y) && !cb->done()) {
       struct timeval tv{5, 0};
@@ -163,12 +161,7 @@ void KineticAutoConnection::connect()
     std::lock_guard<std::mutex> lock(mutex);
     if (tmpfd) {
       tmpfd--;
-      try {
-        sockwatch.subscribe(tmpfd, this);
-      } catch (const std::exception& e) {
-        kio_warning(e.what());
-        throw e;
-      }
+      sockwatch.subscribe(tmpfd, this);
       fd = tmpfd;
       connection = std::move(tmpcon);
       healthy = true;

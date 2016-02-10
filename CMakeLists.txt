@@ -137,6 +137,7 @@ if(BUILD_TEST)
         test/LoggingTest.cc
         test/KineticAdminClusterTest.cc
         test/DataCacheTest.cc
+        test/KineticAutoConnectionTest.cc
         )
     target_link_libraries(kio-test
         ${Z_LIBRARIES}

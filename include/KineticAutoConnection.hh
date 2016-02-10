@@ -44,9 +44,10 @@ public:
   //! Set the connection error status if an operation on the connection
   //! failed catastrophically.
   //!
-  //! @param status the error status that occurred.
+  //! @param errorConnection the underlying connection for which an error was
+  //!   observed.
   //--------------------------------------------------------------------------
-  void setError();
+  void setError(std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>& errorConnection);
 
   //--------------------------------------------------------------------------
   //! Return copy of underlying connection pointer, reconnect if indicated by

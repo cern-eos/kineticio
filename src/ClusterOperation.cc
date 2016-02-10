@@ -39,6 +39,7 @@ void ClusterOperation::expandOperationVector(std::vector<std::unique_ptr<Kinetic
   }
 }
 
+// TODO: add healthy connection minimum number to function and don't attempt if not feasible
 std::map<kinetic::StatusCode, int, CompareStatusCode> ClusterOperation::executeOperationVector(const std::chrono::seconds& timeout)
 {
  // kio_debug("Start execution of ", operations.size(), " operations for sync-point ", &sync);
@@ -47,6 +48,8 @@ std::map<kinetic::StatusCode, int, CompareStatusCode> ClusterOperation::executeO
   do {
     rounds_left--;
     std::vector<kinetic::HandlerKey> hkeys(operations.size());
+    std::vector<std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>> cons(operations.size());
+
 
     /* Call functions on connections */
     for (int i = 0; i < operations.size(); i++) {
@@ -54,19 +57,19 @@ std::map<kinetic::StatusCode, int, CompareStatusCode> ClusterOperation::executeO
         if (operations[i].callback->finished()) {
           continue;
         }
-        auto con = operations[i].connection->get();
-        hkeys[i] = operations[i].function(con);
+        cons[i] = operations[i].connection->get();
+        hkeys[i] = operations[i].function(cons[i]);
 
         fd_set a;
         int fd;
-        if (!con->Run(&a, &a, &fd)) {
+        if (!cons[i]->Run(&a, &a, &fd)) {
           throw std::runtime_error("Connection::Run(...) returned false");
         }
       }
       catch (const std::exception& e) {
         auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
         operations[i].callback->OnResult(status);
-        operations[i].connection->setError();
+        operations[i].connection->setError(cons[i]);
         //kio_notice("Failed executing async operation for connection ", operations[i].connection->getName(), status);
       }
     }
@@ -88,7 +91,7 @@ std::map<kinetic::StatusCode, int, CompareStatusCode> ClusterOperation::executeO
         kio_warning("Network timeout for operation ", operations[i].connection->getName(), " for sync-point", &sync);
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
         operations[i].callback->OnResult(status);
-        operations[i].connection->setError();
+        operations[i].connection->setError(cons[i]);
       }
 
       /* Retry operations with CLIENT_IO_ERROR code result. Something went wrong with the connection,

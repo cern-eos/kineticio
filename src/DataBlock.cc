@@ -118,7 +118,7 @@ void DataBlock::getRemoteValue()
   if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
     version.reset();
   }
-    /* set value_size to reflect remote_value */
+  /* set value_size to reflect remote_value */
   else {
     value_size = remote_value ? remote_value->size() : 0;
   }
