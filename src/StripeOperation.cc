@@ -155,8 +155,8 @@ StripeOperation_PUT::StripeOperation_PUT(const std::shared_ptr<const std::string
         PersistMode)>(
         &ThreadsafeNonblockingKineticConnection::Put,
         std::placeholders::_1,
-        std::cref(key),
-        std::cref(version_old),
+        key,
+        version_old,
         writeMode,
         record,
         cb,
@@ -219,8 +219,8 @@ StripeOperation_DEL::StripeOperation_DEL(const std::shared_ptr<const std::string
         PersistMode)>(
         &ThreadsafeNonblockingKineticConnection::Delete,
         std::placeholders::_1,
-        std::cref(key),
-        std::cref(version),
+        key,
+        version,
         writeMode,
         cb,
         PersistMode::WRITE_BACK);

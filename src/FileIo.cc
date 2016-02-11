@@ -510,6 +510,9 @@ int FileIo::LastBlockNumber::get() const
 
 void FileIo::LastBlockNumber::set(int block_number)
 {
+  if(last_block_number > block_number){
+    kio_notice("Last block number is decreased to ", block_number, " from ", last_block_number);
+  }
   last_block_number = block_number;
   last_block_number_timestamp = std::chrono::system_clock::now();
 }

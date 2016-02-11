@@ -160,8 +160,8 @@ ClusterRangeOp::ClusterRangeOp(const std::shared_ptr<const std::string>& start_k
         const shared_ptr<GetKeyRangeCallbackInterface>)>(
         &ThreadsafeNonblockingKineticConnection::GetKeyRange,
         std::placeholders::_1,
-        std::cref(start_key), true,
-        std::cref(end_key), true,
+        start_key, true,
+        end_key, true,
         false,
         maxRequestedPerDrive,
         cb);

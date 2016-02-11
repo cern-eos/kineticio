@@ -238,7 +238,7 @@ void DataBlock::flush()
 
   KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "invalid");
   do {
-    if (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH) {
+    if (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH || (!version && mode == Mode::STANDARD)) {
       getRemoteValue();
     }
 
