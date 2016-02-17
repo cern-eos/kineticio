@@ -117,6 +117,7 @@ void DataCache::try_shrink()
       it = remove_item(it);
     }
     else if(it->data->dirty() && it->last_access < expired){
+      kio_debug("Attempting background flush of dirty expired data chunk: ", it->data->getIdentity());
       kio().threadpool().try_run(std::bind(&doFlush, it->data));
     }
   }
@@ -154,7 +155,7 @@ void DataCache::try_shrink()
   }
 }
 
-std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumber, DataBlock::Mode mode)
+std::shared_ptr<kio::DataBlock> DataCache::getDataKey(kio::FileIo* owner, int blocknumber, DataBlock::Mode mode)
 {
   /* We cannot use the block key directly for cache lookups, as reloading the configuration will create
      different cluster objects and we have to avoid FileIo objects being associated with multiple clusters */
@@ -192,6 +193,7 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
     it->data->reassign(owner->cluster, data_key, mode);
     it->last_access = std::chrono::system_clock::now();
     cache.splice(cache.begin(), unused_items, it);
+    kio_debug("Added reused data key ", *data_key, " to the cache for owner ", owner);
   }
   else {
     cache.push_front(
@@ -200,12 +202,11 @@ std::shared_ptr<kio::DataBlock> DataCache::get(kio::FileIo* owner, int blocknumb
                   std::chrono::system_clock::now()
         }
     );
+    kio_debug("Added new data key ", *data_key, " to the cache for owner ", owner);
   }
   current_size += cache.front().data->capacity();
   lookup[cache_key] = cache.begin();
   owner_tables[owner].insert(cache.begin());
-
-  kio_debug("Added data key ", *data_key, " to the cache for owner ", owner);
   return cache.front().data;;
 }
 

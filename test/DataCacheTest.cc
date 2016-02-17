@@ -173,7 +173,7 @@ SCENARIO("Cache Performance Test.", "[Cache]")
         int break_point = capacity * 0.7;
         auto tstart = system_clock::now();
         for (int i = 0; i < break_point; i++) {
-          ccc.get((FileIo*) &fio, i, DataBlock::Mode::STANDARD);
+          ccc.getDataKey((FileIo*) &fio, i, DataBlock::Mode::STANDARD);
         }
         auto tend = system_clock::now();
 
@@ -182,7 +182,7 @@ SCENARIO("Cache Performance Test.", "[Cache]")
 
         tstart = system_clock::now();
         for (int i = break_point; i < capacity; i++) {
-          ccc.get((FileIo*) &fio, i, DataBlock::Mode::STANDARD);
+          ccc.getDataKey((FileIo*) &fio, i, DataBlock::Mode::STANDARD);
         }
         tend = system_clock::now();
         printf("%ld items per second up to capacity \n",
@@ -190,7 +190,7 @@ SCENARIO("Cache Performance Test.", "[Cache]")
 
         tstart = system_clock::now();
         for (int i = capacity; i < 2 * capacity; i++) {
-          ccc.get((FileIo*) &fio, i, DataBlock::Mode::STANDARD);
+          ccc.getDataKey((FileIo*) &fio, i, DataBlock::Mode::STANDARD);
         }
         tend = system_clock::now();
         printf("%ld items per second above capacity \n",
@@ -201,7 +201,7 @@ SCENARIO("Cache Performance Test.", "[Cache]")
 
         tstart = system_clock::now();
         for (int i = 2 * capacity; i < 3 * capacity; i++) {
-          ccc.get((FileIo*) &fio, i, DataBlock::Mode::STANDARD);
+          ccc.getDataKey((FileIo*) &fio, i, DataBlock::Mode::STANDARD);
         }
         tend = system_clock::now();
         printf("%ld items per second above capacity after timeout \n\n",

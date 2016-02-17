@@ -56,7 +56,7 @@ public:
   //! @param mode argument to pass to a block if it has to be created
   //! @return the block on success, throws on error
   //--------------------------------------------------------------------------
-  std::shared_ptr<kio::DataBlock> get(
+  std::shared_ptr<kio::DataBlock> getDataKey(
       kio::FileIo* owner,
       int blocknumber,
       DataBlock::Mode cm

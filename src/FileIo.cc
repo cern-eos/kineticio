@@ -136,7 +136,7 @@ void FileIo::scheduleReadahead(int blocknumber)
     auto prediction = prefetchOracle.predict(readahead_length, PrefetchOracle::PredictionType::CONTINUE);
     for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
       if (*it < lastBlockNumber.get()) {
-        auto data = kio().cache().get(this, *it, DataBlock::Mode::STANDARD);
+        auto data = kio().cache().getDataKey(this, *it, DataBlock::Mode::STANDARD);
         auto scheduled = kio().threadpool().try_run(std::bind(do_readahead, data));
         if (scheduled)
           kio_debug("Readahead of data block #", *it);
@@ -194,7 +194,7 @@ int64_t FileIo::ReadWrite(long long off, char* buffer,
       cm = DataBlock::Mode::CREATE;
     }
 
-    auto data = kio().cache().get(this, block_number, cm);
+    auto data = kio().cache().getDataKey(this, block_number, cm);
     scheduleReadahead(block_number);
 
     if (mode == rw::WRITE) {
@@ -267,7 +267,7 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
 
   if (offset > 0) {
     /* Step 1) truncate the block containing the offset. */
-    kio().cache().get(this, block_number, DataBlock::Mode::STANDARD)->truncate(block_offset);
+    kio().cache().getDataKey(this, block_number, DataBlock::Mode::STANDARD)->truncate(block_offset);
 
     /* Step 2) Ensure we don't have data past block_number in the kio().cache() Since
      * truncate isn't super common, go the easy way and just sync+drop the entire
@@ -336,7 +336,7 @@ void FileIo::Stat(struct stat* buf, uint16_t timeout)
   }
 
   lastBlockNumber.verify();
-  auto last_block = kio().cache().get(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD);
+  auto last_block = kio().cache().getDataKey(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD);
 
   memset(buf, 0, sizeof(struct stat));
   buf->st_blksize = cluster->limits(KeyType::Data).max_value_size;

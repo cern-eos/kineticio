@@ -29,7 +29,7 @@ ClusterStatus KineticAdminCluster::status()
   ClusterStatus clusterStatus;
 
   clusterStatus.redundancy_factor = redundancy[KeyType::Data]->numParity();
-  clusterStatus.drives_total = redundancy[KeyType::Data]->size();
+  clusterStatus.drives_total = connections.size();
   clusterStatus.drives_failed = 0;
 
   /* Set indicator existance */
