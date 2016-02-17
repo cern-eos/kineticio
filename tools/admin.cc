@@ -16,9 +16,12 @@
 #include <iostream>
 #include <sys/syslog.h>
 #include <unistd.h>
+#include <signal.h>
 #include "AdminClusterInterface.hh"
 #include "ClusterMap.hh"
 #include "KineticIoFactory.hh"
+
+namespace {
 
 typedef kio::AdminClusterInterface::OperationTarget OperationTarget;
 
@@ -215,10 +218,22 @@ bool parseArguments(int argc, char** argv, Configuration& config)
   return true;
 }
 
-void printinc(int value)
+static bool continue_execution = true;
+
+bool callbackfunction(bool do_print, int value)
 {
-  fprintf(stdout, "\t %d\r", value);
-  fflush(stdout);
+  if (do_print) {
+    fprintf(stdout, "\t %d\r", value);
+    fflush(stdout);
+  }
+  return continue_execution;
+}
+
+void my_handler(int s)
+{
+  fprintf(stdout, "Caught SIGINT, initializing clean shutdown...\n");
+  continue_execution = false;
+}
 }
 
 int main(int argc, char** argv)
@@ -230,18 +245,18 @@ int main(int argc, char** argv)
     return EXIT_FAILURE;
   }
 
-  std::function<void(int)> callback;
-  if (!config.monitoring) {
-    callback = printinc;
-  }
+  /* Register SIGINT to enable clean shutdown */
+  struct sigaction sigIntHandler;
+  sigIntHandler.sa_handler = my_handler;
+  sigemptyset(&sigIntHandler.sa_mask);
+  sigIntHandler.sa_flags = 0;
+  sigaction(SIGINT, &sigIntHandler, NULL);
 
   try {
-    kio::KineticIoFactory::registerLogFunction(mlog,
-                                               std::bind(mshouldLog, std::placeholders::_1, std::placeholders::_2,
-                                                         config.verbosity)
-    );
+    kio::KineticIoFactory::registerLogFunction(mlog, std::bind(mshouldLog, std::placeholders::_1, std::placeholders::_2, config.verbosity));
 
     auto ac = kio::KineticIoFactory::makeAdminCluster(config.id.c_str());
+    auto callback = std::bind(callbackfunction, !config.monitoring, std::placeholders::_1);
 
 
     switch (config.op) {
@@ -250,7 +265,7 @@ int main(int argc, char** argv)
         if (config.monitoring) {
           fprintf(stdout, "kinetic.connections.total=%u kinetic.connections.failed=%u\n", v.drives_total,
                   v.drives_failed);
-          fprintf(stdout, "kinetic.redundancy_factor=%u\n",v.redundancy_factor);
+          fprintf(stdout, "kinetic.redundancy_factor=%u\n", v.redundancy_factor);
           fprintf(stdout, "kinetic.indicator_exist=%s\n", v.indicator_exist ? "YES" : "NO");
           for (size_t i = 0; i < v.connected.size(); i++) {
             fprintf(stdout, "kinetic.drive.index=%lu kinetic.drive.status=%s\n", i, v.connected[i] ? "OK" : "FAILED");

@@ -33,16 +33,16 @@ namespace kio {
 class KineticAdminCluster : public KineticCluster, public AdminClusterInterface {
 public:
   //! See documentation of public interface in AdminClusterInterface
-  int count(OperationTarget target, std::function<void(int)> callback = NULL);
+  int count(OperationTarget target, callback_t callback = NULL);
 
   //! See documentation of public interface in AdminClusterInterface 
-  KeyCounts scan(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1);
+  KeyCounts scan(OperationTarget target, callback_t callback = NULL, int numThreads = 1);
 
   //! See documentation of public interface in AdminClusterInterface
-  KeyCounts repair(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1);
+  KeyCounts repair(OperationTarget target, callback_t callback = NULL, int numThreads = 1);
 
   //! See documentation of public interface in AdminClusterInterface
-  KeyCounts reset(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1);
+  KeyCounts reset(OperationTarget target, callback_t callback = NULL, int numThreads = 1);
 
   //! See documentation of public interface in AdminClusterInterface
   ClusterStatus status();
@@ -92,7 +92,7 @@ private:
   KeyCounts doOperation(
       Operation o,
       OperationTarget t,
-      std::function<void(int)> callback,
+      callback_t callback,
       int numthreads
   );
 

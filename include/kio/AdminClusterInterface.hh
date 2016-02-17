@@ -67,6 +67,13 @@ public:
     int unrepairable;
   };
 
+  //----------------------------------------------------------------------------
+  //! Type of callback function object. If provided it will be called
+  //! periodically with the current number of processed keys. If it returns
+  //! false the currently executed admin operation will be interrupted.
+  //----------------------------------------------------------------------------
+  typedef std::function<bool(int)> callback_t;
+
   //--------------------------------------------------------------------------
   //! Only count the number of keys existing on the cluster.
   //!
@@ -75,7 +82,7 @@ public:
   //! with the current number of processed keys periodically
   //! @return the number of keys in the cluster
   //--------------------------------------------------------------------------
-  virtual int count(OperationTarget target, std::function<void(int)> callback = NULL) = 0;
+  virtual int count(OperationTarget target, callback_t callback = NULL) = 0;
 
   //--------------------------------------------------------------------------
   //! Scan all subchunks of every target key and check if keys need to
@@ -87,7 +94,7 @@ public:
   //! @param numThreads the number of background IO threads used for scanning
   //! @return statistics about the scanned keys
   //--------------------------------------------------------------------------  
-  virtual KeyCounts scan(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1) = 0;
+  virtual KeyCounts scan(OperationTarget target, callback_t callback = NULL, int numThreads = 1) = 0;
 
   //--------------------------------------------------------------------------
   //! Scan all subchunks of every target key and check if keys need to
@@ -99,7 +106,7 @@ public:
   //! @param numThreads the number of background IO threads used for repair
   //! @return statistics about the keys
   //--------------------------------------------------------------------------
-  virtual KeyCounts repair(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1) = 0;
+  virtual KeyCounts repair(OperationTarget target, callback_t callback = NULL, int numThreads = 1) = 0;
 
   //--------------------------------------------------------------------------
   //! Force delete keys on the cluster.
@@ -110,7 +117,7 @@ public:
   //! @param numThreads the number of background IO threads used for deletion
   //! @return statistics about the keys
   //--------------------------------------------------------------------------
-  virtual KeyCounts reset(OperationTarget target, std::function<void(int)> callback = NULL, int numThreads = 1) = 0;
+  virtual KeyCounts reset(OperationTarget target, callback_t callback = NULL, int numThreads = 1) = 0;
 
   //--------------------------------------------------------------------------
   //! Obtain the current status of connections to all drives attached to this

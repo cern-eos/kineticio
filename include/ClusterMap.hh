@@ -100,6 +100,9 @@ public:
   explicit ClusterMap();
 
 private:
+  //! epoll listener loop shared among all connections of clusters in this cluster map
+  std::unique_ptr<SocketListener> listener;
+
   //! the cluster id <-> cluster info
   std::unordered_map<std::string, ClusterInformation> clusterInfoMap;
   
@@ -112,10 +115,7 @@ private:
   //! RedundancyProvider instances of the same type (nData,nParity) can be shared
   //! among multiple cluster instances
   std::unordered_map<std::string, std::shared_ptr<RedundancyProvider>> rpCache;
-  
-  //! epoll listener loop shared among all connections of clusters in this cluster map 
-  std::unique_ptr<SocketListener> listener;  
-  
+
   //! concurrency control
   std::mutex mutex;
 };

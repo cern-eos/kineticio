@@ -65,11 +65,11 @@ bool KineticAdminCluster::removeIndicatorKey(const std::shared_ptr<const string>
                       std::make_shared<const std::string>("handoff=" + *key + "~"),
                       100, connections);
   auto status = hofs.execute(operation_timeout, redundancy[KeyType::Data]);
-  if(status.ok()) {
+  if (status.ok()) {
     std::unique_ptr<std::vector<std::string>> keys;
     hofs.getKeys(keys);
 
-    for(int i=0; i<keys->size(); i++){
+    for (int i = 0; i < keys->size(); i++) {
       StripeOperation_DEL rm(std::make_shared<const std::string>(keys->at(i)),
                              std::make_shared<const string>(),
                              WriteMode::IGNORE_VERSION,
@@ -260,7 +260,7 @@ void KineticAdminCluster::initRangeKeys(
 kio::AdminClusterInterface::KeyCounts KineticAdminCluster::doOperation(
     Operation o,
     OperationTarget t,
-    std::function<void(int)> callback,
+    callback_t callback,
     int numthreads
 )
 {
@@ -292,8 +292,9 @@ kio::AdminClusterInterface::KeyCounts KineticAdminCluster::doOperation(
           bg.run(std::bind(&KineticAdminCluster::applyOperation, this, o, t, std::ref(key_counts), out));
         }
       }
-      if (callback) {
-        callback(key_counts.total);
+      if (callback && !callback(key_counts.total)) {
+        kio_notice("Callback result indicates shutdown request... interrupting execution.");
+        break;
       }
     } while (keys && keys->size());
   }
@@ -303,25 +304,25 @@ kio::AdminClusterInterface::KeyCounts KineticAdminCluster::doOperation(
   };
 }
 
-int KineticAdminCluster::count(OperationTarget target, std::function<void(int)> callback)
+int KineticAdminCluster::count(OperationTarget target, callback_t callback)
 {
   return doOperation(Operation::COUNT, target, std::move(callback), 0).total;
 }
 
 kio::AdminClusterInterface::KeyCounts KineticAdminCluster::scan(OperationTarget target,
-                                                                std::function<void(int)> callback, int numThreads)
+                                                                callback_t callback, int numThreads)
 {
   return doOperation(Operation::SCAN, target, std::move(callback), numThreads);
 }
 
 kio::AdminClusterInterface::KeyCounts KineticAdminCluster::repair(OperationTarget target,
-                                                                  std::function<void(int)> callback, int numThreads)
+                                                                  callback_t callback, int numThreads)
 {
   return doOperation(Operation::REPAIR, target, std::move(callback), numThreads);
 }
 
 kio::AdminClusterInterface::KeyCounts KineticAdminCluster::reset(OperationTarget target,
-                                                                 std::function<void(int)> callback, int numThreads)
+                                                                 callback_t callback, int numThreads)
 {
   return doOperation(Operation::RESET, target, std::move(callback), numThreads);
 }
