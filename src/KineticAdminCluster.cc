@@ -28,11 +28,11 @@ ClusterStatus KineticAdminCluster::status()
 {
   ClusterStatus clusterStatus;
 
-  clusterStatus.redundancy_factor = redundancy[KeyType::Data]->numParity();
-  clusterStatus.drives_total = connections.size();
+  clusterStatus.redundancy_factor = static_cast<uint32_t>(redundancy[KeyType::Data]->numParity());
+  clusterStatus.drives_total = static_cast<uint32_t>(connections.size());
   clusterStatus.drives_failed = 0;
 
-  /* Set indicator existance */
+  /* Set indicator existence */
   std::shared_ptr<const string> indicator_start;
   std::shared_ptr<const string> indicator_end;
   initRangeKeys(OperationTarget::INDICATOR, indicator_start, indicator_end);
@@ -40,7 +40,7 @@ ClusterStatus KineticAdminCluster::status()
   std::unique_ptr<std::vector<string>> keys(new std::vector<string>());
   auto status = range(indicator_start, indicator_end, keys, KeyType::Data, 1);
 
-  clusterStatus.indicator_exist = keys->size() > 0;
+  clusterStatus.indicator_exist = status.ok() && keys->size() > 0;
 
   /* Set individual connection info */
   for (auto it = connections.cbegin(); it != connections.cend(); it++) {
@@ -69,7 +69,7 @@ bool KineticAdminCluster::removeIndicatorKey(const std::shared_ptr<const string>
     std::unique_ptr<std::vector<std::string>> keys;
     hofs.getKeys(keys);
 
-    for (int i = 0; i < keys->size(); i++) {
+    for (size_t i = 0; i < keys->size(); i++) {
       StripeOperation_DEL rm(std::make_shared<const std::string>(keys->at(i)),
                              std::make_shared<const string>(),
                              WriteMode::IGNORE_VERSION,
@@ -173,7 +173,7 @@ void KineticAdminCluster::applyOperation(
 {
   auto keyType = target == OperationTarget::DATA ? KeyType::Data : KeyType::Metadata;
 
-  for (auto it = keys.begin(); it != keys.end(); it++) {
+  for (auto it = keys.cbegin(); it != keys.cend(); it++) {
     std::shared_ptr<const string> key = *it;
 
     /* Special consideration applies when traversing indicator keys... as they can indicate both data and
@@ -221,6 +221,8 @@ void KineticAdminCluster::applyOperation(
           key_counts.removed++;
           break;
         }
+        default:
+          throw std::runtime_error("Invalid Operation");
       }
     } catch (const std::exception& e) {
       key_counts.unrepairable++;
@@ -252,6 +254,8 @@ void KineticAdminCluster::initRangeKeys(
       start_key = utility::makeIndicatorKey(id);
       end_key = utility::makeIndicatorKey(id + "~");
       break;
+    case OperationTarget::INVALID:
+      throw std::logic_error("Invalid Operation Target Type");
   }
   kio_debug("Start key=", *start_key);
   kio_debug("End key=", *end_key);

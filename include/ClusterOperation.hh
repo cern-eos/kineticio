@@ -81,7 +81,7 @@ public:
   //! @param timeout the network timeout to be used
   //! @return a std::map containing the frequency of operation results
   //--------------------------------------------------------------------------
-  std::map<kinetic::StatusCode, int, CompareStatusCode> executeOperationVector(const std::chrono::seconds& timeout);
+  std::map<kinetic::StatusCode, size_t, CompareStatusCode> executeOperationVector(const std::chrono::seconds& timeout);
 
 protected:
   struct KineticAsyncOperation {
@@ -119,8 +119,7 @@ protected:
 //! A range operation
 //--------------------------------------------------------------------------
 class ClusterRangeOp : public ClusterOperation {
-  /* Allow StripeOperation_GET access to internals in order to identify
-   * connections for handoff keys */
+  /* Allow StripeOperation_GET access to internals in order to identify connections for handoff keys */
   friend class StripeOperation_GET;
 public:
   //--------------------------------------------------------------------------

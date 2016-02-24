@@ -38,10 +38,6 @@ namespace kio {
 //------------------------------------------------------------------------------
 class RedundancyProvider {
 public:
-  const std::size_t& numData() const;
-  const std::size_t& numParity() const;
-  std::size_t size() const;
-
   //--------------------------------------------------------------------------
   //! Compute all missing data and parity blocks in the the stripe. Stripe size
   //! has to equal nData+nParity. Blocks can be arbitrary size, but size has
@@ -51,6 +47,27 @@ public:
   //!   computed if possible.
   //--------------------------------------------------------------------------
   void compute(std::vector<std::shared_ptr<const std::string> >& stripe);
+
+  //--------------------------------------------------------------------------
+  //! Get nData
+  //!
+  //! @return the number of data blocks per stripe
+  //--------------------------------------------------------------------------
+  const std::size_t& numData() const;
+
+  //--------------------------------------------------------------------------
+  //! Get nParity
+  //!
+  //! @return the number of parity blocks per stripe
+  //--------------------------------------------------------------------------
+  const std::size_t& numParity() const;
+
+  //--------------------------------------------------------------------------
+  //! For convenience only, returns nData+nParity
+  //!
+  //! @return the number of data blocks and parity blocks per stripe
+  //--------------------------------------------------------------------------
+  std::size_t size() const;
 
   //--------------------------------------------------------------------------
   //! Constructor.

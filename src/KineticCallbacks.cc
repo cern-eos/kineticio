@@ -49,7 +49,7 @@ KineticCallback::~KineticCallback()
 
 void KineticCallback::OnResult(kinetic::KineticStatus result)
 {
-  std::unique_lock<std::mutex> lck(sync.mutex);
+  std::unique_lock<std::mutex> lock(sync.mutex);
   if (done) {
     return;
   }
@@ -64,19 +64,19 @@ void KineticCallback::OnResult(kinetic::KineticStatus result)
 
 kinetic::KineticStatus& KineticCallback::getResult()
 {
-  std::lock_guard<std::mutex> lck(sync.mutex);
+  std::lock_guard<std::mutex> lock(sync.mutex);
   return status;
 }
 
 bool KineticCallback::finished()
 {
-  std::lock_guard<std::mutex> lck(sync.mutex);
+  std::lock_guard<std::mutex> lock(sync.mutex);
   return done;
 }
 
 void KineticCallback::reset()
 {
-  std::lock_guard<std::mutex> lck(sync.mutex);
+  std::lock_guard<std::mutex> lock(sync.mutex);
   done = false;
   status = kinetic::KineticStatus(kinetic::StatusCode::CLIENT_INTERNAL_ERROR, "no result");
   sync.outstanding++;

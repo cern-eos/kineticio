@@ -241,7 +241,7 @@ public:
   //--------------------------------------------------------------------------
   struct VersionCount {
       std::shared_ptr<const std::string> version;
-      int frequency;
+      size_t frequency;
   };
 
   //--------------------------------------------------------------------------
@@ -250,7 +250,7 @@ public:
   //!
   //! @return the most frequent version and its frequency
   //--------------------------------------------------------------------------
-  VersionCount mostFrequentVersion();
+  VersionCount mostFrequentVersion() const;
 
   //--------------------------------------------------------------------------
   //! Check which position the supplied version has in the operation vector

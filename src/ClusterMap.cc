@@ -33,7 +33,7 @@ void ClusterMap::reset(
     std::unordered_map<std::string, std::pair<kinetic::ConnectionOptions, kinetic::ConnectionOptions> > driveInfo
 )
 {
-  std::lock_guard<std::mutex> locker(mutex);
+  std::lock_guard<std::mutex> lock(mutex);
   clusterInfoMap = std::move(clusterInfo);
   driveInfoMap = std::move(driveInfo);
   clusterCache.clear();

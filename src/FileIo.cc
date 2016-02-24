@@ -29,7 +29,7 @@ using namespace kio;
 
 
 FileIo::FileIo(const std::string& url) :
-    cluster(), lastBlockNumber(*this), prefetchOracle(kio().readaheadWindowSize()), opened(false)
+    cluster(), prefetchOracle(kio().readaheadWindowSize()), lastBlockNumber(*this), opened(false)
 {
   if (url.compare(0, strlen("kinetic://"), "kinetic://") != 0) {
     kio_error("Invalid url supplied. Required format: kinetic://clusterId/path, supplied: ", url);
@@ -121,7 +121,7 @@ void FileIo::scheduleReadahead(int blocknumber)
 {
   prefetchOracle.add(blocknumber);
 
-  /* Adjust scheduleReadahead to cache utilization. Full force to 0.75 usage, decreasing until 0.95, then disabled. */
+  /* Adjust to cache utilization. Full force to 0.75 usage, decreasing until 0.95, then disabled. */
   size_t readahead_length = kio().readaheadWindowSize();
   auto cache_utilization = kio().cache().utilization();
 
@@ -179,12 +179,12 @@ int64_t FileIo::ReadWrite(long long off, char* buffer,
   }
 
   const size_t block_capacity = cluster->limits(KeyType::Data).max_value_size;
-  size_t length_todo = length;
-  off_t off_done = 0;
+  size_t length_todo = static_cast<size_t>(length);
+  size_t off_done = 0;
 
   while (length_todo) {
     int block_number = static_cast<int>((off + off_done) / block_capacity);
-    off_t block_offset = (off + off_done) - block_number * block_capacity;
+    size_t block_offset = (off + off_done) - block_number * block_capacity;
     size_t block_length = std::min(length_todo, block_capacity - block_offset);
 
     /* Increase last block number if we write past currently known file size...*/
@@ -217,7 +217,7 @@ int64_t FileIo::ReadWrite(long long off, char* buffer,
           continue;
         }
 
-        /* make sure length doesn't indicate that we read past filesize. */
+        /* make sure length doesn't indicate that we read past file size. */
         if (data->size() > block_offset) {
           length_todo -= std::min(block_length, data->size() - block_offset);
         }
@@ -262,8 +262,8 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
   }
 
   const size_t block_capacity = cluster->limits(KeyType::Data).max_value_size;
-  int block_number = offset / block_capacity;
-  int block_offset = offset - block_number * block_capacity;
+  int block_number = static_cast<int>(offset / block_capacity);
+  size_t block_offset = offset - block_number * block_capacity;
 
   if (offset > 0) {
     /* Step 1) truncate the block containing the offset. */
@@ -312,7 +312,7 @@ void FileIo::Remove(uint16_t timeout)
   auto attributes = attrList();
 
   KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "");
-  for (auto iter = attributes.begin(); iter != attributes.end(); ++iter) {
+  for (auto iter = attributes.cbegin(); iter != attributes.cend(); ++iter) {
     status = cluster->remove(utility::makeAttributeKey(cluster->id(), path, *iter), KeyType::Metadata);
     if (!status.ok()) {
       kio_error("Deleting attribute ", *iter, " failed: ", status);
@@ -346,7 +346,7 @@ void FileIo::Stat(struct stat* buf, uint16_t timeout)
 
 std::string FileIo::attrGet(std::string name)
 {
-  /* Client may be requesting iostats instead of normal attributes */
+  /* Client may be requesting io stats instead of normal attributes */
   if (name == "sys.iostats") {
     auto stats = cluster->stats();
     using namespace std::chrono;
@@ -458,7 +458,7 @@ void FileIo::Statfs(struct statfs* sfs)
   sfs->f_bavail = (fsblkcnt_t) (s.bytes_free / sfs->f_frsize);
   /* Free blocks available to non root user */
   sfs->f_bfree = sfs->f_bavail;
-  /* Total inodes. */
+  /* Total inodes */
   sfs->f_files = s.bytes_total;
   /* Free inodes */
   sfs->f_ffree = s.bytes_free;
@@ -521,7 +521,7 @@ void FileIo::LastBlockNumber::verify()
 {
   using namespace std::chrono;
   /* block number verification independent of  expiration verification
-   * in KinetiChunk class. validate last_block_number (another client might have
+   * in DataBlock class. validate last_block_number (another client might have
    * created new blocks we know nothing about, or truncated the file. */
   if (duration_cast<milliseconds>(system_clock::now() - last_block_number_timestamp) < DataBlock::expiration_time) {
     return;
@@ -549,7 +549,7 @@ void FileIo::LastBlockNumber::verify()
   if (keys->size() > 0) {
     std::string key = keys->back();
     std::string number = key.substr(key.find_last_of('_') + 1, key.length());
-    set(std::stoll(number));
+    set(std::stoi(number));
     return;
   }
 

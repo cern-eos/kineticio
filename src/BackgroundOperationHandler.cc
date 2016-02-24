@@ -21,20 +21,15 @@
 using namespace kio;
 
 
-BackgroundOperationHandler::BackgroundOperationHandler(int worker_threads, int queue_depth) :
+BackgroundOperationHandler::BackgroundOperationHandler(size_t worker_threads, size_t queue_depth) :
     queue_capacity(queue_depth), thread_capacity(worker_threads), numthreads(0), shutdown(false)
 {
-  if (worker_threads < 0 || queue_depth < 0) {
-    kio_error("Negative values for queue size or worker threads make no sense.");
-    throw std::system_error(std::make_error_code(std::errc::invalid_argument));
-  }
-
   if (queue_depth) {
     if (worker_threads == 0) {
       kio_error("Queue without worker threads! Set queue size to 0 if you want to disable background operations.");
       throw std::system_error(std::make_error_code(std::errc::invalid_argument));
     }
-    for (int i = 0; i < worker_threads; i++) {
+    for (size_t i = 0; i < worker_threads; i++) {
       std::thread(&BackgroundOperationHandler::worker_thread, this).detach();
     }
   }
@@ -58,7 +53,7 @@ BackgroundOperationHandler::~BackgroundOperationHandler()
   }
 }
 
-void BackgroundOperationHandler::changeConfiguration(int worker_threads, int queue_depth)
+void BackgroundOperationHandler::changeConfiguration(size_t worker_threads, size_t queue_depth)
 {
   /* if we are in queue mode, and the changed configuration requires less worker threads,
    * first kill all existing worker threads. */
@@ -74,7 +69,7 @@ void BackgroundOperationHandler::changeConfiguration(int worker_threads, int que
   /* If the new configuration is in queue mode, start as many additional worker threads
    * as required. */
   if (queue_depth) {
-    for (int i = queue_capacity ? numthreads.load() : 0; i < worker_threads; i++) {
+    for (size_t i = queue_capacity ? numthreads.load() : 0; i < worker_threads; i++) {
       std::thread(&BackgroundOperationHandler::worker_thread, this).detach();
     }
   }
@@ -119,7 +114,7 @@ void BackgroundOperationHandler::run(std::function<void()>&& function)
     return run_noqueue(std::move(function));
   }
   {
-    std::lock_guard<std::mutex> lck(queue_mutex);
+    std::lock_guard<std::mutex> lock(queue_mutex);
     q.push(std::move(function));
   }
   worker.notify_one();
@@ -136,7 +131,7 @@ bool BackgroundOperationHandler::try_run(std::function<void()>&& function)
     return try_run_noqueue(std::move(function));
   }
   {
-    std::lock_guard<std::mutex> lck(queue_mutex);
+    std::lock_guard<std::mutex> lock(queue_mutex);
     if (q.size() >= queue_capacity) {
       return false;
     }

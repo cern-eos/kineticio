@@ -67,7 +67,7 @@ SCENARIO("Redundancy Provider Test.", "[Redundancy]"){
 
       THEN("Parities are replications."){
         for(int i=0; i<nData+nParity; i++)
-          REQUIRE(value == *stripe[i]);  
+          REQUIRE((value == *stripe[i]));
       }
     }
   }
@@ -126,7 +126,7 @@ SCENARIO("Redundancy Provider Test.", "[Redundancy]"){
               reconstructed.append(stripe[i]->c_str());
             }
             reconstructed.resize(value.size());
-            REQUIRE(value == reconstructed);
+            REQUIRE((value == reconstructed));
           }
         }
 

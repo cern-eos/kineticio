@@ -37,16 +37,16 @@
 namespace kio {
 
 struct ClusterLimits {
-    uint32_t max_key_size;
-    uint32_t max_version_size;
-    uint32_t max_value_size;
+    size_t max_key_size;
+    size_t max_version_size;
+    size_t max_value_size;
     uint32_t max_range_elements;
 };
 
 struct ClusterStats {
     /* Current size values */
-    uint64_t bytes_total;
-    uint64_t bytes_free;
+    size_t bytes_total;
+    size_t bytes_free;
 
     /* IO stats total */
     uint64_t read_ops_total;

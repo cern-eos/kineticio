@@ -71,7 +71,10 @@ SocketListener::SocketListener() :
 SocketListener::~SocketListener()
 {
   int _eventfd = eventfd(0, EFD_NONBLOCK);
-  struct epoll_event e = {EPOLLIN | EPOLLOUT, NULL};
+  struct epoll_event e;
+  e.events = EPOLLIN | EPOLLOUT;
+  e.data.ptr = NULL;
+
   epoll_ctl(epoll_fd, EPOLL_CTL_ADD, _eventfd, &e);
 
   shutdown = true;
@@ -86,7 +89,9 @@ void SocketListener::subscribe(int fd, kio::KineticAutoConnection* connection)
   /* EPOLLIN: Ready to read
    * EPOLLOUT: Ready to write
    * EPOLLET: Edge triggered mode, only trigger when status changes. */
-  struct epoll_event ev = {EPOLLIN | EPOLLOUT | EPOLLET, (void*) connection};
+  struct epoll_event ev;
+  ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
+  ev.data.ptr = connection;
 
   /* Add the descriptor into the monitoring list. We can do it even if another
     thread is waiting in epoll_wait - the descriptor will be properly added */

@@ -31,14 +31,14 @@ static int gf_gen_decode_matrix(
     unsigned int* decode_index,  // out: order of healthy blocks used for decoding [data#1, data#3, ..., parity#1... ]
     unsigned char* src_err_list,  // in: array of #nerrs size [index error #1, index error #2, ... ]
     unsigned char* src_in_err,    // in: array of #data size > [1,0,0,0,1,0...] -> 0 == no error, 1 == error
-    int nerrs,                    // #total errors
-    int nsrcerrs,                 // #data errors
-    int k,                        // #data
-    int m                         // #data+parity
+    unsigned int nerrs,                    // #total errors
+    unsigned int nsrcerrs,                 // #data errors
+    unsigned int k,                        // #data
+    unsigned int m                         // #data+parity
 )
 {
-  int i, j, p;
-  int r;
+  unsigned i, j, p;
+  unsigned int r;
   unsigned char* invert_matrix, * backup, * b, s;
   int incr = 0;
 
@@ -107,7 +107,7 @@ RedundancyProvider::RedundancyProvider(std::size_t data, std::size_t parity) :
 {
   // k = data
   // m = data + parity
-  gf_gen_cauchy1_matrix(encode_matrix.data(), nData + nParity, nData);
+  gf_gen_cauchy1_matrix(encode_matrix.data(), static_cast<int>(nData + nParity), static_cast<int>(nData));
 }
 
 std::string RedundancyProvider::getErrorPattern(
@@ -123,10 +123,10 @@ std::string RedundancyProvider::getErrorPattern(
   }
 
   std::string pattern(nData + nParity, '0');
-  int blockSize = 0;
-  int nErrs = 0;
+  std::size_t nErrs = 0;
+  std::size_t blockSize = 0;
 
-  for (int i = 0; i < stripe.size(); i++) {
+  for (size_t i = 0; i < stripe.size(); i++) {
     if (!stripe[i] || stripe[i]->empty()) {
       pattern[i] = 1;
       nErrs++;
@@ -165,7 +165,7 @@ RedundancyProvider::CodingTable& RedundancyProvider::getCodingTable(
     /* Expand pattern */
     int nerrs = 0, nsrcerrs = 0;
     unsigned char err_indx_list[nParity];
-    for (int i = 0; i < pattern.size(); i++) {
+    for (std::uint8_t i = 0; i < pattern.size(); i++) {
       if (pattern[i]) {
         err_indx_list[nerrs++] = i;
         if (i < nData) { nsrcerrs++; }
@@ -196,7 +196,7 @@ RedundancyProvider::CodingTable& RedundancyProvider::getCodingTable(
     }
 
     /* Compute Tables. */
-    ec_init_tables(nData, nerrs, decode_matrix.data(), dd.table.data());
+    ec_init_tables(static_cast<int>(nData), nerrs, decode_matrix.data(), dd.table.data());
     cache.insert(std::make_pair(pattern, dd));
   }
   return cache.at(pattern);
@@ -204,7 +204,7 @@ RedundancyProvider::CodingTable& RedundancyProvider::getCodingTable(
 
 void replication(std::vector<std::shared_ptr<const std::string> >& stripe, std::string& pattern)
 {
-  int valid;
+  size_t valid;
   /* get valid index */
   for (valid = 0; valid < pattern.size(); valid++) {
     if (!pattern[valid]) {
@@ -212,7 +212,7 @@ void replication(std::vector<std::shared_ptr<const std::string> >& stripe, std::
     }
   }
 
-  for (int i = 0; i < pattern.size(); i++) {
+  for (size_t i = 0; i < pattern.size(); i++) {
     if (pattern[i]) {
       stripe[i] = stripe[valid];
     }
@@ -238,7 +238,7 @@ void RedundancyProvider::compute(std::vector<std::shared_ptr<const std::string> 
   auto& dd = getCodingTable(pattern);
 
   unsigned char* inbuf[nData];
-  for (int i = 0; i < nData; i++) {
+  for (size_t i = 0; i < nData; i++) {
     inbuf[i] = (unsigned char*) stripe[dd.blockIndices[i]]->c_str();
   }
 
@@ -251,8 +251,8 @@ void RedundancyProvider::compute(std::vector<std::shared_ptr<const std::string> 
   }
 
   ec_encode_data(
-      blockSize,      // Length of each block of data (vector) of source or dest data.
-      nData,          // The number of vector sources in the generator matrix for coding.
+      static_cast<int>(blockSize), // Length of each block of data (vector) of source or destination data.
+      static_cast<int>(nData),     // The number of vector sources in the generator matrix for coding.
       dd.nErrors,     // The number of output vectors to concurrently encode/decode.
       dd.table.data(), // Pointer to array of input tables
       inbuf,          // Array of pointers to source input buffers
@@ -260,10 +260,10 @@ void RedundancyProvider::compute(std::vector<std::shared_ptr<const std::string> 
   );
 
   int e = 0;
-  for (int i = 0; i < nData + nParity; i++) {
+  for (size_t i = 0; i < nData + nParity; i++) {
     if (pattern[i]) {
       stripe[i] = make_shared<const string>(
-          (const char*) outbuf[e], blockSize
+          reinterpret_cast<char*>(outbuf[e]), blockSize
       );
       e++;
     }

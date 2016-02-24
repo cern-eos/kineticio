@@ -38,7 +38,7 @@ KineticCluster::KineticCluster(
   redundancy[KeyType::Metadata] = rp_metadata;
 
   /* Attempt to get cluster limits from _any_ drive in the cluster */
-  for (int off = 0; off < connections.size(); off++) {
+  for (size_t off = 0; off < connections.size(); off++) {
     ClusterLogOp log({Command_GetLog_Type::Command_GetLog_Type_LIMITS}, connections, 1, off);
     auto cbs = log.execute(operation_timeout);
 
@@ -177,7 +177,7 @@ std::vector<std::shared_ptr<const std::string>> KineticCluster::valueToStripe(co
   std::shared_ptr<std::string> zero;
 
   /* Set data chunks of the stripe. If value < stripe size, fill in with 0ed strings. */
-  for (int i = 0; i < redundancy[type]->numData(); i++) {
+  for (size_t i = 0; i < redundancy[type]->numData(); i++) {
     if (i * chunkSize < value.length()) {
       auto chunk = std::make_shared<string>(value.substr(i * chunkSize, chunkSize));
       chunk->resize(chunkSize);
@@ -192,14 +192,14 @@ std::vector<std::shared_ptr<const std::string>> KineticCluster::valueToStripe(co
     }
   }
   /* Set empty strings for parities */
-  for (int i = 0; i < redundancy[type]->numParity(); i++) {
+  for (size_t i = 0; i < redundancy[type]->numParity(); i++) {
     stripe.push_back(std::make_shared<const string>());
   }
   /* Compute redundancy */
   redundancy[type]->compute(stripe);
 
   /* We don't actually want to write the 0ed data chunks used for redundancy computation. So get rid of them. */
-  for (int index = (value.size() + chunkSize - 1) / chunkSize; index < redundancy[type]->numData(); index++) {
+  for (size_t index = (value.size() + chunkSize - 1) / chunkSize; index < redundancy[type]->numData(); index++) {
     stripe[index] = std::make_shared<const string>();
   }
 
@@ -208,7 +208,7 @@ std::vector<std::shared_ptr<const std::string>> KineticCluster::valueToStripe(co
 
 /* Handle races, 2 or more clients attempting to put/remove the same key at the same time. */
 bool KineticCluster::mayForce(const std::shared_ptr<const std::string>& key, KeyType type,
-                              const std::shared_ptr<const std::string>& version, int counter)
+                              const std::shared_ptr<const std::string>& version, size_t counter)
 {
   StripeOperation_GET getVersions(key, true, connections, redundancy[type]->size());
   auto rmap = getVersions.executeOperationVector(operation_timeout);
@@ -231,7 +231,7 @@ bool KineticCluster::mayForce(const std::shared_ptr<const std::string>& key, Key
   /* Super-Corner-Case: It could be that the client that should win the most_frequent match has crashed. For this
    * reason, all competing clients will wait, polling the key versions. As multiple clients
    * could theoretically be in this loop concurrently, we specify the maximum number of polls by the position of the first
-   * occurrence of the supplied version for a subchunk. If the situation does not clear up by end of polling period,
+   * occurrence of the supplied version for a chunk. If the situation does not clear up by end of polling period,
    * overwrite permission will be given. */
   if (counter > 10 * getVersions.versionPosition(version)) {
     return true;
@@ -239,7 +239,7 @@ bool KineticCluster::mayForce(const std::shared_ptr<const std::string>& key, Key
 
   /* 100 ms sleep time */
   usleep(100 * 1000);
-  return mayForce(key, type, version, counter++);
+  return mayForce(key, type, version, ++counter);
 }
 
 
@@ -280,7 +280,7 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
     }
   }
 
-  /* Add parity chunks to get request (already obtained chunks will not be refetched). */
+  /* Add parity chunks to get request (already obtained chunks will not be re-fetched). */
   getop.extend(connections, redundancy[type]->numParity());
   try {
     return execute_get(getop, key, version, value, type);
@@ -397,14 +397,14 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
   uint64_t write_bytes_total = 0;
 
   /* Evaluate Operation Results. */
-  for (int i = 0; i < cbs.size(); i++) {
+  for (size_t i = 0; i < cbs.size(); i++) {
     if (!cbs[i]->getResult().ok()) {
       kio_notice("Could not obtain statistics / capacity information for a drive: ", cbs[i]->getResult());
       continue;
     }
     const auto& log = cbs[i]->getLog();
 
-    uint64_t bytes_used = log->capacity.nominal_capacity_in_bytes * log->capacity.portion_full;
+    auto bytes_used = static_cast<size_t>(log->capacity.nominal_capacity_in_bytes * log->capacity.portion_full);
     bytes_total += log->capacity.nominal_capacity_in_bytes;
     bytes_free += log->capacity.nominal_capacity_in_bytes - bytes_used;
 

@@ -15,9 +15,7 @@
 
 #include "KineticIoSingleton.hh"
 #include "Logging.hh"
-#include <stdlib.h>
 #include <fstream>
-#include <sstream>
 #include <iostream>
 
 using namespace kio;
@@ -60,7 +58,7 @@ namespace {
 std::string readfile(const char* path)
 {
   std::ifstream file(path);
-  /* Unlimted buffer size so reading in large cluster files works. */
+  /* Unlimited buffer size so reading in large cluster files works. */
   file.rdbuf()->pubsetbuf(0, 0);
   std::stringstream buffer;
   buffer << file.rdbuf();

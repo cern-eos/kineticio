@@ -30,7 +30,7 @@ endif (CMAKE_COMPILER_IS_GNUCXX)
 
 ################################################################################
 # Set CXX flags
-set(CMAKE_CXX_FLAGS "--std=c++0x -g")
+set(CMAKE_CXX_FLAGS "--std=c++0x -g -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Werror")
 
 ################################################################################
 # Dependencies

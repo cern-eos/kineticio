@@ -21,9 +21,11 @@
 
 class SimulatorController {
 public:
-  bool start(int index);
-  bool stop(int index);
-  bool reset(int index);
+  bool start(size_t index);
+  bool stop(size_t index);
+  bool reset(size_t index);
+  bool block(size_t index);
+
   kinetic::ConnectionOptions get(int index);
 
   static SimulatorController& getInstance(){

@@ -14,12 +14,9 @@
  ************************************************************************/
 
 #include <kio/KineticIoFactory.hh>
-#include <kio/FileIoInterface.hh>
-#include <string>
 #include <string.h>
 #include <fstream>
 #include <sstream>
-#include <vector>
 
 using std::string;
 
@@ -86,9 +83,9 @@ int main(int argc, char** argv)
 
     std::string token;
     std::getline(current, token, ',');
-    long offset = std::atoi(token.c_str());
+    size_t offset = std::atoi(token.c_str());
     std::getline(current, token);
-    long length = std::atoi(token.c_str());
+    size_t length = std::atoi(token.c_str());
     
     if(length > buffer.size())
       buffer.resize(length);

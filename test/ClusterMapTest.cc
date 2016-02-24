@@ -15,7 +15,6 @@
 
 #include "catch.hpp"
 #include "KineticIoSingleton.hh"
-#include "KineticIoFactory.hh"
 #include "SimulatorController.h"
 
 using namespace kio;

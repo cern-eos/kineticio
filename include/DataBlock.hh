@@ -60,7 +60,7 @@ public:
   //! @param offset offset in the block to start reading
   //! @param length number of bytes to read
   //--------------------------------------------------------------------------
-  void read(char* const buffer, off_t offset, size_t length);
+  void read(char* const buffer, size_t offset, size_t length);
 
   //--------------------------------------------------------------------------
   //! Writing in-memory only, never flushes to the backend. Any write up to the
@@ -71,14 +71,14 @@ public:
   //! @param offset offset in the block to start writing
   //! @param length number of bytes to write
   //--------------------------------------------------------------------------
-  void write(const char* const buffer, off_t offset, size_t length);
+  void write(const char* const buffer, size_t offset, size_t length);
 
   //--------------------------------------------------------------------------
   //! Truncate in-memory only, never flushes to the backend storage.
   //!
   //! @param offset the new size
   //--------------------------------------------------------------------------
-  void truncate(off_t offset);
+  void truncate(size_t offset);
 
   //--------------------------------------------------------------------------
   //! Flush flushes all changes to the backend.
@@ -188,8 +188,8 @@ private:
   std::size_t value_size;
 
   //! a list of bit-regions that have been changed since this data block has
-  //! last been flushed
-  std::list<std::pair<off_t, size_t> > updates;
+  //! last been flushed (offset, length)
+  std::list<std::pair<size_t, size_t> > updates;
 
   //! time the block was last verified to be up to date
   std::chrono::system_clock::time_point timestamp;

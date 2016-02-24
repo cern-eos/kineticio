@@ -15,20 +15,42 @@
 
 #include <unistd.h>
 #include <signal.h>
+#include <fcntl.h>
 #include "Logging.hh"
 #include "SimulatorController.h"
 
-bool SimulatorController::start(int index)
+bool SimulatorController::start(size_t index)
 {
-  if(pids.size()>index)
-    if(pids[index])
-      return false;
+  if(pids.size()>index) {
+    if (pids[index]) {
+      kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
+      std::shared_ptr<kinetic::BlockingKineticConnection> con;
+      if (factory.NewBlockingConnection(get(index), con, 30).ok()) {
+        con->UnlockDevice("NULL");
+
+        return false;
+      }
+    }
+  }
 
   int pid;
   if ((pid = fork()) < 0) {
     return false;
   }
   else if (pid == 0) {
+    int tmpFd = open( "/dev/null", O_WRONLY );
+    if ( tmpFd == -1 ) {
+      printf("Failed Opening /dev/null\n");
+    }
+    if ( dup2( tmpFd, 1 ) != 1 ) {
+      printf("dup2 failed for fd 1\n");
+    }
+    if ( dup2( tmpFd, 2 ) != 1 ) {
+      printf("dup2 failed for fd 2\n");
+    }
+    close( tmpFd );
+
+
     std::string home = "tmp"+std::to_string((long long int) index);
     std::string port = std::to_string((long long int) 8123 + index);
     std::string tls  = std::to_string((long long int) 8443 + index);
@@ -45,18 +67,19 @@ bool SimulatorController::start(int index)
     if(pids.size()<index+1)
       pids.resize(index+1);
     pids[index] = pid;
-    kio_debug("Starting Simulator on port ", 8123+index, "with pid ",pids[index]);
+    kio_debug("Starting Simulator on port ", 8123+index, " with pid ",pids[index]);
     usleep(1000 * 2000);
     return true;
   }
+  throw std::logic_error("Unreachable");
 }
 
-bool SimulatorController::stop(int index)
+bool SimulatorController::stop(size_t index)
 {
   if(pids.size()<=index || !pids[index])
     return false;
 
-  kio_debug("Killing Simulator on port ", 8123+index, "with pid ",pids[index]);
+  kio_debug("Killing Simulator on port ", 8123+index, " with pid ",pids[index]);
   kill(pids[index], SIGTERM);
 
   pids[index]=0;
@@ -64,12 +87,23 @@ bool SimulatorController::stop(int index)
   return true;
 }
 
-bool SimulatorController::reset(int index)
+bool SimulatorController::reset(size_t index)
+{
+  kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
+  std::shared_ptr<kinetic::BlockingKineticConnection> con;
+  if( factory.NewBlockingConnection(get(index), con, 30).ok() ) {
+    con->UnlockDevice("NULL");
+    return con->InstantErase("NULL").ok();
+  }
+  return false;
+}
+
+bool SimulatorController::block(size_t index)
 {
   kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
   std::shared_ptr<kinetic::BlockingKineticConnection> con;
   if( factory.NewBlockingConnection(get(index), con, 30).ok() )
-    return con->InstantErase("NULL").ok();
+    return con->LockDevice("NULL").ok();
   return false;
 }
 
@@ -82,6 +116,6 @@ SimulatorController::SimulatorController()
 
 SimulatorController::~SimulatorController()
 {
-  for(int i=0; i<pids.size(); i++)
+  for(size_t i=0; i<pids.size(); i++)
     stop(i);
 }

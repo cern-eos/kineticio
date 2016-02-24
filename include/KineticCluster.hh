@@ -169,7 +169,8 @@ protected:
   //!   a call to mayForce.
   //! @return true if client may force-overwrite
   //--------------------------------------------------------------------------
-  bool mayForce(const std::shared_ptr<const std::string>& key, KeyType type, const std::shared_ptr<const std::string>& version, int counter=0);
+  bool mayForce(const std::shared_ptr<const std::string>& key, KeyType type,
+                const std::shared_ptr<const std::string>& version, size_t counter = 0);
 
 protected:
   //! cluster id

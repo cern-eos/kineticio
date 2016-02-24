@@ -112,7 +112,7 @@ SCENARIO("Connection Test", "[Con]")
 
 
       AND_THEN("When we kill the simulator, we can still get the connection, but noop will not succeed.") {
-        c.stop(0);
+        c.block(0);
         auto con = autocon->get();
         auto cb = std::make_shared<ConnectCallback>();
         con->NoOp(cb);

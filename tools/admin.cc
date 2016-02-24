@@ -19,7 +19,6 @@
 #include <signal.h>
 #include "AdminClusterInterface.hh"
 #include "ClusterMap.hh"
-#include "KineticIoFactory.hh"
 
 namespace {
 
@@ -279,7 +278,7 @@ int main(int argc, char** argv)
           fprintf(stdout, "# \tIndicator keys: %s \n", v.indicator_exist ? "EXIST" : "NONE");
           fprintf(stdout, "# ------------------------------------------------------------------------\n");
           for (size_t i = 0; i < v.connected.size(); i++) {
-            fprintf(stdout, "# drive %2d : %s %s\n", (int) i, v.connected[i] ? "OK" : "FAILED", v.location[i].c_str());
+            fprintf(stdout, "# drive %2ld : %s %s\n", i, v.connected[i] ? "OK" : "FAILED", v.location[i].c_str());
           }
         }
         break;
@@ -308,6 +307,8 @@ int main(int argc, char** argv)
         }
         printStatistics(ac->reset(config.target, callback, config.numthreads), config);
         break;
+      default:
+        throw std::runtime_error("No valid operation specified.");
     }
   } catch (std::exception& e) {
     fprintf(stdout, "Encountered Exception: %s\n", e.what());

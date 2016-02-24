@@ -32,7 +32,7 @@ SCENARIO("Utility Test.", "[Utility]"){
 
       THEN("We can extract the encoded size attribute again."){
         auto extracted_size = utility::uuidDecodeSize(v);
-        REQUIRE(target_size == extracted_size);
+        REQUIRE((target_size == extracted_size));
       }
 
       WHEN("We manipulate the version size"){
@@ -51,7 +51,7 @@ SCENARIO("Utility Test.", "[Utility]"){
       
       AND_THEN("We can reconstruct the key from the indicator"){
         auto reconstructed = utility::indicatorToKey(*indicator);
-        REQUIRE(*reconstructed == *key);
+        REQUIRE((*reconstructed == *key));
       }
     }
   }
@@ -63,22 +63,22 @@ SCENARIO("Utility Test.", "[Utility]"){
     
     THEN("We can construct different types of keys"){
       auto mdkey = utility::makeMetadataKey(clusterId, path);
-      REQUIRE(*mdkey == "cluster:metadata:/the/path");
+      REQUIRE((*mdkey == "cluster:metadata:/the/path"));
 
       auto attrkey = utility::makeAttributeKey(clusterId, path, "test-attribute");
-      REQUIRE(*attrkey == "cluster:attribute:/the/path:test-attribute");
+      REQUIRE((*attrkey == "cluster:attribute:/the/path:test-attribute"));
 
       auto datakey = utility::makeDataKey(clusterId, path, 12);
-      REQUIRE(*datakey == "cluster:data:/the/path_0000000012");
+      REQUIRE((*datakey == "cluster:data:/the/path_0000000012"));
 
       auto indicatorkey = utility::makeIndicatorKey(*datakey);
-      REQUIRE(*indicatorkey == "indicator:"+ *datakey);
+      REQUIRE((*indicatorkey == "indicator:"+ *datakey));
 
       AND_THEN("we can reconstruct the fully qualified url from the metadata key"){
-        REQUIRE(utility::metadataToUrl(*mdkey) == url);
+        REQUIRE((utility::metadataToUrl(*mdkey) == url));
       }
       AND_THEN("we can extract the attribute name from the attribute key"){
-        REQUIRE(utility::extractAttributeName(clusterId, path, *attrkey) == "test-attribute");
+        REQUIRE((utility::extractAttributeName(clusterId, path, *attrkey) == "test-attribute"));
       }
     }
 
@@ -100,7 +100,7 @@ SCENARIO("Utility Test.", "[Utility]"){
       std::vector< uint32_t > crcs(stripe.size());
 
       std::chrono::system_clock::time_point t = std::chrono::system_clock::now();
-      for(int i=0; i<stripe.size(); i++){
+      for(size_t i=0; i<stripe.size(); i++){
         crcs[i] = crc32(0, (const Bytef*)stripe[i]->c_str(), stripe[i]->length());
       }
       printf("creating %ld crc32 checksums took %ld milliseconds\n",
@@ -110,7 +110,7 @@ SCENARIO("Utility Test.", "[Utility]"){
       );
 
       t = std::chrono::system_clock::now();
-      for(int i=0; i<stripe.size(); i++){
+      for(size_t i=0; i<stripe.size(); i++){
         crcs[i] = crc32c(0, stripe[i]->c_str(), stripe[i]->length());
       }
       printf("creating %ld crc32c checksums took %ld milliseconds\n",

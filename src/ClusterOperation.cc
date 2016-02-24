@@ -28,7 +28,7 @@ ClusterOperation::~ClusterOperation()
 void ClusterOperation::expandOperationVector(std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
                                              std::size_t size, std::size_t offset)
 {
-  for(auto i=0; i<size; i++){
+  for(size_t i=0; i<size; i++){
     operations.push_back(
         KineticAsyncOperation{
             0,
@@ -40,7 +40,8 @@ void ClusterOperation::expandOperationVector(std::vector<std::unique_ptr<Kinetic
 }
 
 // TODO: add healthy connection minimum number to function and don't attempt if not feasible
-std::map<kinetic::StatusCode, int, CompareStatusCode> ClusterOperation::executeOperationVector(const std::chrono::seconds& timeout)
+std::map<kinetic::StatusCode, size_t, CompareStatusCode> ClusterOperation::executeOperationVector(
+    const std::chrono::seconds& timeout)
 {
  // kio_debug("Start execution of ", operations.size(), " operations for sync-point ", &sync);
   auto need_retry = false;
@@ -52,7 +53,7 @@ std::map<kinetic::StatusCode, int, CompareStatusCode> ClusterOperation::executeO
 
 
     /* Call functions on connections */
-    for (int i = 0; i < operations.size(); i++) {
+    for (size_t i = 0; i < operations.size(); i++) {
       try {
         if (operations[i].callback->finished()) {
           continue;
@@ -79,7 +80,7 @@ std::map<kinetic::StatusCode, int, CompareStatusCode> ClusterOperation::executeO
     sync.wait_until(timeout_time);
 
     need_retry = false;
-    for (int i = 0; i < operations.size(); i++) {
+    for (size_t i = 0; i < operations.size(); i++) {
       /* timeout any unfinished request*/
       if (!operations[i].callback->finished()) {
         try {
@@ -105,8 +106,8 @@ std::map<kinetic::StatusCode, int, CompareStatusCode> ClusterOperation::executeO
 
  // kio_debug("Finished execution for sync-point ", &sync);
 
-  std::map<kinetic::StatusCode, int, CompareStatusCode> rmap;
-  for (auto it = operations.begin(); it != operations.end(); it++) {
+  std::map<kinetic::StatusCode, size_t, CompareStatusCode> rmap;
+  for (auto it = operations.cbegin(); it != operations.cend(); it++) {
     rmap[it->callback->getResult().statusCode()]++;
   }
   return rmap;
@@ -136,7 +137,7 @@ std::vector<std::shared_ptr<GetLogCallback>> ClusterLogOp::execute(
   executeOperationVector(timeout);
 
   std::vector<std::shared_ptr<GetLogCallback>> callbacks;
-  for (auto o = operations.begin(); o != operations.end(); o++) {
+  for (auto o = operations.cbegin(); o != operations.cend(); o++) {
     callbacks.push_back(std::static_pointer_cast<GetLogCallback>(o->callback));
   }
   return callbacks;
@@ -192,7 +193,7 @@ void ClusterRangeOp::getKeys(std::unique_ptr<std::vector<std::string>>& keys)
     }
   }
   /* assign to output parameter and cut excess results */
-  keys.reset(new std::vector<string>(set.begin(), set.end()));
+  keys.reset(new std::vector<string>(set.cbegin(), set.cend()));
   if (keys->size() > maxRequested) {
     keys->resize(maxRequested);
   }

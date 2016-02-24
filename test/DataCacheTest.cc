@@ -15,12 +15,8 @@
 
 #include "catch.hpp"
 #include "FileIo.hh"
-#include "DataCache.hh"
-#include <kio/FileIoInterface.hh>
-#include "ClusterInterface.hh"
 #include "Utility.hh"
 #include "SimulatorController.h"
-#include <chrono>
 #include <unistd.h>
 
 

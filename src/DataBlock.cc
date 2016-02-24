@@ -43,7 +43,7 @@ DataBlock::DataBlock(std::shared_ptr<ClusterInterface> c, const std::shared_ptr<
 
 DataBlock::~DataBlock()
 {
-  // take the mutex in order to prevent object deconsturction while flush
+  // take the mutex in order to prevent object deconstruction while flush
   // operation is executed by non-owning thread.
   std::lock_guard<std::mutex> lock(mutex);
 }
@@ -147,8 +147,8 @@ void DataBlock::getRemoteValue()
     merged_value->resize(capacity());
   }
 
-  for (auto iter = updates.begin(); iter != updates.end(); ++iter) {
-    auto update = *iter;
+  for (auto it = updates.cbegin(); it != updates.cend(); ++it) {
+    auto update = *it;
     if (!update.second) {
       value_size = update.first;
     }
@@ -161,10 +161,10 @@ void DataBlock::getRemoteValue()
   local_value = std::move(merged_value);
 }
 
-void DataBlock::read(char* const buffer, off_t offset, size_t length)
+void DataBlock::read(char* const buffer, size_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
-  if (buffer == NULL || offset < 0 || offset + length > cluster->limits(KeyType::Data).max_value_size){
+  if (buffer == NULL || offset + length > cluster->limits(KeyType::Data).max_value_size){
     kio_warning("Invalid argument. buffer=",buffer, " offset=", offset, " length=", length);
     throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
@@ -179,8 +179,8 @@ void DataBlock::read(char* const buffer, off_t offset, size_t length)
     memset(buffer, 0, length);
   }
 
-  if (value_size > (size_t) offset) {
-    size_t copy_length = std::min(length, (size_t) (value_size - offset));
+  if (value_size > offset) {
+    size_t copy_length = std::min(length, value_size - offset);
     if (local_value) {
       local_value->copy(buffer, copy_length, offset);
     } else {
@@ -189,16 +189,16 @@ void DataBlock::read(char* const buffer, off_t offset, size_t length)
   }
 }
 
-void DataBlock::write(const char* const buffer, off_t offset, size_t length)
+void DataBlock::write(const char* const buffer, size_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
-  if (buffer == NULL || offset < 0 || offset + length > cluster->limits(KeyType::Data).max_value_size){
+  if (buffer == NULL || offset + length > cluster->limits(KeyType::Data).max_value_size){
     kio_warning("Invalid argument. buffer=",buffer, " offset=", offset, " length=", length);
     throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
 
   /* Set new entry size. */
-  value_size = std::max((size_t) offset + length, value_size);
+  value_size = std::max(offset + length, value_size);
 
   /* Ensure that the value string exists and is big enough to store the write request. If necessary,
    * we will allocate straight to capacity size to prevent multiple resize operations making
@@ -217,19 +217,19 @@ void DataBlock::write(const char* const buffer, off_t offset, size_t length)
 
   /* Copy data and remember write access. */
   local_value->replace(offset, length, buffer, length);
-  updates.push_back(std::pair<off_t, size_t>(offset, length));
+  updates.push_back(std::pair<size_t, size_t>(offset, length));
 }
 
-void DataBlock::truncate(off_t offset)
+void DataBlock::truncate(size_t offset)
 {
   std::lock_guard<std::mutex> lock(mutex);
-  if (offset < 0 || offset > cluster->limits(KeyType::Data).max_value_size){
+  if (offset > cluster->limits(KeyType::Data).max_value_size){
     kio_warning("Invalid argument offset=", offset);
     throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
 
-  value_size = (size_t) offset;
-  updates.push_back(std::pair<off_t, size_t>(offset, 0));
+  value_size = offset;
+  updates.push_back(std::make_pair(offset, 0));
 }
 
 void DataBlock::flush()

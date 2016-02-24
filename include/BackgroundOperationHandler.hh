@@ -67,7 +67,7 @@ public:
   //! @param worker_threads maximum number of spawned background threads
   //! @param queue_depth maximum number of functions queued for execution
   //--------------------------------------------------------------------------
-  void changeConfiguration(int worker_threads, int queue_depth);
+  void changeConfiguration(size_t worker_threads, size_t queue_depth);
 
   //--------------------------------------------------------------------------
   //! Constructor. Note that if queue_depth is set to zero, background threads
@@ -76,7 +76,7 @@ public:
   //! @param worker_threads maximum number of spawned background threads
   //! @param queue_depth maximum number of functions queued for execution
   //--------------------------------------------------------------------------
-  explicit BackgroundOperationHandler(int worker_threads, int queue_depth);
+  explicit BackgroundOperationHandler(size_t worker_threads, size_t queue_depth);
 
   //--------------------------------------------------------------------------
   //! Destructor
@@ -116,9 +116,9 @@ private:
   //! queue of functions to be executed
   std::queue<std::function<void()>> q;
   //! maximum number of queue entries, atomic to support changeConfiguration
-  std::atomic<int> queue_capacity;
+  std::atomic<size_t> queue_capacity;
   //! maximum number of background threads, atomic to support changeConfiguration
-  std::atomic<int> thread_capacity;
+  std::atomic<size_t> thread_capacity;
   //! concurrency control for queue access;
   std::mutex queue_mutex;
   //! workers block until an item is inserted into queue
@@ -126,7 +126,7 @@ private:
   //! controller will be triggered when an item is removed from queue
   std::condition_variable controller;
   //! current number of active background threads
-  std::atomic<int> numthreads;
+  std::atomic<size_t> numthreads;
   //! signal worker threads to shutdown
   std::atomic<bool> shutdown;
 };

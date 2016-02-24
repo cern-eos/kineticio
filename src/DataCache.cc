@@ -19,8 +19,6 @@
 #include "Logging.hh"
 #include "KineticCluster.hh"
 #include "KineticIoSingleton.hh"
-#include <thread>
-#include <unistd.h>
 
 using namespace kio;
 

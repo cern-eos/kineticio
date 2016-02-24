@@ -76,7 +76,7 @@ int main( int argc, char* const argv[] )
     argc--;
   }
 
-  int result = Catch::Session().run( argc, argv );
+  int result = Catch::Session().run( argc, (const char**) argv );
 
   // Reset environment variables back to the initial values.
   setenv("KINETIC_DRIVE_LOCATION", location.c_str(), 1);

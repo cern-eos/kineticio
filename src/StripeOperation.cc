@@ -37,8 +37,8 @@ void StripeOperation::expandOperationVector(std::vector<std::unique_ptr<KineticA
                                             std::size_t size,
                                             std::size_t offset)
 {
-  std::uint32_t index;
-  MurmurHash3_x86_32(key->c_str(), key->length(), 0, &index);
+  size_t index;
+  MurmurHash3_x86_32(key->c_str(), static_cast<uint32_t>(key->length()), 0, &index);
   index += offset;
 
   while (size) {
@@ -85,7 +85,7 @@ kinetic::KineticStatus StripeOperation::createSingleKey(std::shared_ptr<const st
                                                         std::vector<std::unique_ptr<KineticAutoConnection>>& connections)
 {
   auto record = makeRecord(keyvalue, keyversion);
-  auto count = 0;
+  size_t count = 0;
 
   do {
     expandOperationVector(connections, 1, operations.size());
@@ -140,7 +140,7 @@ StripeOperation_PUT::StripeOperation_PUT(const std::shared_ptr<const std::string
     : StripeOperation(key), version_new(version_new), values(values)
 {
   expandOperationVector(connections, size, offset);
-  for (int i = 0; i < operations.size(); i++) {
+  for (size_t i = 0; i < operations.size(); i++) {
 
     auto record = makeRecord(values[i], version_new);
     auto cb = std::make_shared<PutCallback>(sync);
@@ -190,7 +190,7 @@ void StripeOperation_PUT::putHandoffKeys(std::vector<std::unique_ptr<KineticAuto
 {
   assert(values.size() <= operations.size());
 
-  for (int opnum = 0; opnum < values.size(); opnum++) {
+  for (size_t opnum = 0; opnum < values.size(); opnum++) {
     if (operations[opnum].callback->getResult().statusCode() != StatusCode::OK) {
 
       auto handoff_key = make_shared<const string>(
@@ -326,13 +326,13 @@ bool StripeOperation_GET::insertHandoffChunks(std::vector<std::unique_ptr<Kineti
   ClusterRangeOp range(start_key, end_key, 100, connections);
   range.executeOperationVector(std::chrono::seconds(5));
 
-  for (int i = 0; i < range.operations.size(); i++) {
+  for (size_t i = 0; i < range.operations.size(); i++) {
     auto& opkeys = std::static_pointer_cast<RangeCallback>(range.operations[i].callback)->getKeys();
     kio_debug("found ", opkeys ? opkeys->size() : 0, " handoff keys on connection #", i);
 
     if (opkeys) {
       for (auto opkey = opkeys->begin(); opkey != opkeys->end(); opkey++) {
-        std::size_t chunk_number = utility::Convert::toInt(opkey->substr(opkey->find_last_of("=") + 1));
+        auto chunk_number = utility::Convert::toInt(opkey->substr(opkey->find_last_of("=") + 1));
         kio_debug("Chunk number is ", chunk_number);
 
         operations[chunk_number].connection = connections[i].get();
@@ -349,18 +349,18 @@ void StripeOperation_GET::reconstructValue(std::shared_ptr<RedundancyProvider>& 
 {
   value = make_shared<string>();
 
-  auto size = (int) utility::uuidDecodeSize(version.version);
+  auto size = utility::uuidDecodeSize(version.version);
   if (!size) {
     kio_debug("Key ", *key, " is empty according to version: ", version.version);
     return;
   }
-  std::vector<int> zeroed_indices;
+  std::vector<size_t> zeroed_indices;
 
   std::vector<shared_ptr<const string>> stripe;
   bool need_recovery = false;
 
   /* Step 1) re-construct stripe */
-  for (int i = 0; i < operations.size(); i++) {
+  for (size_t i = 0; i < operations.size(); i++) {
     auto& record = std::static_pointer_cast<GetCallback>(operations[i].callback)->getRecord();
 
     if (record && *record->version() == *version.version && record->value()) {
@@ -391,15 +391,15 @@ void StripeOperation_GET::reconstructValue(std::shared_ptr<RedundancyProvider>& 
   if (need_recovery) {
 
     if (zeroed_indices.size()) {
-      int chunkSize = 0;
-      for (auto it = stripe.begin(); it != stripe.end(); it++) {
+      size_t chunkSize = 0;
+      for (auto it = stripe.cbegin(); it != stripe.cend(); it++) {
         if ((*it)->length()) {
           chunkSize = (*it)->length();
           break;
         }
       }
       auto zero = std::make_shared<const std::string>(chunkSize, '\0');
-      for (auto it = zeroed_indices.begin(); it != zeroed_indices.end(); it++) {
+      for (auto it = zeroed_indices.cbegin(); it != zeroed_indices.cend(); it++) {
         assert(*it < redundancy->numData());
         assert(*it * chunkSize >= size);
         stripe[*it] = zero;
@@ -445,16 +445,16 @@ bool getRecordVersionEqual(const std::shared_ptr<KineticCallback>& lhs, const st
       *std::static_pointer_cast<GetCallback>(rhs)->getRecord()->version();
 }
 
-StripeOperation_GET::VersionCount StripeOperation_GET::mostFrequentVersion()
+StripeOperation_GET::VersionCount StripeOperation_GET::mostFrequentVersion() const
 {
   VersionCount v{std::shared_ptr<const std::string>(), 0};
 
   v.frequency = 0;
 
-  auto element = operations.begin();
-  for (auto o = operations.begin(); o != operations.end(); o++) {
-    int frequency = 0;
-    for (auto l = operations.begin(); l != operations.end(); l++) {
+  auto element = operations.cbegin();
+  for (auto o = operations.cbegin(); o != operations.cend(); o++) {
+    size_t frequency = 0;
+    for (auto l = operations.cbegin(); l != operations.cend(); l++) {
       if (skip_value ? getVersionEqual(o->callback, l->callback) : getRecordVersionEqual(o->callback, l->callback)) {
         frequency++;
       }
@@ -494,7 +494,7 @@ kinetic::KineticStatus StripeOperation_GET::execute(const std::chrono::seconds& 
   }
 
   /* Any status code encountered at least nData times is valid. If operation was a success, set return values. */
-  for (auto it = rmap.begin(); it != rmap.end(); it++) {
+  for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
     if (it->second >= redundancy->numData()) {
       if (it->first == kinetic::StatusCode::OK && !skip_value) {
         reconstructValue(redundancy);
@@ -519,7 +519,7 @@ std::shared_ptr<const std::string> StripeOperation_GET::getValue()
 
 size_t StripeOperation_GET::versionPosition(const std::shared_ptr<const std::string>& version) const
 {
-  for (int index = 0; index < operations.size(); index++) {
+  for (size_t index = 0; index < operations.size(); index++) {
     auto& cb = operations[index].callback;
 
     if (version->empty() && cb->getResult().statusCode() == StatusCode::REMOTE_NOT_FOUND) {

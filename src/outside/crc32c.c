@@ -36,7 +36,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <unistd.h>
 #include <pthread.h>
 
 /* CRC-32C (iSCSI) polynomial in reversed bit order. */

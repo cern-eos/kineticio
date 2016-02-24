@@ -16,7 +16,6 @@
 #include "Utility.hh"
 #include <iomanip>
 #include <uuid/uuid.h>
-#include <Logging.hh>
 
 using namespace kio;
 
