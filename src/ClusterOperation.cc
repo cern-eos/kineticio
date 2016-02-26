@@ -22,18 +22,19 @@ using namespace kinetic;
 
 ClusterOperation::ClusterOperation()
 { }
+
 ClusterOperation::~ClusterOperation()
 { }
 
 void ClusterOperation::expandOperationVector(std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
                                              std::size_t size, std::size_t offset)
 {
-  for(size_t i=0; i<size; i++){
+  for (size_t i = 0; i < size; i++) {
     operations.push_back(
         KineticAsyncOperation{
             0,
             std::shared_ptr<kio::KineticCallback>(),
-            connections[(i+offset) % connections.size()].get()
+            connections[(i + offset) % connections.size()].get()
         }
     );
   }
@@ -43,7 +44,7 @@ void ClusterOperation::expandOperationVector(std::vector<std::unique_ptr<Kinetic
 std::map<kinetic::StatusCode, size_t, CompareStatusCode> ClusterOperation::executeOperationVector(
     const std::chrono::seconds& timeout)
 {
- // kio_debug("Start execution of ", operations.size(), " operations for sync-point ", &sync);
+  kio_debug("Start execution of ", operations.size(), " operations for sync-point ", &sync);
   auto need_retry = false;
   auto rounds_left = 2;
   do {
@@ -71,7 +72,7 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> ClusterOperation::execu
         auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
         operations[i].callback->OnResult(status);
         operations[i].connection->setError(cons[i]);
-        //kio_notice("Failed executing async operation for connection ", operations[i].connection->getName(), status);
+        kio_notice("Failed executing async operation for connection ", operations[i].connection->getName(), status);
       }
     }
 
@@ -89,10 +90,11 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> ClusterOperation::execu
           kio_warning("Failed removing handle from connection ", operations[i].connection->getName(), "due to: ",
                       e.what());
         }
-        kio_warning("Network timeout for operation ", operations[i].connection->getName(), " for sync-point", &sync);
+        kio_warning("Network timeout for connection ", operations[i].connection->getName(), " for sync-point", &sync,
+                    "timeout period is set to ", timeout, ", the absolute timeout value was: ",
+                    timeout_time.time_since_epoch().count());
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
         operations[i].callback->OnResult(status);
-        operations[i].connection->setError(cons[i]);
       }
 
       /* Retry operations with CLIENT_IO_ERROR code result. Something went wrong with the connection,
@@ -104,8 +106,7 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> ClusterOperation::execu
     }
   } while (need_retry && rounds_left);
 
- // kio_debug("Finished execution for sync-point ", &sync);
-
+  kio_debug("Finished execution for sync-point ", &sync);
   std::map<kinetic::StatusCode, size_t, CompareStatusCode> rmap;
   for (auto it = operations.cbegin(); it != operations.cend(); it++) {
     rmap[it->callback->getResult().statusCode()]++;

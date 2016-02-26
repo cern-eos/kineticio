@@ -55,7 +55,7 @@ SCENARIO("Admin integration test.", "[Admin]")
     auto cluster = std::make_shared<KineticAdminCluster>(clusterId, blocksize, std::chrono::seconds(10),
                                                          std::move(connections),
                                                          std::make_shared<RedundancyProvider>(nData, nParity),
-                                                         std::make_shared<RedundancyProvider>(1, nParity)
+                                                         std::make_shared<RedundancyProvider>(1, nParity+1)
     );
 
     WHEN("Putting a key-value pair with one drive down") {
@@ -112,10 +112,6 @@ SCENARIO("Admin integration test.", "[Admin]")
 
       AND_WHEN("The drive comes up again.") {
         c.start(0);
-        // trigger a random operation so that the cluster connection will be re-established 
-        cluster->remove(std::make_shared<const string>(""), KeyType::Data);
-        // wait for connection to reconnect
-        sleep(2);
 
         THEN("It is no longer marked as incomplete but as need_actionafter a scan") {
           auto kc = cluster->scan(target);

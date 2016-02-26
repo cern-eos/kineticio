@@ -86,11 +86,9 @@ SCENARIO("KineticIo Integration Test", "[Io]")
     }
 
     THEN("Statfs succeeds") {
+      /* wait for io stats to update in freshly generated cluster */
+      usleep(100 * 1000);
       struct statfs sfs;
-      try {
-        fileio->Statfs(&sfs);
-      } catch (...) { }
-      usleep(2000 * 1000);
       REQUIRE_NOTHROW(fileio->Statfs(&sfs));
       REQUIRE((sfs.f_bavail > 0));
     }
@@ -235,7 +233,7 @@ SCENARIO("KineticIo Integration Test", "[Io]")
         struct stat stbuf;
         REQUIRE_NOTHROW(fileio->Stat(&stbuf));
         REQUIRE((stbuf.st_blocks == 2));
-        REQUIRE(((size_t)stbuf.st_blksize == capacity));
+        REQUIRE((stbuf.st_blksize == capacity));
         REQUIRE((stbuf.st_size == stbuf.st_blksize - 32 + buf_size));
       }
 

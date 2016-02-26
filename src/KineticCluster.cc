@@ -297,7 +297,7 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
     }
   }
 
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key" + *key + "not accessible.");
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key " + *key + " not accessible.");
 }
 
 kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::string>& key,

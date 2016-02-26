@@ -21,15 +21,14 @@
 
 bool SimulatorController::start(size_t index)
 {
-  if(pids.size()>index) {
+  if (pids.size() > index) {
     if (pids[index]) {
       kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
       std::shared_ptr<kinetic::BlockingKineticConnection> con;
       if (factory.NewBlockingConnection(get(index), con, 30).ok()) {
         con->UnlockDevice("NULL");
-
-        return false;
       }
+      return false;
     }
   }
 
@@ -38,36 +37,37 @@ bool SimulatorController::start(size_t index)
     return false;
   }
   else if (pid == 0) {
-    int tmpFd = open( "/dev/null", O_WRONLY );
-    if ( tmpFd == -1 ) {
+    int tmpFd = open("/dev/null", O_WRONLY);
+    if (tmpFd == -1) {
       printf("Failed Opening /dev/null\n");
     }
-    if ( dup2( tmpFd, 1 ) != 1 ) {
+    if (dup2(tmpFd, 1) != 1) {
       printf("dup2 failed for fd 1\n");
     }
-    if ( dup2( tmpFd, 2 ) != 1 ) {
+    if (dup2(tmpFd, 2) != 1) {
       printf("dup2 failed for fd 2\n");
     }
-    close( tmpFd );
+    close(tmpFd);
 
 
-    std::string home = "tmp"+std::to_string((long long int) index);
+    std::string home = "tmp" + std::to_string((long long int) index);
     std::string port = std::to_string((long long int) 8123 + index);
-    std::string tls  = std::to_string((long long int) 8443 + index);
+    std::string tls = std::to_string((long long int) 8443 + index);
     char* const args[] = {
-          (char*)"startSimulator.sh",
-          (char*)"-port", (char*)port.c_str(),
-          (char*)"-tlsport", (char*)tls.c_str(),
-          (char*)"-home", (char*)home.c_str(),
-          (char*)0
+        (char*) "startSimulator.sh",
+        (char*) "-port", (char*) port.c_str(),
+        (char*) "-tlsport", (char*) tls.c_str(),
+        (char*) "-home", (char*) home.c_str(),
+        (char*) 0
     };
     execv("vendor/src/kinetic_simulator/bin/startSimulator.sh", args);
   }
   else {
-    if(pids.size()<index+1)
-      pids.resize(index+1);
+    if (pids.size() < index + 1) {
+      pids.resize(index + 1);
+    }
     pids[index] = pid;
-    kio_debug("Starting Simulator on port ", 8123+index, " with pid ",pids[index]);
+    kio_debug("Starting Simulator on port ", 8123 + index, " with pid ", pids[index]);
     usleep(1000 * 2000);
     return true;
   }
@@ -76,13 +76,14 @@ bool SimulatorController::start(size_t index)
 
 bool SimulatorController::stop(size_t index)
 {
-  if(pids.size()<=index || !pids[index])
+  if (pids.size() <= index || !pids[index]) {
     return false;
+  }
 
-  kio_debug("Killing Simulator on port ", 8123+index, " with pid ",pids[index]);
+  kio_debug("Killing Simulator on port ", 8123 + index, " with pid ", pids[index]);
   kill(pids[index], SIGTERM);
 
-  pids[index]=0;
+  pids[index] = 0;
   usleep(1000 * 1000);
   return true;
 }
@@ -91,7 +92,7 @@ bool SimulatorController::reset(size_t index)
 {
   kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
   std::shared_ptr<kinetic::BlockingKineticConnection> con;
-  if( factory.NewBlockingConnection(get(index), con, 30).ok() ) {
+  if (factory.NewBlockingConnection(get(index), con, 30).ok()) {
     con->UnlockDevice("NULL");
     return con->InstantErase("NULL").ok();
   }
@@ -102,20 +103,23 @@ bool SimulatorController::block(size_t index)
 {
   kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
   std::shared_ptr<kinetic::BlockingKineticConnection> con;
-  if( factory.NewBlockingConnection(get(index), con, 30).ok() )
+  if (factory.NewBlockingConnection(get(index), con, 30).ok()) {
     return con->LockDevice("NULL").ok();
+  }
   return false;
 }
 
-kinetic::ConnectionOptions SimulatorController::get(int index) {
-  return kinetic::ConnectionOptions{ "localhost", 8443+index, true, 1, "asdfasdf" };
+kinetic::ConnectionOptions SimulatorController::get(int index)
+{
+  return kinetic::ConnectionOptions{"localhost", 8443 + index, true, 1, "asdfasdf"};
 }
 
 SimulatorController::SimulatorController()
-{}
+{ }
 
 SimulatorController::~SimulatorController()
 {
-  for(size_t i=0; i<pids.size(); i++)
+  for (size_t i = 0; i < pids.size(); i++) {
     stop(i);
+  }
 }
