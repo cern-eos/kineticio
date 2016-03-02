@@ -96,7 +96,7 @@ protected:
   //! Operation vector
   std::vector<KineticAsyncOperation> operations;
 
-  //! Callback syncronization
+  //! Callback synchronization
   CallbackSynchronization sync;
 
   //--------------------------------------------------------------------------

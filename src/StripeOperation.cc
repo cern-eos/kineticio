@@ -37,7 +37,7 @@ void StripeOperation::expandOperationVector(std::vector<std::unique_ptr<KineticA
                                             std::size_t size,
                                             std::size_t offset)
 {
-  size_t index;
+  uint32_t index;
   MurmurHash3_x86_32(key->c_str(), static_cast<uint32_t>(key->length()), 0, &index);
   index += offset;
 
@@ -188,8 +188,6 @@ kinetic::KineticStatus StripeOperation_PUT::execute(const std::chrono::seconds& 
 
 void StripeOperation_PUT::putHandoffKeys(std::vector<std::unique_ptr<KineticAutoConnection>>& connections)
 {
-  assert(values.size() <= operations.size());
-
   for (size_t opnum = 0; opnum < values.size(); opnum++) {
     if (operations[opnum].callback->getResult().statusCode() != StatusCode::OK) {
 
@@ -370,7 +368,7 @@ void StripeOperation_GET::reconstructValue(std::shared_ptr<RedundancyProvider>& 
         stripe.push_back(record->value());
         /* If we have no value but passed crc verification, this indicates a 0ed data chunk has been used for
          * parity calculations but not unnecessarily written to the backend. */
-        if (!record->value()->size()) {
+        if (!record->value()->size() && i<redundancy->numData()) {
           zeroed_indices.push_back(i);
         }
       }
@@ -400,9 +398,7 @@ void StripeOperation_GET::reconstructValue(std::shared_ptr<RedundancyProvider>& 
       }
       auto zero = std::make_shared<const std::string>(chunkSize, '\0');
       for (auto it = zeroed_indices.cbegin(); it != zeroed_indices.cend(); it++) {
-        assert(*it < redundancy->numData());
-        assert(*it * chunkSize >= size);
-        stripe[*it] = zero;
+          stripe[*it] = zero;
       }
     }
     redundancy->compute(stripe);

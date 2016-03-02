@@ -233,7 +233,7 @@ SCENARIO("KineticIo Integration Test", "[Io]")
         struct stat stbuf;
         REQUIRE_NOTHROW(fileio->Stat(&stbuf));
         REQUIRE((stbuf.st_blocks == 2));
-        REQUIRE((stbuf.st_blksize == capacity));
+        REQUIRE(((size_t) stbuf.st_blksize == capacity));
         REQUIRE((stbuf.st_size == stbuf.st_blksize - 32 + buf_size));
       }
 
