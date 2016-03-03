@@ -64,8 +64,8 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
         KeyType::Metadata);
 
     if (status.ok()) {
-      last_block_number = last_block_number_hint = 0;
-      last_block_number_timestamp = std::chrono::system_clock::now();
+      eof_blocknumber = size_hint = 0;
+      eof_verification_time = std::chrono::system_clock::now();
     }
     else if (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH) {
       kio_debug("File ", path, " already exists (O_CREAT flag set).");
@@ -83,12 +83,12 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
     if (status.ok()) {
       try {
         /* Size hint might be stored in attribute. */
-        last_block_number = last_block_number_hint = utility::Convert::toInt(attrGet("sys.kinetic.size_hint"));
+        eof_blocknumber = size_hint = utility::Convert::toInt(attrGet("sys.kinetic.size_hint"));
       } catch (const std::system_error& e) {
         /* no size hint available. not a problem */
-        last_block_number = last_block_number_hint = 0;
+        eof_blocknumber = size_hint = 0;
       }
-      last_block_number_timestamp = std::chrono::system_clock::time_point();
+      eof_verification_time = std::chrono::system_clock::time_point();
     }
     else if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
       kio_debug("File ", path, " does not exist and cannot be opened without O_CREAT flag.");
@@ -109,13 +109,13 @@ void FileIo::Close(uint16_t timeout)
    * create or update the size_hint attribute.
    * This conditional size_hint attribut ewill minimize IO for stat but at the same time avoid unecessary attribute
    * IO on every close. */
-  size_t hint_difference = std::abs(last_block_number - last_block_number_hint);
+  size_t hint_difference = std::abs(eof_blocknumber - size_hint);
   size_t max_request_size = cluster->limits(KeyType::Data).max_range_elements;
   if (hint_difference > max_request_size) {
-    try { attrSet("sys.kinetic.size_hint", utility::Convert::toString(last_block_number)); } catch (...) { }
+    try { attrSet("sys.kinetic.size_hint", utility::Convert::toString(eof_blocknumber)); } catch (...) { }
   }
 
-  last_block_number = last_block_number_hint = 0;
+  eof_blocknumber = size_hint = 0;
   opened = false;
   kio().cache().flush(this);
   kio().cache().drop(this);
@@ -150,7 +150,7 @@ void FileIo::scheduleReadahead(int blocknumber)
   if (readahead_length) {
     auto prediction = prefetchOracle.predict(readahead_length, PrefetchOracle::PredictionType::CONTINUE);
     for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
-      if (*it < last_block_number) {
+      if (*it < eof_blocknumber) {
         auto data = kio().cache().getDataKey(this, *it, DataBlock::Mode::STANDARD);
         auto scheduled = kio().threadpool().try_run(std::bind(do_readahead, data));
         if (scheduled)
@@ -204,8 +204,8 @@ int64_t FileIo::ReadWrite(long long off, char* buffer,
 
     /* Increase last block number if we write past currently known file size...*/
     DataBlock::Mode cm = DataBlock::Mode::STANDARD;
-    if (mode == rw::WRITE && block_number > last_block_number) {
-      last_block_number = block_number;
+    if (mode == rw::WRITE && block_number > eof_blocknumber) {
+      eof_blocknumber = block_number;
       cm = DataBlock::Mode::CREATE;
     }
 
@@ -224,11 +224,11 @@ int64_t FileIo::ReadWrite(long long off, char* buffer,
       data->read(buffer + off_done, block_offset, block_length);
 
       /* If it looks like we are reading the last block (or past it) */
-      if (block_number >= last_block_number) {
+      if (block_number >= eof_blocknumber) {
 
         /* First verify that the stored last block number is still up to date. */
-        last_block_number = verifiedLastBlockNumber();
-        if (block_number < last_block_number) {
+        verify_eof();
+        if (block_number < eof_blocknumber) {
           continue;
         }
 
@@ -314,7 +314,7 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
   } while (keys->size() == cluster->limits(KeyType::Data).max_range_elements);
 
   /* Set last block number */
-  last_block_number = block_number;
+  eof_blocknumber = block_number;
 }
 
 void FileIo::Remove(uint16_t timeout)
@@ -343,58 +343,73 @@ void FileIo::Remove(uint16_t timeout)
   }
 }
 
-int FileIo::verifiedLastBlockNumber()
-{
-  using namespace std::chrono;
 
-  if (duration_cast<milliseconds>(system_clock::now() - last_block_number_timestamp) < DataBlock::expiration_time) {
-    return last_block_number;
+int FileIo::get_eof_backend()
+{
+  /* Most likely the currently stored eof block number is correct... so let's start there. */
+  std::unique_ptr<std::vector<string>> keys;
+  auto start_key = utility::makeDataKey(cluster->id(), path, eof_blocknumber);
+  auto end_key = utility::makeDataKey(cluster->id(), path, std::numeric_limits<int>::max());
+
+  KineticStatus status = cluster->range(start_key, end_key, keys, KeyType::Data);
+
+  /* Found no keys... backend file might have been truncated by another client or writes might
+   * not have been flushed yet. */
+  if (status.ok() && !keys->size()) {
+    keys->push_back(*utility::makeDataKey(cluster->id(), path, 0));
+    do {
+      start_key = make_shared<const string>(keys->back());
+      keys->pop_back();
+      status = cluster->range(start_key, end_key, keys, KeyType::Data);
+    } while (status.ok() && keys->size() == cluster->limits(KeyType::Data).max_range_elements);
   }
 
-  /* Technically, we could start at block 0 to catch all cases... but that the
-   * file is truncated by another client while opened here is highly unlikely.
-   * And for big files this would mean unnecessary GetKeyRange requests for the
-   * regular case.  */
-  std::unique_ptr<std::vector<string>> keys;
-  do {
-    KineticStatus status = cluster->range(
-        keys && keys->size() ? make_shared<const string>(keys->back()) :
-        utility::makeDataKey(cluster->id(), path, last_block_number),
-        utility::makeDataKey(cluster->id(), path, std::numeric_limits<int>::max()),
-        keys, KeyType::Data);
-
-    if (!status.ok()) {
-      kio_error("KeyRange request unexpectedly failed for blocks of path: ", path, ": ", status);
-      throw std::system_error(std::make_error_code(std::errc::io_error));
-    }
-  } while (keys->size() == cluster->limits(KeyType::Data).max_range_elements);
+  if (!status.ok()) {
+    kio_error("KeyRange request unexpectedly failed for blocks of path: ", path, ": ", status);
+    throw std::system_error(std::make_error_code(std::errc::io_error));
+  }
 
   /* Success: get block number from last key.*/
   if (keys->size() > 0) {
     std::string key = keys->back();
     std::string number = key.substr(key.find_last_of('_') + 1, key.length());
-    last_block_number_timestamp = std::chrono::system_clock::now();
     return std::stoi(number);
-  }
-
-  /* No keys found. the file might have been truncated, retry but start the
-   * search from block 0 this time. */
-  if (last_block_number > 0) {
-    last_block_number = 0;
-    return verifiedLastBlockNumber();
   }
 
   /* No block keys found. Ensure that the key has not been removed by testing for
      the existence of the metadata key. */
   shared_ptr<const string> version;
-  auto status = cluster->get(utility::makeMetadataKey(cluster->id(), path), version,
-                             KeyType::Metadata);
-  if (!status.ok()) {
-    kio_warning("File has been removed: ", path);
-    throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
+  auto mdkey = utility::makeMetadataKey(cluster->id(), path);
+  if (cluster->get(mdkey, version, KeyType::Metadata).ok()) {
+    return 0;
   }
-  return 0;
+  kio_warning("File does not exist: ", path);
+  throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
 }
+
+void FileIo::verify_eof()
+{
+  using namespace std::chrono;
+  if (duration_cast<milliseconds>(system_clock::now() - eof_verification_time) > DataBlock::expiration_time) {
+
+    eof_verification_time = std::chrono::system_clock::now();
+
+    int backend = get_eof_backend();
+    if (backend >= eof_blocknumber) {
+      eof_blocknumber = backend;
+      return;
+    }
+    auto last_block = kio().cache().getDataKey(this, eof_blocknumber, DataBlock::Mode::STANDARD);
+
+    /* un-flushed writes mean that eof_blocknumber is correct */
+    if (last_block->dirty()) {
+      return;
+    }
+    /* No un-flushed changes... re-get the block number from backend to ensure that there was no race condition */
+    eof_blocknumber = get_eof_backend();
+  }
+}
+
 
 void FileIo::Stat(struct stat* buf, uint16_t timeout)
 {
@@ -403,13 +418,13 @@ void FileIo::Stat(struct stat* buf, uint16_t timeout)
     Open(0);
   }
 
-  last_block_number = verifiedLastBlockNumber();
-  auto last_block = kio().cache().getDataKey(this, last_block_number, DataBlock::Mode::STANDARD);
+  verify_eof();
+  auto last_block = kio().cache().getDataKey(this, eof_blocknumber, DataBlock::Mode::STANDARD);
 
   memset(buf, 0, sizeof(struct stat));
   buf->st_blksize = cluster->limits(KeyType::Data).max_value_size;
-  buf->st_blocks = last_block_number + 1;
-  buf->st_size = last_block_number * buf->st_blksize + last_block->size();
+  buf->st_blocks = eof_blocknumber + 1;
+  buf->st_size = eof_blocknumber * buf->st_blksize + last_block->size();
 }
 
 std::string FileIo::attrGet(std::string name)

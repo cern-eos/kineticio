@@ -198,29 +198,35 @@ private:
   //--------------------------------------------------------------------------
   void doFlush(std::shared_ptr<kio::DataBlock> data);
 
+  //--------------------------------------------------------------------------
+  //! Verify the eof_blocknumber attribute.
+  //--------------------------------------------------------------------------
+  void verify_eof();
 
-  int verifiedLastBlockNumber();
+  //--------------------------------------------------------------------------
+  //! Check for the last block on the backend cluster.
+  //! @return the last block number
+  //--------------------------------------------------------------------------
+  int get_eof_backend();
 
   /* protected instead of private to allow mocking in cache performance testing */
 protected:
   //! we don't want to have to look in the drive map for every access...
   std::shared_ptr<ClusterInterface> cluster;
 
-  //! readahead
+  //! read-ahead
   PrefetchOracle prefetchOracle;
 
-  //! the size_hint attribute that was read in during open, standard 0
-  int last_block_number_hint;
+  //! the size_hint attribute that was read in during open
+  int size_hint;
 
   //! the currently last block number
-  int last_block_number;
+  int eof_blocknumber;
 
-  //! time point it was verified that the last_block_number is correct
-  //! (another client might have created a later block)
-  std::chrono::system_clock::time_point last_block_number_timestamp;
+  //! time point it was verified that eof_blocknumber is in sync with the backend (multi-clients)
+  std::chrono::system_clock::time_point eof_verification_time;
 
-  //! Exceptions occurring during background execution are stored and thrown at
-  //! the next request.
+  //! Exceptions occurring during background execution are stored and thrown at the next request.
   std::queue<std::system_error> exceptions;
 
   //! Thread safety when accessing exceptions

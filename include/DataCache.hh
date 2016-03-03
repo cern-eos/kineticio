@@ -48,8 +48,7 @@ class DataCache {
 public:
   //--------------------------------------------------------------------------
   //! Return the data block associated with the supplied owner and block
-  //! number. Throws on error. ALSO throws, if a background flush has failed
-  //! for the owner.
+  //! number.
   //!
   //! @param owner a pointer to the kio::FileIo object the block belongs to
   //! @param blocknumber specifies which block of the file is requested,
