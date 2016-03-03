@@ -427,7 +427,7 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
   statistics_snapshot.read_ops_period = read_ops_total - statistics_snapshot.read_ops_total;
   statistics_snapshot.read_bytes_period = read_bytes_total - statistics_snapshot.read_bytes_total;
   statistics_snapshot.write_ops_period = write_ops_total - statistics_snapshot.write_ops_total;
-  statistics_snapshot.write_bytes_period = write_ops_total - statistics_snapshot.write_bytes_total;
+  statistics_snapshot.write_bytes_period = write_bytes_total - statistics_snapshot.write_bytes_total;
 
   statistics_snapshot.read_ops_total = read_ops_total;
   statistics_snapshot.read_bytes_total = read_bytes_total;
