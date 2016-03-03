@@ -29,7 +29,7 @@ using namespace kio;
 
 
 FileIo::FileIo(const std::string& url) :
-    cluster(), prefetchOracle(kio().readaheadWindowSize()), lastBlockNumber(*this), opened(false)
+    cluster(), prefetchOracle(kio().readaheadWindowSize()), opened(false)
 {
   if (url.compare(0, strlen("kinetic://"), "kinetic://") != 0) {
     kio_error("Invalid url supplied. Required format: kinetic://clusterId/path, supplied: ", url);
@@ -64,7 +64,8 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
         KeyType::Metadata);
 
     if (status.ok()) {
-      lastBlockNumber.set(0);
+      last_block_number = last_block_number_hint = 0;
+      last_block_number_timestamp = std::chrono::system_clock::now();
     }
     else if (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH) {
       kio_debug("File ", path, " already exists (O_CREAT flag set).");
@@ -78,7 +79,18 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
         version,
         KeyType::Metadata
     );
-    if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
+
+    if (status.ok()) {
+      try {
+        /* Size hint might be stored in attribute. */
+        last_block_number = last_block_number_hint = utility::Convert::toInt(attrGet("sys.kinetic.size_hint"));
+      } catch (const std::system_error& e) {
+        /* no size hint available. not a problem */
+        last_block_number = last_block_number_hint = 0;
+      }
+      last_block_number_timestamp = std::chrono::system_clock::time_point();
+    }
+    else if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
       kio_debug("File ", path, " does not exist and cannot be opened without O_CREAT flag.");
       throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
     }
@@ -93,21 +105,24 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
 
 void FileIo::Close(uint16_t timeout)
 {
-  if (!opened) {
-    kio_error("Calling close on unopened file object for path: ", path);
-    throw std::system_error(std::make_error_code(std::errc::operation_not_permitted));
+  /* If we would need more than one cluster::range request in the stat operation to find the correct fill size
+   * create or update the size_hint attribute.
+   * This conditional size_hint attribut ewill minimize IO for stat but at the same time avoid unecessary attribute
+   * IO on every close. */
+  size_t hint_difference = std::abs(last_block_number - last_block_number_hint);
+  size_t max_request_size = cluster->limits(KeyType::Data).max_range_elements;
+  if (hint_difference > max_request_size) {
+    try { attrSet("sys.kinetic.size_hint", utility::Convert::toString(last_block_number)); } catch (...) { }
   }
+
+  last_block_number = last_block_number_hint = 0;
+  opened = false;
   kio().cache().flush(this);
   kio().cache().drop(this);
-  opened = false;
 }
 
 void FileIo::Sync(uint16_t timeout)
 {
-  if (!opened) {
-    kio_error("Calling sync on unopened file object for path: ", path);
-    throw std::system_error(std::make_error_code(std::errc::operation_not_permitted));
-  }
   kio().cache().flush(this);
 }
 
@@ -135,7 +150,7 @@ void FileIo::scheduleReadahead(int blocknumber)
   if (readahead_length) {
     auto prediction = prefetchOracle.predict(readahead_length, PrefetchOracle::PredictionType::CONTINUE);
     for (auto it = prediction.cbegin(); it != prediction.cend(); it++) {
-      if (*it < lastBlockNumber.get()) {
+      if (*it < last_block_number) {
         auto data = kio().cache().getDataKey(this, *it, DataBlock::Mode::STANDARD);
         auto scheduled = kio().threadpool().try_run(std::bind(do_readahead, data));
         if (scheduled)
@@ -189,8 +204,8 @@ int64_t FileIo::ReadWrite(long long off, char* buffer,
 
     /* Increase last block number if we write past currently known file size...*/
     DataBlock::Mode cm = DataBlock::Mode::STANDARD;
-    if (mode == rw::WRITE && block_number > lastBlockNumber.get()) {
-      lastBlockNumber.set(block_number);
+    if (mode == rw::WRITE && block_number > last_block_number) {
+      last_block_number = block_number;
       cm = DataBlock::Mode::CREATE;
     }
 
@@ -209,11 +224,11 @@ int64_t FileIo::ReadWrite(long long off, char* buffer,
       data->read(buffer + off_done, block_offset, block_length);
 
       /* If it looks like we are reading the last block (or past it) */
-      if (block_number >= lastBlockNumber.get()) {
+      if (block_number >= last_block_number) {
 
         /* First verify that the stored last block number is still up to date. */
-        lastBlockNumber.verify();
-        if (block_number < lastBlockNumber.get()) {
+        last_block_number = verifiedLastBlockNumber();
+        if (block_number < last_block_number) {
           continue;
         }
 
@@ -299,7 +314,7 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
   } while (keys->size() == cluster->limits(KeyType::Data).max_range_elements);
 
   /* Set last block number */
-  lastBlockNumber.set(block_number);
+  last_block_number = block_number;
 }
 
 void FileIo::Remove(uint16_t timeout)
@@ -328,20 +343,73 @@ void FileIo::Remove(uint16_t timeout)
   }
 }
 
+int FileIo::verifiedLastBlockNumber()
+{
+  using namespace std::chrono;
+
+  if (duration_cast<milliseconds>(system_clock::now() - last_block_number_timestamp) < DataBlock::expiration_time) {
+    return last_block_number;
+  }
+
+  /* Technically, we could start at block 0 to catch all cases... but that the
+   * file is truncated by another client while opened here is highly unlikely.
+   * And for big files this would mean unnecessary GetKeyRange requests for the
+   * regular case.  */
+  std::unique_ptr<std::vector<string>> keys;
+  do {
+    KineticStatus status = cluster->range(
+        keys && keys->size() ? make_shared<const string>(keys->back()) :
+        utility::makeDataKey(cluster->id(), path, last_block_number),
+        utility::makeDataKey(cluster->id(), path, std::numeric_limits<int>::max()),
+        keys, KeyType::Data);
+
+    if (!status.ok()) {
+      kio_error("KeyRange request unexpectedly failed for blocks of path: ", path, ": ", status);
+      throw std::system_error(std::make_error_code(std::errc::io_error));
+    }
+  } while (keys->size() == cluster->limits(KeyType::Data).max_range_elements);
+
+  /* Success: get block number from last key.*/
+  if (keys->size() > 0) {
+    std::string key = keys->back();
+    std::string number = key.substr(key.find_last_of('_') + 1, key.length());
+    last_block_number_timestamp = std::chrono::system_clock::now();
+    return std::stoi(number);
+  }
+
+  /* No keys found. the file might have been truncated, retry but start the
+   * search from block 0 this time. */
+  if (last_block_number > 0) {
+    last_block_number = 0;
+    return verifiedLastBlockNumber();
+  }
+
+  /* No block keys found. Ensure that the key has not been removed by testing for
+     the existence of the metadata key. */
+  shared_ptr<const string> version;
+  auto status = cluster->get(utility::makeMetadataKey(cluster->id(), path), version,
+                             KeyType::Metadata);
+  if (!status.ok()) {
+    kio_warning("File has been removed: ", path);
+    throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
+  }
+  return 0;
+}
+
 void FileIo::Stat(struct stat* buf, uint16_t timeout)
 {
-  /* We allow stating unopened files... */
+  /* We allow statting unopened files... */
   if (!opened) {
     Open(0);
   }
 
-  lastBlockNumber.verify();
-  auto last_block = kio().cache().getDataKey(this, lastBlockNumber.get(), DataBlock::Mode::STANDARD);
+  last_block_number = verifiedLastBlockNumber();
+  auto last_block = kio().cache().getDataKey(this, last_block_number, DataBlock::Mode::STANDARD);
 
   memset(buf, 0, sizeof(struct stat));
   buf->st_blksize = cluster->limits(KeyType::Data).max_value_size;
-  buf->st_blocks = lastBlockNumber.get() + 1;
-  buf->st_size = lastBlockNumber.get() * buf->st_blksize + last_block->size();
+  buf->st_blocks = last_block_number + 1;
+  buf->st_size = last_block_number * buf->st_blksize + last_block->size();
 }
 
 std::string FileIo::attrGet(std::string name)
@@ -353,7 +421,7 @@ std::string FileIo::attrGet(std::string name)
     double time = duration_cast<seconds>(stats.io_end - stats.io_start).count();
     double MB = 1024 * 1024;
 
-    return utility::Convert::toString(
+    auto stringstats = utility::Convert::toString(
         "read-mb-total=", stats.read_bytes_total / MB,
         ",read-ops-total=", stats.read_ops_total,
         ",write-mb-total=", stats.write_bytes_total / MB,
@@ -363,6 +431,8 @@ std::string FileIo::attrGet(std::string name)
         ",write-mb-second=", (stats.write_bytes_period / time) / MB,
         ",write-ops-second=", stats.write_ops_period / time
     );
+    kio_debug(stringstats);
+    return stringstats;
   }
 
   std::shared_ptr<const string> value;
@@ -493,80 +563,4 @@ std::vector<std::string> FileIo::ListFiles(std::string subtree, size_t max)
     }
   } while (names.size() < max && keys->size() == cluster->limits(KeyType::Metadata).max_range_elements);
   return names;
-}
-
-
-FileIo::LastBlockNumber::LastBlockNumber(FileIo& parent) :
-    parent(parent), last_block_number(0), last_block_number_timestamp()
-{ }
-
-FileIo::LastBlockNumber::~LastBlockNumber()
-{ }
-
-int FileIo::LastBlockNumber::get() const
-{
-  return last_block_number;
-}
-
-void FileIo::LastBlockNumber::set(int block_number)
-{
-  if(last_block_number > block_number){
-    kio_notice("Last block number is decreased to ", block_number, " from ", last_block_number);
-  }
-  last_block_number = block_number;
-  last_block_number_timestamp = std::chrono::system_clock::now();
-}
-
-void FileIo::LastBlockNumber::verify()
-{
-  using namespace std::chrono;
-  /* block number verification independent of  expiration verification
-   * in DataBlock class. validate last_block_number (another client might have
-   * created new blocks we know nothing about, or truncated the file. */
-  if (duration_cast<milliseconds>(system_clock::now() - last_block_number_timestamp) < DataBlock::expiration_time) {
-    return;
-  }
-
-  /* Technically, we could start at block 0 to catch all cases... but that the
-   * file is truncated by another client while opened here is highly unlikely.
-   * And for big files this would mean unnecessary GetKeyRange requests for the
-   * regular case.  */
-  std::unique_ptr<std::vector<string>> keys;
-  do {
-    KineticStatus status = parent.cluster->range(
-        keys && keys->size() ? make_shared<const string>(keys->back()) :
-        utility::makeDataKey(parent.cluster->id(), parent.path, last_block_number),
-        utility::makeDataKey(parent.cluster->id(), parent.path, std::numeric_limits<int>::max()),
-        keys, KeyType::Data);
-
-    if (!status.ok()) {
-      kio_error("KeyRange request unexpectedly failed for blocks of path: ", parent.path, ": ", status);
-      throw std::system_error(std::make_error_code(std::errc::io_error));
-    }
-  } while (keys->size() == parent.cluster->limits(KeyType::Data).max_range_elements);
-
-  /* Success: get block number from last key.*/
-  if (keys->size() > 0) {
-    std::string key = keys->back();
-    std::string number = key.substr(key.find_last_of('_') + 1, key.length());
-    set(std::stoi(number));
-    return;
-  }
-
-  /* No keys found. the file might have been truncated, retry but start the
-   * search from block 0 this time. */
-  if (last_block_number > 0) {
-    last_block_number = 0;
-    return verify();
-  }
-
-  /* No block keys found. Ensure that the key has not been removed by testing for
-     the existence of the metadata key. */
-  shared_ptr<const string> version;
-  auto status = parent.cluster->get(utility::makeMetadataKey(parent.cluster->id(), parent.path), version,
-                                    KeyType::Metadata);
-  if (!status.ok()) {
-    kio_warning("File has been removed: ", parent.path);
-    throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
-  }
 }

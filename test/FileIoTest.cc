@@ -73,8 +73,6 @@ SCENARIO("KineticIo Integration Test", "[Io]")
       REQUIRE_THROWS_AS(fileio->Write(0, write_buf, buf_size), std::system_error);
       REQUIRE_THROWS_AS(fileio->Truncate(0), std::system_error);
       REQUIRE_THROWS_AS(fileio->Remove(), std::system_error);
-      REQUIRE_THROWS_AS(fileio->Sync(), std::system_error);
-      REQUIRE_THROWS_AS(fileio->Close(), std::system_error);
     }
 
     THEN("Attempting to open without create flag fails with ENOENT.") {
@@ -140,8 +138,9 @@ SCENARIO("KineticIo Integration Test", "[Io]")
 
     THEN("ListFiles returns the file name.") {
       auto list = fileio->ListFiles(full_url, 100);
-      for(size_t i=0; i<list.size(); i++)
-        printf("%s \n",list[i].c_str());
+      for (size_t i = 0; i < list.size(); i++) {
+        printf("%s \n", list[i].c_str());
+      }
 
       REQUIRE((list.size() == 1));
       REQUIRE((list.front() == full_url));
@@ -198,9 +197,19 @@ SCENARIO("KineticIo Integration Test", "[Io]")
           THEN("stat succeeds and returns the truncated size") {
             struct stat stbuf;
             REQUIRE_NOTHROW(fileio->Stat(&stbuf));
-            REQUIRE(((size_t)stbuf.st_size == size));
+            REQUIRE(((size_t) stbuf.st_size == size));
           }
         }
+      }
+    }
+
+    WHEN("The Io object grows over 100 blocks and is closed") {
+      REQUIRE_NOTHROW(fileio->Truncate(1024*1024*512));
+      fileio->Close();
+      THEN("A size_hint will have been generated. ") {
+        auto hint = fileio->attrGet("sys.kinetic.size_hint");
+        printf("Hint: %s",hint.c_str());
+        REQUIRE((utility::Convert::toInt(hint) == 512));
       }
     }
 
@@ -235,7 +244,27 @@ SCENARIO("KineticIo Integration Test", "[Io]")
         REQUIRE((stbuf.st_blocks == 2));
         REQUIRE(((size_t) stbuf.st_blksize == capacity));
         REQUIRE((stbuf.st_size == stbuf.st_blksize - 32 + buf_size));
+
+        AND_THEN("Writing again earlier in the file doesn't change the stat size.") {
+          REQUIRE((fileio->Write(10, write_buf, buf_size) == buf_size));
+          REQUIRE_NOTHROW(fileio->Stat(&stbuf));
+          REQUIRE((stbuf.st_blocks == 2));
+          REQUIRE(((size_t) stbuf.st_blksize == capacity));
+          REQUIRE((stbuf.st_size == stbuf.st_blksize - 32 + buf_size));
+        }
+
+        AND_THEN("Reopening the object, using it to write earlier, correct stat size is still reported.") {
+          REQUIRE_NOTHROW(fileio->Close());
+          REQUIRE_NOTHROW(fileio->Open(0));
+          REQUIRE((fileio->Write(10, write_buf, buf_size) == buf_size));
+          REQUIRE_NOTHROW(fileio->Stat(&stbuf));
+          REQUIRE((stbuf.st_blocks == 2));
+          REQUIRE(((size_t) stbuf.st_blksize == capacity));
+          REQUIRE((stbuf.st_size == stbuf.st_blksize - 32 + buf_size));
+        }
       }
+
+
 
       THEN("The file can can be removed again.") {
         REQUIRE_NOTHROW(fileio->Remove());
@@ -278,7 +307,7 @@ SCENARIO("FileIo Attribute Integration Test", "[Attr]")
         REQUIRE((owrite_value == fileio->attrGet("name")));
       }
 
-      AND_THEN("Attribute functionality remains active if the file is closed."){
+      AND_THEN("Attribute functionality remains active if the file is closed.") {
         fileio->Close();
         REQUIRE((write_value == fileio->attrGet("name")));
       }
@@ -301,9 +330,9 @@ SCENARIO("FileIo Attribute Integration Test", "[Attr]")
         REQUIRE((list.size() == 1));
         REQUIRE((list.front() == "name"));
 
-        AND_WHEN("A file is removed"){
+        AND_WHEN("A file is removed") {
           REQUIRE_NOTHROW(fileio->Remove());
-          THEN("Attributes are removed along with it..."){
+          THEN("Attributes are removed along with it...") {
             auto list = fileio->attrList();
             REQUIRE((list.size() == 0));
           }

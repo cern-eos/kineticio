@@ -198,54 +198,8 @@ private:
   //--------------------------------------------------------------------------
   void doFlush(std::shared_ptr<kio::DataBlock> data);
 
-private:
-  class LastBlockNumber {
 
-  public:
-    //--------------------------------------------------------------------------
-    //! Checks if the block number stored in last_block_number is still valid,
-    //! if not it will query the drive to obtain the up-to-date last block and
-    //! store it (so it can get requested with get() by the user).
-    //-------------------------------------------------------------------------
-    void verify();
-
-    //-------------------------------------------------------------------------
-    //! Get the block number of the last block.
-    //!
-    //! @return currently set last block number
-    //-------------------------------------------------------------------------
-    int get() const;
-
-    //-------------------------------------------------------------------------
-    //! Set the supplied block number as last block.
-    //!
-    //! @param block_number the block number to be set
-    //-------------------------------------------------------------------------
-    void set(int block_number);
-
-    //-------------------------------------------------------------------------
-    //! Constructor
-    //!
-    //! @param parent reference to the enclosing KineticFileIo object
-    //-------------------------------------------------------------------------
-    explicit LastBlockNumber(FileIo& parent);
-
-    //-------------------------------------------------------------------------
-    //! Destructor.
-    //-------------------------------------------------------------------------
-    ~LastBlockNumber();
-
-  private:
-    //! reference to the enclosing KineticFileIo object
-    FileIo& parent;
-
-    //! currently set last block number
-    int last_block_number;
-
-    //! time point it was verified that the last_block_number is correct
-    //! (another client might have created a later block)
-    std::chrono::system_clock::time_point last_block_number_timestamp;
-  };
+  int verifiedLastBlockNumber();
 
   /* protected instead of private to allow mocking in cache performance testing */
 protected:
@@ -255,8 +209,15 @@ protected:
   //! readahead
   PrefetchOracle prefetchOracle;
 
-  //! keep track of the last block to answer stat requests reasonably
-  LastBlockNumber lastBlockNumber;
+  //! the size_hint attribute that was read in during open, standard 0
+  int last_block_number_hint;
+
+  //! the currently last block number
+  int last_block_number;
+
+  //! time point it was verified that the last_block_number is correct
+  //! (another client might have created a later block)
+  std::chrono::system_clock::time_point last_block_number_timestamp;
 
   //! Exceptions occurring during background execution are stored and thrown at
   //! the next request.
