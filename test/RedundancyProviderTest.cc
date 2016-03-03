@@ -18,6 +18,7 @@
 #include "Utility.hh"
 #include <fcntl.h>
 #include <unistd.h>
+#include <Logging.hh>
 
 using std::shared_ptr;
 using std::string;
@@ -97,7 +98,7 @@ SCENARIO("Redundancy Provider Test.", "[Redundancy]"){
         }
         auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()-t).count();
 
-        printf( "%d KB chunk size -> %ld MB/sec \n", size / (1024*nData), (long int) ((((size/1048576.0) * runs) / (milliseconds)) * 1000));
+        kio_notice(size / (1024*nData), " KB chunk size -> ", (long int) ((((size/1048576.0) * runs) / (milliseconds)) * 1000), " MB/sec");
       }
     }
   }

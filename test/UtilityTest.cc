@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <zlib.h>
+#include <Logging.hh>
 
 using namespace kio; 
 using std::string;
@@ -103,21 +104,18 @@ SCENARIO("Utility Test.", "[Utility]"){
       for(size_t i=0; i<stripe.size(); i++){
         crcs[i] = crc32(0, (const Bytef*)stripe[i]->c_str(), stripe[i]->length());
       }
-      printf("creating %ld crc32 checksums took %ld milliseconds\n",
-             crcs.size(),
-             std::chrono::duration_cast<std::chrono::milliseconds>
-                 (std::chrono::system_clock::now()-t).count()
-      );
+      kio_notice("creating ", crcs.size(), " crc32 checksums took ",
+                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()-t).count(),
+                " milliseconds ");
 
       t = std::chrono::system_clock::now();
       for(size_t i=0; i<stripe.size(); i++){
         crcs[i] = crc32c(0, stripe[i]->c_str(), stripe[i]->length());
       }
-      printf("creating %ld crc32c checksums took %ld milliseconds\n",
-             crcs.size(),
-              std::chrono::duration_cast<std::chrono::milliseconds>
-                (std::chrono::system_clock::now()-t).count()
-              );
+
+      kio_notice("creating ", crcs.size(), " crc32c checksums took ",
+                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()-t).count(),
+                " milliseconds ");
     }
   }
 };

@@ -37,13 +37,13 @@ static void tlog(const char* func, const char* file, int line, int priority, con
 {
   switch(priority) {
     case LOG_DEBUG:
-      printf("DEBUG: ");
+      printf("    DEBUG: ");
       break;
     case LOG_NOTICE:
-      printf("NOTICE: ");
+      printf("  NOTICE: ");
       break;
     case LOG_WARNING:
-      printf("WARNING: ");
+      printf(" WARNING: ");
       break;
     case LOG_ERR:
       printf("ERROR: ");

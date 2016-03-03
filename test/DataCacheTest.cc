@@ -18,6 +18,7 @@
 #include "Utility.hh"
 #include "SimulatorController.h"
 #include <unistd.h>
+#include <Logging.hh>
 
 
 using namespace kio;
@@ -164,7 +165,7 @@ SCENARIO("Cache Performance Test.", "[Cache]")
         std::shared_ptr<ClusterInterface> cluster(new MockCluster());
         MockFileIo fio("kinetic://Cluster1/thepath", cluster);
 
-        printf("Cache get() performance for a cache with capacity of %d items \n", capacity);
+        kio_notice("Cache get() performance for a cache with capacity of ", capacity, " items");
 
         int break_point = capacity * 0.7;
         auto tstart = system_clock::now();
@@ -173,26 +174,25 @@ SCENARIO("Cache Performance Test.", "[Cache]")
         }
         auto tend = system_clock::now();
 
-        printf("%ld items per second up to 70 percent capacity\n",
-               (capacity * 700) / (duration_cast<milliseconds>(tend - tstart).count() + 1));
+        kio_notice((capacity * 700) / (duration_cast<milliseconds>(tend - tstart).count() + 1),
+            " items per second up to 70 percent capacity");
 
         tstart = system_clock::now();
         for (int i = break_point; i < capacity; i++) {
           ccc.getDataKey((FileIo*) &fio, i, DataBlock::Mode::STANDARD);
         }
         tend = system_clock::now();
-        printf("%ld items per second up to capacity \n",
-               (capacity * 300) / (duration_cast<milliseconds>(tend - tstart).count() + 1));
+        kio_notice((capacity * 300) / (duration_cast<milliseconds>(tend - tstart).count() + 1),
+                  " items per second up to capacity");
 
         tstart = system_clock::now();
         for (int i = capacity; i < 2 * capacity; i++) {
           ccc.getDataKey((FileIo*) &fio, i, DataBlock::Mode::STANDARD);
         }
         tend = system_clock::now();
-        printf("%ld items per second above capacity \n",
-               (capacity * 1000) / (duration_cast<milliseconds>(tend - tstart).count() + 1));
-
-        printf("Waiting for cache items to time out so they qualify for removal\n");
+        kio_notice((capacity * 1000) / (duration_cast<milliseconds>(tend - tstart).count() + 1),
+                  "%ld items per second above capacity");
+        kio_notice("Waiting for cache items to time out so they qualify for removal");
         sleep(6);
 
         tstart = system_clock::now();
@@ -200,8 +200,8 @@ SCENARIO("Cache Performance Test.", "[Cache]")
           ccc.getDataKey((FileIo*) &fio, i, DataBlock::Mode::STANDARD);
         }
         tend = system_clock::now();
-        printf("%ld items per second above capacity after timeout \n\n",
-               (capacity * 1000) / (duration_cast<milliseconds>(tend - tstart).count() + 1));
+        kio_notice((capacity * 1000) / (duration_cast<milliseconds>(tend - tstart).count() + 1), "  "
+            "items per second above capacity after timeout");
       }
     }
 

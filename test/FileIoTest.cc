@@ -138,10 +138,6 @@ SCENARIO("KineticIo Integration Test", "[Io]")
 
     THEN("ListFiles returns the file name.") {
       auto list = fileio->ListFiles(full_url, 100);
-      for (size_t i = 0; i < list.size(); i++) {
-        printf("%s \n", list[i].c_str());
-      }
-
       REQUIRE((list.size() == 1));
       REQUIRE((list.front() == full_url));
     }
@@ -208,7 +204,6 @@ SCENARIO("KineticIo Integration Test", "[Io]")
       fileio->Close();
       THEN("A size_hint will have been generated. ") {
         auto hint = fileio->attrGet("sys.kinetic.size_hint");
-        printf("Hint: %s",hint.c_str());
         REQUIRE((utility::Convert::toInt(hint) == 512));
       }
     }
@@ -350,7 +345,6 @@ SCENARIO("FileIo Attribute Integration Test", "[Attr]")
     AND_THEN("We can use the attr interface to request io stats") {
       auto stats = fileio->attrGet("sys.iostats");
       REQUIRE(stats.size());
-      kio_debug("Stats: ", stats);
     }
   }
 }
