@@ -254,11 +254,9 @@ kinetic::KineticStatus KineticCluster::execute_get(kio::StripeOperation_GET& get
     value = getop.getValue();
     version = getop.getVersion();
   }
-
   if (getop.needsIndicator()) {
     getop.putIndicatorKey(connections);
   }
-  kio_debug("Get request of key ", *key, " completed with status: ", status);
   return status;
 }
 
@@ -304,14 +302,18 @@ kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::stri
                                            std::shared_ptr<const std::string>& version, KeyType type)
 {
   std::shared_ptr<const string> value;
-  return do_get(key, version, value, type, true);
+  auto status = do_get(key, version, value, type, true);
+  kio_debug("Get VERSION request of key ", *key, " completed with status: ", status);
+  return status;
 }
 
 kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::string>& key,
                                            std::shared_ptr<const std::string>& version,
                                            std::shared_ptr<const std::string>& value, KeyType type)
 {
-  return do_get(key, version, value, type, false);
+  auto status =  do_get(key, version, value, type, false);
+  kio_debug("Get DATA request of key ", *key, " completed with status: ", status);
+  return status;
 }
 
 KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& key,
@@ -346,7 +348,6 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
     if (status.ok()) {
       version_out = version_new;
     }
-    kio_debug("Put request for key ", *key, " completed with status: ", status);
     return status;
   } catch (std::exception& e) {
     if (mode == WriteMode::IGNORE_VERSION) {
@@ -365,7 +366,9 @@ kinetic::KineticStatus KineticCluster::put(const std::shared_ptr<const std::stri
                                            std::shared_ptr<const std::string>& version_out,
                                            KeyType type)
 {
-  return do_put(key, make_shared<const string>(), value, version_out, type, WriteMode::IGNORE_VERSION);
+  auto status = do_put(key, make_shared<const string>(), value, version_out, type, WriteMode::IGNORE_VERSION);
+  kio_debug("Forced put request for key ", *key, " completed with status: ", status);
+  return status;
 }
 
 kinetic::KineticStatus KineticCluster::put(const std::shared_ptr<const std::string>& key,
@@ -374,8 +377,10 @@ kinetic::KineticStatus KineticCluster::put(const std::shared_ptr<const std::stri
                                            std::shared_ptr<const std::string>& version_out,
                                            KeyType type)
 {
-  return do_put(key, version ? version : make_shared<const string>(), value, version_out, type,
+  auto status = do_put(key, version ? version : make_shared<const string>(), value, version_out, type,
                 WriteMode::REQUIRE_SAME_VERSION);
+  kio_debug("Versioned put request for key ", *key, " completed with status: ", status);
+  return status;
 }
 
 

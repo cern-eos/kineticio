@@ -191,7 +191,7 @@ SCENARIO("Cache Performance Test.", "[Cache]")
         }
         tend = system_clock::now();
         kio_notice((capacity * 1000) / (duration_cast<milliseconds>(tend - tstart).count() + 1),
-                  "%ld items per second above capacity");
+                  " items per second above capacity");
         kio_notice("Waiting for cache items to time out so they qualify for removal");
         sleep(6);
 

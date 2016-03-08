@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <zlib.h>
 #include <Logging.hh>
+#include <uuid.h>
 
 using namespace kio; 
 using std::string;
@@ -28,8 +29,26 @@ SCENARIO("Utility Test.", "[Utility]"){
   GIVEN ("A size attribute"){
     size_t target_size = 112323;
 
+    THEN("uuid decode accepts deprecated binary uuid encoding for backwards compability (eosgenome)"){
+      std::ostringstream ss;
+      ss << std::setw(10) << std::setfill('0') << target_size;
+      uuid_t uuid;
+      uuid_generate(uuid);
+      auto selfconstructedversion = std::make_shared<const string>(
+          ss.str() + utility::Convert::toString(uuid)
+      );
+
+      REQUIRE(selfconstructedversion->size() == 26);
+
+      auto extracted_size = utility::uuidDecodeSize(selfconstructedversion);
+      REQUIRE((target_size == extracted_size));
+    }
+
     WHEN("We encode a size attribute in version Information. "){
       auto v = utility::uuidGenerateEncodeSize(target_size);
+      REQUIRE(v->size() == 46);
+
+
 
       THEN("We can extract the encoded size attribute again."){
         auto extracted_size = utility::uuidDecodeSize(v);
@@ -38,7 +57,7 @@ SCENARIO("Utility Test.", "[Utility]"){
 
       WHEN("We manipulate the version size"){
         auto v2 = std::make_shared<const std::string>(*v + "123");
-        THEN("Trying to extra the size attribute fails. "){
+        THEN("Trying to extract the size attribute fails. "){
           REQUIRE_THROWS(utility::uuidDecodeSize(v2));
         }
       }

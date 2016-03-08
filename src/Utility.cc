@@ -89,7 +89,11 @@ std::string utility::uuidGenerateString()
 {
   uuid_t uuid;
   uuid_generate(uuid);
-  return std::string(reinterpret_cast<const char*>(uuid), sizeof(uuid_t));
+
+  char uuid_str[37];  // 36 byte string plus "\0"
+  uuid_unparse_lower(uuid, uuid_str);
+
+  return std::string(uuid_str);
 }
 
 std::shared_ptr<const std::string> utility::uuidGenerateEncodeSize(std::size_t size)
@@ -101,11 +105,12 @@ std::shared_ptr<const std::string> utility::uuidGenerateEncodeSize(std::size_t s
 
 std::size_t utility::uuidDecodeSize(const std::shared_ptr<const std::string>& uuid)
 {
-  if (!uuid || uuid->size() != 10 + sizeof(uuid_t)) {
-    throw std::invalid_argument("invalid version supplied.");
+  /* valid sizes are 10 bytes for encoded size plus either 16 byte uuid binary or 36 byte uuid string representation */
+  if (uuid && (uuid->size() == 46 || uuid->size() == 26)) {
+    std::string size(uuid->substr(0, 10));
+    return utility::Convert::toInt(size);
   }
-  std::string size(uuid->substr(0, 10));
-  return (size_t) atoi(size.c_str());
+  throw std::invalid_argument("invalid version supplied.");
 }
 
 std::shared_ptr<const std::string> utility::makeDataKey(const std::string& clusterId, const std::string& base,
