@@ -20,7 +20,7 @@
 using namespace kio;
 using namespace kinetic;
 
-ClusterOperation::ClusterOperation()
+ClusterOperation::ClusterOperation() : sync(std::make_shared<CallbackSynchronization>())
 { }
 
 ClusterOperation::~ClusterOperation()
@@ -44,7 +44,6 @@ void ClusterOperation::expandOperationVector(std::vector<std::unique_ptr<Kinetic
 std::map<kinetic::StatusCode, size_t, CompareStatusCode> ClusterOperation::executeOperationVector(
     const std::chrono::seconds& timeout)
 {
-  kio_debug("Start execution of ", operations.size(), " operations for sync-point ", &sync);
   auto need_retry = false;
   auto rounds_left = 2;
   do {
@@ -78,7 +77,7 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> ClusterOperation::execu
 
     /* Wait until sufficient requests returned or we pass operation timeout. */
     std::chrono::system_clock::time_point timeout_time = std::chrono::system_clock::now() + timeout;
-    sync.wait_until(timeout_time);
+    sync->wait_until(timeout_time);
 
     need_retry = false;
     for (size_t i = 0; i < operations.size(); i++) {
@@ -90,7 +89,7 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> ClusterOperation::execu
           kio_warning("Failed removing handle from connection ", operations[i].connection->getName(), "due to: ",
                       e.what());
         }
-        kio_warning("Network timeout for connection ", operations[i].connection->getName(), " for sync-point", &sync,
+        kio_warning("Network timeout for connection ", operations[i].connection->getName(),
                     "timeout period is set to ", timeout, ", the absolute timeout value was: ",
                     timeout_time.time_since_epoch().count());
         auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
@@ -106,7 +105,6 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> ClusterOperation::execu
     }
   } while (need_retry && rounds_left);
 
-  kio_debug("Finished execution for sync-point ", &sync);
   std::map<kinetic::StatusCode, size_t, CompareStatusCode> rmap;
   for (auto it = operations.cbegin(); it != operations.cend(); it++) {
     rmap[it->callback->getResult().statusCode()]++;

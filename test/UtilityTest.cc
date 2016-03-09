@@ -38,7 +38,7 @@ SCENARIO("Utility Test.", "[Utility]"){
           ss.str() + utility::Convert::toString(uuid)
       );
 
-      REQUIRE(selfconstructedversion->size() == 26);
+      REQUIRE((selfconstructedversion->size() == 26));
 
       auto extracted_size = utility::uuidDecodeSize(selfconstructedversion);
       REQUIRE((target_size == extracted_size));
@@ -46,7 +46,7 @@ SCENARIO("Utility Test.", "[Utility]"){
 
     WHEN("We encode a size attribute in version Information. "){
       auto v = utility::uuidGenerateEncodeSize(target_size);
-      REQUIRE(v->size() == 46);
+      REQUIRE((v->size() == 46));
 
 
 

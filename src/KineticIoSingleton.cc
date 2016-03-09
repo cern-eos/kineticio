@@ -20,7 +20,7 @@
 
 using namespace kio;
 
-KineticIoSingleton::KineticIoSingleton() : dataCache(0), threadPool(1, 1)
+KineticIoSingleton::KineticIoSingleton() : dataCache(0), threadPool(0, 0)
 {
   configuration.readahead_window_size = 0;
   try {

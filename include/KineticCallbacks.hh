@@ -21,7 +21,7 @@
  ************************************************************************/
 
 #ifndef KINETICIO_OPERATIONCALLBACKS_HH
-#define	KINETICIO_OPERATIONCALLBACKS_HH
+#define  KINETICIO_OPERATIONCALLBACKS_HH
 
 #include <kinetic/kinetic.h>
 #include <condition_variable>
@@ -31,7 +31,7 @@
 #include <vector>
 #include <string>
 
-namespace kio{
+namespace kio {
 
 //------------------------------------------------------------------------------
 //! Synchronization between multiple KineticCallback entities waiting on
@@ -39,6 +39,7 @@ namespace kio{
 //------------------------------------------------------------------------------
 class CallbackSynchronization {
   friend class KineticCallback;
+
 public:
   //----------------------------------------------------------------------------
   //! Blocking wait until either the timeout point has passed or the number of
@@ -103,7 +104,7 @@ public:
   //----------------------------------------------------------------------------
   //! Constructor
   //----------------------------------------------------------------------------
-  KineticCallback(CallbackSynchronization& s);
+  KineticCallback(std::shared_ptr<CallbackSynchronization> s);
 
   //----------------------------------------------------------------------------
   //! Destructor
@@ -114,72 +115,95 @@ private:
   //! the status / result of the kinetic operation this callback belongs to
   kinetic::KineticStatus status;
   //! count outstanding operations and wake blocked thread when all are ready
-  CallbackSynchronization& sync;
+  std::shared_ptr<CallbackSynchronization> sync;
   //! true if the associated kinetic operation has completed, false otherwise
   bool done;
 };
 
-class GetCallback : public KineticCallback, public kinetic::GetCallbackInterface{
+class GetCallback : public KineticCallback, public kinetic::GetCallbackInterface {
 public:
   const std::unique_ptr<kinetic::KineticRecord>& getRecord();
 
-  void Success(const std::string &key, std::unique_ptr<kinetic::KineticRecord> r);
+  void Success(const std::string& key, std::unique_ptr<kinetic::KineticRecord> r);
+
   void Failure(kinetic::KineticStatus error);
-  explicit GetCallback(CallbackSynchronization& s);
+
+  explicit GetCallback(std::shared_ptr<CallbackSynchronization> s);
+
   ~GetCallback();
+
 private:
   std::unique_ptr<kinetic::KineticRecord> record;
 };
 
-class GetVersionCallback : public KineticCallback, public kinetic::GetVersionCallbackInterface{
+class GetVersionCallback : public KineticCallback, public kinetic::GetVersionCallbackInterface {
 public:
   const std::string& getVersion();
 
-  void Success(const std::string &v);
+  void Success(const std::string& v);
+
   void Failure(kinetic::KineticStatus error);
-  explicit GetVersionCallback(CallbackSynchronization& s);
+
+  explicit GetVersionCallback(std::shared_ptr<CallbackSynchronization> s);
+
   ~GetVersionCallback();
+
 private:
-   std::string version;
+  std::string version;
 };
 
-class GetLogCallback : public KineticCallback, public kinetic::GetLogCallbackInterface{
+class GetLogCallback : public KineticCallback, public kinetic::GetLogCallbackInterface {
 public:
   std::unique_ptr<kinetic::DriveLog>& getLog();
 
   void Success(std::unique_ptr<kinetic::DriveLog> dlog);
+
   void Failure(kinetic::KineticStatus error);
-  explicit GetLogCallback(CallbackSynchronization& s);
+
+  explicit GetLogCallback(std::shared_ptr<CallbackSynchronization> s);
+
   ~GetLogCallback();
+
 private:
-    std::unique_ptr<kinetic::DriveLog> drive_log;
+  std::unique_ptr<kinetic::DriveLog> drive_log;
 };
 
-class PutCallback : public KineticCallback, public kinetic::PutCallbackInterface{
+class PutCallback : public KineticCallback, public kinetic::PutCallbackInterface {
 public:
   void Success();
+
   void Failure(kinetic::KineticStatus error);
-  explicit PutCallback(CallbackSynchronization& s);
+
+  explicit PutCallback(std::shared_ptr<CallbackSynchronization> s);
+
   ~PutCallback();
 };
 
-class DeleteCallback : public KineticCallback, public kinetic::SimpleCallbackInterface{
+class DeleteCallback : public KineticCallback, public kinetic::SimpleCallbackInterface {
 public:
   void Success();
+
   void Failure(kinetic::KineticStatus error);
-  explicit DeleteCallback(CallbackSynchronization& s);
+
+  explicit DeleteCallback(std::shared_ptr<CallbackSynchronization> s);
+
   ~DeleteCallback();
 };
 
-class RangeCallback : public KineticCallback, public kinetic::GetKeyRangeCallbackInterface{
+class RangeCallback : public KineticCallback, public kinetic::GetKeyRangeCallbackInterface {
 public:
-  std::unique_ptr< std::vector<std::string> >& getKeys();
+  std::unique_ptr<std::vector<std::string> >& getKeys();
+
   void Success(std::unique_ptr<std::vector<std::string>> k);
+
   void Failure(kinetic::KineticStatus error);
-  explicit RangeCallback(CallbackSynchronization& s);
+
+  explicit RangeCallback(std::shared_ptr<CallbackSynchronization> s);
+
   ~RangeCallback();
+
 private:
-    std::unique_ptr< std::vector<std::string> > keys;
+  std::unique_ptr<std::vector<std::string> > keys;
 };
 
 }

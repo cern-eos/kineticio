@@ -156,6 +156,9 @@ void KineticAutoConnection::connect()
       tmpfd = 0;
     }
   }
+  else {
+    kio_debug("Factory did not return a connection. ", logstring);
+  }
 
   {
     std::lock_guard<std::mutex> lock(mutex);
@@ -166,7 +169,7 @@ void KineticAutoConnection::connect()
       connection = std::move(tmpcon);
       healthy = true;
       timestamp = std::chrono::system_clock::now();
-      kio_debug("connection attempt succeeded ", logstring);
+      kio_debug("Connection attempt succeeded ", logstring);
     }
     else {
       kio_debug("Connection attempt failed ", logstring);

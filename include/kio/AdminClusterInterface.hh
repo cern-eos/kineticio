@@ -35,7 +35,7 @@ struct ClusterStatus{
     std::vector<bool> connected;
     std::vector<std::string> location;
 };
-  
+
 //------------------------------------------------------------------------------
 //! Interface class for cluster status and key scan & repair.
 //------------------------------------------------------------------------------
@@ -48,7 +48,7 @@ public:
   enum class OperationTarget{
     DATA, METADATA, ATTRIBUTE, INDICATOR, INVALID
   };
-  
+
   //----------------------------------------------------------------------------
   //! Used to store statistics after a scan or repair operation.
   //----------------------------------------------------------------------------

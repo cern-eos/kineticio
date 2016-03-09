@@ -97,7 +97,7 @@ protected:
   std::vector<KineticAsyncOperation> operations;
 
   //! Callback synchronization
-  CallbackSynchronization sync;
+  std::shared_ptr<CallbackSynchronization> sync;
 
   //--------------------------------------------------------------------------
   //! Used for initial setup (and possible future expansion) of the operation

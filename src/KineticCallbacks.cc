@@ -36,12 +36,12 @@ void CallbackSynchronization::wait_until(std::chrono::system_clock::time_point t
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-KineticCallback::KineticCallback(CallbackSynchronization& s) :
+KineticCallback::KineticCallback(std::shared_ptr<CallbackSynchronization> s) :
     status(kinetic::KineticStatus(kinetic::StatusCode::CLIENT_INTERNAL_ERROR, "no result")),
-    sync(s),
+    sync(std::move(s)),
     done(false)
 {
-  sync.outstanding++;
+  sync->outstanding++;
 }
 
 KineticCallback::~KineticCallback()
@@ -49,44 +49,44 @@ KineticCallback::~KineticCallback()
 
 void KineticCallback::OnResult(kinetic::KineticStatus result)
 {
-  std::unique_lock<std::mutex> lock(sync.mutex);
+  std::unique_lock<std::mutex> lock(sync->mutex);
   if (done) {
     return;
   }
 
   status = result;
   done = true;
-  sync.outstanding--;
-  if (!sync.outstanding) {
-    sync.cv.notify_one();
+  sync->outstanding--;
+  if (!sync->outstanding) {
+    sync->cv.notify_one();
   }
 }
 
 kinetic::KineticStatus& KineticCallback::getResult()
 {
-  std::lock_guard<std::mutex> lock(sync.mutex);
+  std::lock_guard<std::mutex> lock(sync->mutex);
   return status;
 }
 
 bool KineticCallback::finished()
 {
-  std::lock_guard<std::mutex> lock(sync.mutex);
+  std::lock_guard<std::mutex> lock(sync->mutex);
   return done;
 }
 
 void KineticCallback::reset()
 {
-  std::lock_guard<std::mutex> lock(sync.mutex);
+  std::lock_guard<std::mutex> lock(sync->mutex);
   done = false;
   status = kinetic::KineticStatus(kinetic::StatusCode::CLIENT_INTERNAL_ERROR, "no result");
-  sync.outstanding++;
+  sync->outstanding++;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 using namespace kinetic;
 
-GetCallback::GetCallback(CallbackSynchronization& s) : KineticCallback(s)
+GetCallback::GetCallback(std::shared_ptr<CallbackSynchronization> s) : KineticCallback(std::move(s))
 { }
 
 GetCallback::~GetCallback()
@@ -110,7 +110,7 @@ const std::unique_ptr<KineticRecord>& GetCallback::getRecord()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-GetVersionCallback::GetVersionCallback(CallbackSynchronization& s) : KineticCallback(s)
+GetVersionCallback::GetVersionCallback(std::shared_ptr<CallbackSynchronization> s) : KineticCallback(std::move(s))
 { }
 
 GetVersionCallback::~GetVersionCallback()
@@ -134,7 +134,7 @@ const std::string& GetVersionCallback::getVersion()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-GetLogCallback::GetLogCallback(CallbackSynchronization& s) : KineticCallback(s)
+GetLogCallback::GetLogCallback(std::shared_ptr<CallbackSynchronization> s) : KineticCallback(std::move(s))
 { }
 
 GetLogCallback::~GetLogCallback()
@@ -158,7 +158,7 @@ unique_ptr<DriveLog>& GetLogCallback::getLog()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-PutCallback::PutCallback(CallbackSynchronization& s) : KineticCallback(s)
+PutCallback::PutCallback(std::shared_ptr<CallbackSynchronization> s) : KineticCallback(std::move(s))
 { }
 
 PutCallback::~PutCallback()
@@ -176,7 +176,7 @@ void PutCallback::Failure(KineticStatus error)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-DeleteCallback::DeleteCallback(CallbackSynchronization& s) : KineticCallback(s)
+DeleteCallback::DeleteCallback(std::shared_ptr<CallbackSynchronization> s) : KineticCallback(std::move(s))
 { }
 
 DeleteCallback::~DeleteCallback()
@@ -194,7 +194,7 @@ void DeleteCallback::Failure(KineticStatus error)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-RangeCallback::RangeCallback(CallbackSynchronization& s) : KineticCallback(s)
+RangeCallback::RangeCallback(std::shared_ptr<CallbackSynchronization> s) : KineticCallback(std::move(s))
 { }
 
 RangeCallback::~RangeCallback()
