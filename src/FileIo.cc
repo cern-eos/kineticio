@@ -444,8 +444,7 @@ std::string FileIo::attrGet(std::string name)
         ",read-mb-second=", (stats.read_bytes_period / time) / MB,
         ",read-ops-second=", stats.read_ops_period / time,
         ",write-mb-second=", (stats.write_bytes_period / time) / MB,
-        ",write-ops-second=", stats.write_ops_period / time,
-        ",load=", stats.utilization_hda_period
+        ",write-ops-second=", stats.write_ops_period / time
     );
     kio_debug(stringstats);
     return stringstats;

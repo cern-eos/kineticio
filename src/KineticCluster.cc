@@ -17,7 +17,6 @@
 #include "Utility.hh"
 #include <set>
 #include <unistd.h>
-#include <drive_log.h>
 #include "Logging.hh"
 #include "KineticIoSingleton.hh"
 
@@ -312,7 +311,7 @@ kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::stri
                                            std::shared_ptr<const std::string>& version,
                                            std::shared_ptr<const std::string>& value, KeyType type)
 {
-  auto status = do_get(key, version, value, type, false);
+  auto status =  do_get(key, version, value, type, false);
   kio_debug("Get DATA request of key ", *key, " completed with status: ", status);
   return status;
 }
@@ -379,7 +378,7 @@ kinetic::KineticStatus KineticCluster::put(const std::shared_ptr<const std::stri
                                            KeyType type)
 {
   auto status = do_put(key, version ? version : make_shared<const string>(), value, version_out, type,
-                       WriteMode::REQUIRE_SAME_VERSION);
+                WriteMode::REQUIRE_SAME_VERSION);
   kio_debug("Versioned put request for key ", *key, " completed with status: ", status);
   return status;
 }
@@ -389,14 +388,9 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
 {
   std::lock_guard<DestructionMutex> dlock(*dm);
 
-  ClusterLogOp logop(
-      {
-          Command_GetLog_Type::Command_GetLog_Type_CAPACITIES,
-          Command_GetLog_Type::Command_GetLog_Type_STATISTICS,
-          Command_GetLog_Type::Command_GetLog_Type_UTILIZATIONS
-      },
-      connections, connections.size()
-  );
+  ClusterLogOp logop({Command_GetLog_Type::Command_GetLog_Type_CAPACITIES,
+                      Command_GetLog_Type::Command_GetLog_Type_STATISTICS
+                     }, connections, connections.size());
   auto cbs = logop.execute(operation_timeout);
 
   /* Set up temporary variables */
@@ -406,14 +400,11 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
   uint64_t read_bytes_total = 0;
   uint64_t write_ops_total = 0;
   uint64_t write_bytes_total = 0;
-  double hda_utilization = 0;
-  int failed_connections = 0;
 
   /* Evaluate Operation Results. */
   for (size_t i = 0; i < cbs.size(); i++) {
     if (!cbs[i]->getResult().ok()) {
       kio_notice("Could not obtain statistics / capacity information for a drive: ", cbs[i]->getResult());
-      failed_connections++;
       continue;
     }
     const auto& log = cbs[i]->getLog();
@@ -422,7 +413,6 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
     bytes_total += log->capacity.nominal_capacity_in_bytes;
     bytes_free += log->capacity.nominal_capacity_in_bytes - bytes_used;
 
-    /* extract operation statistics */
     for (auto it = log->operation_statistics.cbegin(); it != log->operation_statistics.cend(); it++) {
       if (it->name == "GET_RESPONSE") {
         read_ops_total += it->count;
@@ -431,13 +421,6 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
       else if (it->name == "PUT") {
         write_ops_total += it->count;
         write_bytes_total += it->bytes;
-      }
-    }
-
-    /* extract utilization */
-    for (auto it = log->utilizations.cbegin(); it != log->utilizations.cend(); it++) {
-      if (it->name == "HDA") {
-        hda_utilization += it->percent;
       }
     }
   }
@@ -451,8 +434,6 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
   statistics_snapshot.write_ops_period = write_ops_total - statistics_snapshot.write_ops_total;
   statistics_snapshot.write_bytes_period = write_bytes_total - statistics_snapshot.write_bytes_total;
 
-  statistics_snapshot.utilization_hda_period = hda_utilization / (cbs.size() - failed_connections);
-
   statistics_snapshot.read_ops_total = read_ops_total;
   statistics_snapshot.read_bytes_total = read_bytes_total;
   statistics_snapshot.write_ops_total = write_ops_total;
@@ -460,5 +441,4 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
 
   statistics_snapshot.bytes_free = bytes_free;
   statistics_snapshot.bytes_total = bytes_total;
-
 }
