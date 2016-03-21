@@ -61,6 +61,9 @@ struct ClusterStats {
     uint64_t read_bytes_period;
     uint64_t write_ops_period;
     uint64_t write_bytes_period;
+
+    /* Utilization between io_start and io_end */
+    double utilization_hda_period;
 };
 
 enum class KeyType {

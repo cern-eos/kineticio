@@ -114,8 +114,11 @@ public:
 private:
   //! the status / result of the kinetic operation this callback belongs to
   kinetic::KineticStatus status;
-  //! count outstanding operations and wake blocked thread when all are ready
+
+  //! count outstanding operations and wake blocked thread when all are ready. Stored in a shared_ptr
+  //! to guard against it being destructed by the time the callback is called.
   std::shared_ptr<CallbackSynchronization> sync;
+
   //! true if the associated kinetic operation has completed, false otherwise
   bool done;
 };
