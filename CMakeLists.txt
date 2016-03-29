@@ -61,8 +61,8 @@ set(kineticio_SRC
     src/ClusterMap.cc
     src/KineticIoSingleton.cc
     src/KineticAutoConnection.cc
-    src/ClusterOperation.cc
-    src/StripeOperation.cc
+    src/KineticClusterOperation.cc
+    src/KineticClusterStripeOperation.cc
     src/KineticCallbacks.cc
     src/KineticCluster.cc
     src/KineticAdminCluster.cc
@@ -138,6 +138,7 @@ if(BUILD_TEST)
         test/KineticAdminClusterTest.cc
         test/DataCacheTest.cc
         test/KineticAutoConnectionTest.cc
+        test/ConcurrencyTest.cc
         )
     target_link_libraries(kio-test
         ${Z_LIBRARIES}

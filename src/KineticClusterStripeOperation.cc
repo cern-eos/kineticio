@@ -16,26 +16,29 @@
 #include <Logging.hh>
 #include <RedundancyProvider.hh>
 #include <ClusterInterface.hh>
-#include "StripeOperation.hh"
+#include "KineticClusterStripeOperation.hh"
 #include "outside/MurmurHash3.h"
 #include <set>
+#include <unistd.h>
 
 using namespace kio;
 using namespace kinetic;
 
 
-StripeOperation::StripeOperation(const std::shared_ptr<const std::string>& key) : key(key), need_indicator(false)
+KineticClusterStripeOperation::KineticClusterStripeOperation(
+    std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
+    const std::shared_ptr<const std::string>& key,
+    std::shared_ptr<RedundancyProvider>& redundancy) :
+    KineticClusterOperation(connections), key(key), need_indicator(false), redundancy(redundancy)
 {
 }
 
-StripeOperation::~StripeOperation()
+KineticClusterStripeOperation::~KineticClusterStripeOperation()
 {
 
 }
 
-void StripeOperation::expandOperationVector(std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                                            std::size_t size,
-                                            std::size_t offset)
+void KineticClusterStripeOperation::expandOperationVector(std::size_t size, std::size_t offset)
 {
   uint32_t index;
   MurmurHash3_x86_32(key->c_str(), static_cast<uint32_t>(key->length()), 0, &index);
@@ -79,16 +82,15 @@ bool validStatusCode(const kinetic::StatusCode& code)
 }
 
 // todo: try_put
-kinetic::KineticStatus StripeOperation::createSingleKey(std::shared_ptr<const std::string> keyname,
-                                                        std::shared_ptr<const std::string> keyversion,
-                                                        std::shared_ptr<const std::string> keyvalue,
-                                                        std::vector<std::unique_ptr<KineticAutoConnection>>& connections)
+kinetic::KineticStatus KineticClusterStripeOperation::createSingleKey(std::shared_ptr<const std::string> keyname,
+                                                                      std::shared_ptr<const std::string> keyversion,
+                                                                      std::shared_ptr<const std::string> keyvalue)
 {
   auto record = makeRecord(keyvalue, keyversion);
   size_t count = 0;
 
   do {
-    expandOperationVector(connections, 1, operations.size());
+    expandOperationVector(1, operations.size());
     count++;
 
     auto cb = std::make_shared<PutCallback>(sync);
@@ -118,13 +120,14 @@ kinetic::KineticStatus StripeOperation::createSingleKey(std::shared_ptr<const st
   return operations.back().callback->getResult();
 }
 
-void StripeOperation::putIndicatorKey(std::vector<std::unique_ptr<KineticAutoConnection>>& connections)
+void KineticClusterStripeOperation::putIndicatorKey()
 {
-  createSingleKey(utility::makeIndicatorKey(*key), make_shared<const string>("indicator"),
-                  make_shared<const string>(), connections);
+  createSingleKey(utility::makeIndicatorKey(*key),
+                  make_shared<const string>("indicator"),
+                  make_shared<const string>());
 }
 
-bool StripeOperation::needsIndicator()
+bool KineticClusterStripeOperation::needsIndicator()
 {
   return need_indicator;
 }
@@ -136,42 +139,53 @@ StripeOperation_PUT::StripeOperation_PUT(const std::shared_ptr<const std::string
                                          std::vector<std::shared_ptr<const std::string>>& values,
                                          kinetic::WriteMode writeMode,
                                          std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
+                                         std::shared_ptr<RedundancyProvider>& redundancy,
                                          std::size_t size, size_t offset)
-    : StripeOperation(key), version_new(version_new), values(values)
+    : WriteStripeOperation(connections, key, redundancy), version_new(version_new), values(values)
 {
-  expandOperationVector(connections, size, offset);
+  expandOperationVector(size, offset);
   for (size_t i = 0; i < operations.size(); i++) {
-
-    auto record = makeRecord(values[i], version_new);
-    auto cb = std::make_shared<PutCallback>(sync);
-
-    operations[i].callback = cb;
-    operations[i].function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
-        const shared_ptr<const string>,
-        const shared_ptr<const string>,
-        WriteMode,
-        const shared_ptr<const KineticRecord>,
-        const shared_ptr<PutCallbackInterface>,
-        PersistMode)>(
-        &ThreadsafeNonblockingKineticConnection::Put,
-        std::placeholders::_1,
-        key,
-        version_old,
-        writeMode,
-        record,
-        cb,
-        PersistMode::WRITE_BACK);
+    createAsyncOperation(i, version_old, writeMode);
   }
 }
 
-kinetic::KineticStatus StripeOperation_PUT::execute(const std::chrono::seconds& timeout,
-                                                    std::shared_ptr<RedundancyProvider>& redundancy)
+void StripeOperation_PUT::createAsyncOperation(size_t index, const shared_ptr<const string>& drive_version,
+                                               kinetic::WriteMode writeMode)
+{
+
+  auto record = makeRecord(values[index], version_new);
+  auto cb = std::make_shared<PutCallback>(sync);
+
+  operations[index].callback = cb;
+  operations[index].function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
+      const shared_ptr<const string>,
+      const shared_ptr<const string>,
+      WriteMode,
+      const shared_ptr<const KineticRecord>,
+      const shared_ptr<PutCallbackInterface>,
+      PersistMode)>(
+      &ThreadsafeNonblockingKineticConnection::Put,
+      std::placeholders::_1,
+      key,
+      drive_version,
+      writeMode,
+      record,
+      cb,
+      PersistMode::WRITE_BACK);
+}
+
+kinetic::KineticStatus StripeOperation_PUT::execute(const std::chrono::seconds& timeout)
 {
   auto rmap = executeOperationVector(timeout);
 
   /* Partial stripe write has to be resolved. */
   if (rmap[StatusCode::OK] && (rmap[StatusCode::REMOTE_VERSION_MISMATCH] || rmap[StatusCode::REMOTE_NOT_FOUND])) {
-    throw std::runtime_error("Partial Stripe Write Detected.");
+    resolvePartialWrite(timeout, version_new);
+    /* re-compute results map */
+    rmap.clear();
+    for (auto it = operations.cbegin(); it != operations.cend(); it++) {
+      rmap[it->callback->getResult().statusCode()]++;
+    }
   }
 
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
@@ -185,8 +199,7 @@ kinetic::KineticStatus StripeOperation_PUT::execute(const std::chrono::seconds& 
   return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key" + *key + "not accessible.");
 }
 
-
-void StripeOperation_PUT::putHandoffKeys(std::vector<std::unique_ptr<KineticAutoConnection>>& connections)
+void StripeOperation_PUT::putHandoffKeys()
 {
   for (size_t opnum = 0; opnum < values.size(); opnum++) {
     if (operations[opnum].callback->getResult().statusCode() != StatusCode::OK) {
@@ -194,39 +207,128 @@ void StripeOperation_PUT::putHandoffKeys(std::vector<std::unique_ptr<KineticAuto
       auto handoff_key = make_shared<const string>(
           utility::Convert::toString("handoff=", *key, "version=", *version_new, "chunk=", opnum)
       );
-      createSingleKey(handoff_key, version_new, values[opnum], connections);
+      createSingleKey(handoff_key, version_new, values[opnum]);
     }
   }
+}
+
+WriteStripeOperation::WriteStripeOperation(
+    std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
+    const std::shared_ptr<const std::string>& key,
+    std::shared_ptr<RedundancyProvider>& redundancy) : KineticClusterStripeOperation(connections, key, redundancy)
+{
+
+}
+
+
+void WriteStripeOperation::stripeRepair(const std::chrono::seconds& timeout, const StripeOperation_GET& drive_versions)
+{
+  for (size_t opnum = 0; opnum < operations.size(); opnum++) {
+    if (operations[opnum].callback->getResult().statusCode() == StatusCode::REMOTE_VERSION_MISMATCH) {
+      auto drive_version = drive_versions.getVersionAt(opnum);
+      if (drive_version) {
+        createAsyncOperation(opnum, drive_version, kinetic::WriteMode::REQUIRE_SAME_VERSION);
+      }
+    }
+  }
+  executeOperationVector(timeout);
+
+}
+
+/* Three step algorithm
+ *   ? -> update
+ *  2) supplied version is not on backend at all ? ->
+ *      a) initial write was successful -> has been updated by another client -> return ok
+ *      b) initial write failed -> stripe has been repaired by another client -> return version missmatch
+ *  3) supplied version is on backend but not most frequent -> wait for another client to update */
+void WriteStripeOperation::resolvePartialWrite(const std::chrono::seconds& timeout,
+                                               const std::shared_ptr<const std::string>& version)
+{
+  auto start_time = std::chrono::system_clock::now();
+  auto position = 0;
+
+  do {
+    StripeOperation_GET getVersions(key, true, connections, redundancy, redundancy->size());
+    auto rmap = getVersions.executeOperationVector(timeout);
+    auto most_frequent = getVersions.mostFrequentVersion();
+
+    /* Remote not found does not reflect in most_frequent */
+    if (rmap[StatusCode::REMOTE_NOT_FOUND] > most_frequent.frequency) {
+      most_frequent.version = make_shared<const string>();
+      most_frequent.frequency = rmap[StatusCode::REMOTE_NOT_FOUND];
+    }
+
+    /* 1) supplied version is most frequent version -> our turn to repair partial write */
+    if (*version == *most_frequent.version) {
+      stripeRepair(timeout, getVersions);
+    }
+
+    position = -1;
+    for (size_t i = 0; i < redundancy->size(); i++) {
+      auto drive_version = getVersions.getVersionAt(i);
+      if (drive_version && *version == *drive_version) {
+        position = i;
+        break;
+      }
+    }
+
+    /* version is not in stripe at all. this situation can occur if a partial write has been fixed by another
+     * client, or (assuming >= nData chunks of the version had been written initially), the stripe has
+     * already been overwritten by another client.. nothing we need to do here, original evaluation */
+    if (position < 0) {
+      return;
+    }
+
+    /* version is in the stripe, but is not the most frequent version.
+     * It could be that the client that should win the most_frequent match has crashed. For this
+     * reason, all competing clients will wait, polling the key versions. As multiple clients
+     * could theoretically be in this loop concurrently, we specify the maximum number of polls by the position of the first
+     * occurrence of the supplied version for a chunk. If the situation does not clear up by end of polling period,
+     * overwrite permission will be given. */
+    usleep(100 * 1000);
+  } while (std::chrono::system_clock::now() < start_time + timeout * (position + 1));
+
+
+  StripeOperation_GET getVersions(key, true, connections, redundancy, redundancy->size());
+  getVersions.executeOperationVector(timeout);
+  return stripeRepair(timeout, getVersions);
 }
 
 StripeOperation_DEL::StripeOperation_DEL(const std::shared_ptr<const std::string>& key,
                                          const std::shared_ptr<const std::string>& version,
                                          kinetic::WriteMode writeMode,
                                          std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                                         std::size_t size, size_t offset) : StripeOperation(key)
+                                         std::shared_ptr<RedundancyProvider>& redundancy,
+                                         std::size_t size, size_t offset) :
+    WriteStripeOperation(connections, key, redundancy)
 {
-  expandOperationVector(connections, size, offset);
-  for (auto o = operations.begin(); o != operations.end(); o++) {
-    auto cb = std::make_shared<DeleteCallback>(sync);
-    o->callback = cb;
-    o->function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
-        const shared_ptr<const string>,
-        const shared_ptr<const string>,
-        WriteMode,
-        const shared_ptr<SimpleCallbackInterface>,
-        PersistMode)>(
-        &ThreadsafeNonblockingKineticConnection::Delete,
-        std::placeholders::_1,
-        key,
-        version,
-        writeMode,
-        cb,
-        PersistMode::WRITE_BACK);
+  expandOperationVector(size, offset);
+  for (size_t i = 0; i < operations.size(); i++) {
+    createAsyncOperation(i, version, writeMode);
   }
 }
 
-kinetic::KineticStatus StripeOperation_DEL::execute(const std::chrono::seconds& timeout,
-                                                    std::shared_ptr<RedundancyProvider>& redundancy)
+void StripeOperation_DEL::createAsyncOperation(size_t index, const std::shared_ptr<const std::string>& drive_version,
+                                               kinetic::WriteMode writeMode)
+{
+  auto cb = std::make_shared<DeleteCallback>(sync);
+  operations[index].callback = cb;
+  operations[index].function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
+      const shared_ptr<const string>,
+      const shared_ptr<const string>,
+      WriteMode,
+      const shared_ptr<SimpleCallbackInterface>,
+      PersistMode)>(
+      &ThreadsafeNonblockingKineticConnection::Delete,
+      std::placeholders::_1,
+      key,
+      drive_version,
+      writeMode,
+      cb,
+      PersistMode::WRITE_BACK);
+}
+
+kinetic::KineticStatus StripeOperation_DEL::execute(const std::chrono::seconds& timeout)
 {
   auto rmap = executeOperationVector(timeout);
 
@@ -257,16 +359,17 @@ kinetic::KineticStatus StripeOperation_DEL::execute(const std::chrono::seconds& 
 
 StripeOperation_GET::StripeOperation_GET(const std::shared_ptr<const std::string>& key, bool skip_value,
                                          std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
+                                         std::shared_ptr<RedundancyProvider>& redundancy,
                                          std::size_t size, size_t offset)
-    : StripeOperation(key), skip_value(skip_value)
+    : KineticClusterStripeOperation(connections, key, redundancy), skip_value(skip_value)
 {
-  expandOperationVector(connections, size, offset);
+  expandOperationVector(size, offset);
   fillOperationVector();
 }
 
-void StripeOperation_GET::extend(std::vector<std::unique_ptr<KineticAutoConnection>>& connections, std::size_t size)
+void StripeOperation_GET::extend(std::size_t size)
 {
-  expandOperationVector(connections, size, operations.size());
+  expandOperationVector(size, operations.size());
   fillOperationVector();
 }
 
@@ -307,11 +410,12 @@ void StripeOperation_GET::fillOperationVector()
 }
 
 
-bool StripeOperation_GET::insertHandoffChunks(std::vector<std::unique_ptr<KineticAutoConnection>>& connections)
+bool StripeOperation_GET::insertHandoffChunks()
 {
   /* If we don't even have a target version, there's no need to look for chunks */
-  if(!version.version)
+  if (!version.version) {
     return false;
+  }
 
   auto inserted = false;
   auto start_key = std::make_shared<const string>(
@@ -343,7 +447,7 @@ bool StripeOperation_GET::insertHandoffChunks(std::vector<std::unique_ptr<Kineti
 }
 
 
-void StripeOperation_GET::reconstructValue(std::shared_ptr<RedundancyProvider>& redundancy)
+void StripeOperation_GET::reconstructValue()
 {
   value = make_shared<string>();
 
@@ -368,7 +472,7 @@ void StripeOperation_GET::reconstructValue(std::shared_ptr<RedundancyProvider>& 
         stripe.push_back(record->value());
         /* If we have no value but passed crc verification, this indicates a 0ed data chunk has been used for
          * parity calculations but not unnecessarily written to the backend. */
-        if (!record->value()->size() && i<redundancy->numData()) {
+        if (!record->value()->size() && i < redundancy->numData()) {
           zeroed_indices.push_back(i);
         }
       }
@@ -398,7 +502,7 @@ void StripeOperation_GET::reconstructValue(std::shared_ptr<RedundancyProvider>& 
       }
       auto zero = std::make_shared<const std::string>(chunkSize, '\0');
       for (auto it = zeroed_indices.cbegin(); it != zeroed_indices.cend(); it++) {
-          stripe[*it] = zero;
+        stripe[*it] = zero;
       }
     }
     redundancy->compute(stripe);
@@ -477,8 +581,7 @@ StripeOperation_GET::VersionCount StripeOperation_GET::mostFrequentVersion() con
   return v;
 }
 
-kinetic::KineticStatus StripeOperation_GET::execute(const std::chrono::seconds& timeout,
-                                                    std::shared_ptr<RedundancyProvider>& redundancy)
+kinetic::KineticStatus StripeOperation_GET::execute(const std::chrono::seconds& timeout)
 {
   auto rmap = executeOperationVector(timeout);
   version = mostFrequentVersion();
@@ -493,7 +596,7 @@ kinetic::KineticStatus StripeOperation_GET::execute(const std::chrono::seconds& 
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
     if (it->second >= redundancy->numData()) {
       if (it->first == kinetic::StatusCode::OK && !skip_value) {
-        reconstructValue(redundancy);
+        reconstructValue();
       }
       if (validStatusCode(it->first)) {
         return KineticStatus(it->first, "");
@@ -503,33 +606,32 @@ kinetic::KineticStatus StripeOperation_GET::execute(const std::chrono::seconds& 
   throw std::runtime_error("No valid result.");
 }
 
-std::shared_ptr<const std::string> StripeOperation_GET::getVersion()
+std::shared_ptr<const std::string> StripeOperation_GET::getVersion() const
 {
   return version.version;
 }
 
-std::shared_ptr<const std::string> StripeOperation_GET::getValue()
+std::shared_ptr<const std::string> StripeOperation_GET::getValue() const
 {
   return value;
 }
 
-size_t StripeOperation_GET::versionPosition(const std::shared_ptr<const std::string>& version) const
+std::shared_ptr<const std::string> StripeOperation_GET::getVersionAt(int index) const
 {
-  for (size_t index = 0; index < operations.size(); index++) {
-    auto& cb = operations[index].callback;
+  auto& cb = operations[index].callback;
 
-    if (version->empty() && cb->getResult().statusCode() == StatusCode::REMOTE_NOT_FOUND) {
-      return index;
+  if (cb->getResult().statusCode() == StatusCode::REMOTE_NOT_FOUND) {
+    return make_shared<const string>();
+  }
+
+  if (cb->getResult().ok()) {
+    if (skip_value) {
+      return make_shared<const std::string>(std::static_pointer_cast<GetVersionCallback>(cb)->getVersion());
     }
-
-    if (cb->getResult().ok()) {
-      if (skip_value && *version == std::static_pointer_cast<GetVersionCallback>(cb)->getVersion()) {
-        return index;
-      }
-      if (!skip_value && *version == *std::static_pointer_cast<GetCallback>(cb)->getRecord()->version()) {
-        return index;
-      }
+    else {
+      return std::static_pointer_cast<GetCallback>(cb)->getRecord()->version();
     }
   }
-  return operations.size();
+
+  return std::shared_ptr<const std::string>();
 }

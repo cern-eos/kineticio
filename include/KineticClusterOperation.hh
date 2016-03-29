@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-//! @file ClusterOperation.hh
+//! @file KineticClusterOperation.hh
 //! @author Paul Hermann Lensing
 //! @brief Operations on connections of a cluster
 //------------------------------------------------------------------------------
@@ -19,8 +19,8 @@
  * License for more details.                                            *
  ************************************************************************/
 
-#ifndef  KINETICIO_CLUSTEROPERATION_HH
-#define  KINETICIO_CLUSTEROPERATION_HH
+#ifndef  KINETICIO_KINETICCLUSTEROPERATION_HH
+#define  KINETICIO_KINETICCLUSTEROPERATION_HH
 
 #include <kinetic/kinetic.h>
 #include <functional>
@@ -62,17 +62,17 @@ public:
 //--------------------------------------------------------------------------
 //! Cluster Operation base class, not intended to be used directly
 //--------------------------------------------------------------------------
-class ClusterOperation {
+class KineticClusterOperation {
 public:
   //--------------------------------------------------------------------------
   //! Constructor.
   //--------------------------------------------------------------------------
-  explicit ClusterOperation();
+  explicit KineticClusterOperation(std::vector<std::unique_ptr<KineticAutoConnection>>& connections);
 
   //--------------------------------------------------------------------------
   //! Destructor.
   //--------------------------------------------------------------------------
-  virtual ~ClusterOperation();
+  virtual ~KineticClusterOperation();
 
   //--------------------------------------------------------------------------
   //! Executes an operation vector. The operation vector will have to have been
@@ -99,6 +99,9 @@ protected:
   //! Callback synchronization
   std::shared_ptr<CallbackSynchronization> sync;
 
+  //! Connection vector
+  std::vector<std::unique_ptr<KineticAutoConnection>>& connections;
+
   //--------------------------------------------------------------------------
   //! Used for initial setup (and possible future expansion) of the operation
   //! vector. Chooses the connections to be used. Can be overwritten for
@@ -109,7 +112,6 @@ protected:
   //! @param offset the offset to add to the initial connection choice
   //--------------------------------------------------------------------------
   virtual void expandOperationVector(
-      std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
       std::size_t size, std::size_t offset
   );
 };
@@ -118,7 +120,7 @@ protected:
 //--------------------------------------------------------------------------
 //! A range operation
 //--------------------------------------------------------------------------
-class ClusterRangeOp : public ClusterOperation {
+class ClusterRangeOp : public KineticClusterOperation {
   /* Allow StripeOperation_GET access to internals in order to identify connections for handoff keys */
   friend class StripeOperation_GET;
 public:
@@ -135,10 +137,10 @@ public:
   //! keys returned by the range request.
   //!
   //! @param timeout the network timeout
-  //! @param redundancy the redundancy object
+  //! @param quorum_size the minimum number of aligned replies required
   //! @return status of the execution
   //--------------------------------------------------------------------------
-  kinetic::KineticStatus execute(const std::chrono::seconds& timeout, std::shared_ptr<RedundancyProvider>& redundancy);
+  kinetic::KineticStatus execute(const std::chrono::seconds& timeout, size_t quorum_size);
 
   //--------------------------------------------------------------------------
   //! Constructor
@@ -164,7 +166,7 @@ private:
 //--------------------------------------------------------------------------
 //! A log operation
 //--------------------------------------------------------------------------
-class ClusterLogOp : public ClusterOperation {
+class ClusterLogOp : public KineticClusterOperation {
 public:
   //--------------------------------------------------------------------------
   //! Execute the operation and return individual callbacks in a vector.

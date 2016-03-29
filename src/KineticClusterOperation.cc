@@ -13,21 +13,21 @@
  * License for more details.                                            *
  ************************************************************************/
 
-#include "ClusterOperation.hh"
+#include "KineticClusterOperation.hh"
 #include <Logging.hh>
 #include <set>
 
 using namespace kio;
 using namespace kinetic;
 
-ClusterOperation::ClusterOperation() : sync(std::make_shared<CallbackSynchronization>())
+KineticClusterOperation::KineticClusterOperation(std::vector<std::unique_ptr<KineticAutoConnection>>& connections) :
+    sync(std::make_shared<CallbackSynchronization>()), connections(connections)
 { }
 
-ClusterOperation::~ClusterOperation()
+KineticClusterOperation::~KineticClusterOperation()
 { }
 
-void ClusterOperation::expandOperationVector(std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                                             std::size_t size, std::size_t offset)
+void KineticClusterOperation::expandOperationVector(std::size_t size, std::size_t offset)
 {
   for (size_t i = 0; i < size; i++) {
     operations.push_back(
@@ -41,7 +41,7 @@ void ClusterOperation::expandOperationVector(std::vector<std::unique_ptr<Kinetic
 }
 
 // TODO: add healthy connection minimum number to function and don't attempt if not feasible
-std::map<kinetic::StatusCode, size_t, CompareStatusCode> ClusterOperation::executeOperationVector(
+std::map<kinetic::StatusCode, size_t, CompareStatusCode> KineticClusterOperation::executeOperationVector(
     const std::chrono::seconds& timeout)
 {
   auto need_retry = false;
@@ -114,9 +114,9 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> ClusterOperation::execu
 
 ClusterLogOp::ClusterLogOp(const std::vector<kinetic::Command_GetLog_Type> types,
                            std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                           std::size_t size, size_t offset) : ClusterOperation()
+                           std::size_t size, size_t offset) : KineticClusterOperation(connections)
 {
-  expandOperationVector(connections, size, offset);
+  expandOperationVector(size, offset);
   for (auto o = operations.begin(); o != operations.end(); o++) {
     auto cb = std::make_shared<GetLogCallback>(sync);
     o->callback = cb;
@@ -146,9 +146,9 @@ ClusterRangeOp::ClusterRangeOp(const std::shared_ptr<const std::string>& start_k
                                const std::shared_ptr<const std::string>& end_key,
                                size_t maxRequestedPerDrive,
                                std::vector<std::unique_ptr<KineticAutoConnection>>& connections)
-    : maxRequested(maxRequestedPerDrive)
+    : KineticClusterOperation(connections), maxRequested(maxRequestedPerDrive)
 {
-  expandOperationVector(connections, connections.size(), 0);
+  expandOperationVector(connections.size(), 0);
   for (auto o = operations.begin(); o != operations.end(); o++) {
     auto cb = std::make_shared<RangeCallback>(sync);
     o->callback = cb;
@@ -168,13 +168,12 @@ ClusterRangeOp::ClusterRangeOp(const std::shared_ptr<const std::string>& start_k
   }
 }
 
-kinetic::KineticStatus ClusterRangeOp::execute(const std::chrono::seconds& timeout,
-                                               std::shared_ptr<RedundancyProvider>& redundancy)
+kinetic::KineticStatus ClusterRangeOp::execute(const std::chrono::seconds& timeout, size_t quorum_size)
 {
   auto rmap = executeOperationVector(timeout);
 
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
-    if (it->second > operations.size() - redundancy->size()) {
+    if (it->second >= quorum_size) {
       return KineticStatus(it->first, "");
     }
   }
