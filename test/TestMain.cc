@@ -73,7 +73,7 @@ static void tlog(const char* func, const char* file, int line, int priority, con
   printf("\n");
 }
 
-int main( int argc, char* const argv[] )
+int main( int argc, char const* argv[] )
 {
   // Set environment variables so that KineticIo can find the simulator.
   std::string location(getenv("KINETIC_DRIVE_LOCATION") ? getenv("KINETIC_DRIVE_LOCATION") : "" );
@@ -95,7 +95,7 @@ int main( int argc, char* const argv[] )
     argc--;
   }
 
-  int result = Catch::Session().run( argc, (const char**) argv );
+  int result = Catch::Session().run( argc, argv );
 
   // Reset environment variables back to the initial values.
   setenv("KINETIC_DRIVE_LOCATION", location.c_str(), 1);

@@ -217,11 +217,11 @@ WriteStripeOperation::WriteStripeOperation(
     const std::shared_ptr<const std::string>& key,
     std::shared_ptr<RedundancyProvider>& redundancy) : KineticClusterStripeOperation(connections, key, redundancy)
 {
-
 }
 
 
-void WriteStripeOperation::stripeRepair(const std::chrono::seconds& timeout, const StripeOperation_GET& drive_versions)
+bool WriteStripeOperation::attemptStripeRepair(const std::chrono::seconds& timeout,
+                                               const StripeOperation_GET& drive_versions)
 {
   for (size_t opnum = 0; opnum < operations.size(); opnum++) {
     if (operations[opnum].callback->getResult().statusCode() == StatusCode::REMOTE_VERSION_MISMATCH) {
@@ -231,12 +231,12 @@ void WriteStripeOperation::stripeRepair(const std::chrono::seconds& timeout, con
       }
     }
   }
-  executeOperationVector(timeout);
-
+  auto rmap = executeOperationVector(timeout);
+  return rmap[StatusCode::REMOTE_VERSION_MISMATCH] == 0;
 }
 
 /* Three step algorithm
- *   ? -> update
+ *  1) -> update
  *  2) supplied version is not on backend at all ? ->
  *      a) initial write was successful -> has been updated by another client -> return ok
  *      b) initial write failed -> stripe has been repaired by another client -> return version missmatch
@@ -260,7 +260,10 @@ void WriteStripeOperation::resolvePartialWrite(const std::chrono::seconds& timeo
 
     /* 1) supplied version is most frequent version -> our turn to repair partial write */
     if (*version == *most_frequent.version) {
-      stripeRepair(timeout, getVersions);
+      if( attemptStripeRepair(timeout, getVersions) ) {
+        /* if repair is completely successful (there are no version missmatches left in stripe), we are done. */
+        return;
+      }
     }
 
     position = -1;
@@ -288,10 +291,10 @@ void WriteStripeOperation::resolvePartialWrite(const std::chrono::seconds& timeo
     usleep(100 * 1000);
   } while (std::chrono::system_clock::now() < start_time + timeout * (position + 1));
 
-
+  kio_warning("Client crash detected. Overwriting with version ", *version);
   StripeOperation_GET getVersions(key, true, connections, redundancy, redundancy->size());
   getVersions.executeOperationVector(timeout);
-  return stripeRepair(timeout, getVersions);
+  attemptStripeRepair(timeout, getVersions);
 }
 
 StripeOperation_DEL::StripeOperation_DEL(const std::shared_ptr<const std::string>& key,
@@ -430,7 +433,7 @@ bool StripeOperation_GET::insertHandoffChunks()
 
   for (size_t i = 0; i < range.operations.size(); i++) {
     auto& opkeys = std::static_pointer_cast<RangeCallback>(range.operations[i].callback)->getKeys();
-    kio_debug("found ", opkeys ? opkeys->size() : 0, " handoff keys on connection #", i);
+    //kio_debug("found ", opkeys ? opkeys->size() : 0, " handoff keys on connection #", i);
 
     if (opkeys) {
       for (auto opkey = opkeys->begin(); opkey != opkeys->end(); opkey++) {
@@ -484,7 +487,13 @@ void StripeOperation_GET::reconstructValue()
       }
     }
     else {
-      kio_notice("Chunk ", i, " of key ", *key, " is invalid.");
+      if (record && *record->version() != *version.version) {
+        kio_notice("Chunk ", i, " of key ", *key, " has incorrect version. "
+            "Expected = ", *version.version, "    Observed = ", *record->version());
+      }
+      else {
+        kio_notice("Chunk ", i, " of key ", *key, " is invalid.");
+      }
       stripe.push_back(make_shared<const string>());
       need_recovery = true;
     }

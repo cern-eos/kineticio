@@ -234,15 +234,16 @@ public:
   );
 
 protected:
+  virtual void createAsyncOperation(size_t index, const std::shared_ptr<const std::string>& drive_version, kinetic::WriteMode writeMode) = 0;
+
   //! Concurrency resolution: In case of partial stripe writes / removes due
   //! to concurrent write accesses, decide which client wins the race based
   //! on achieved write pattern and using remote versions as a tie breaker.
   void resolvePartialWrite(const std::chrono::seconds& timeout, const std::shared_ptr<const std::string>& version);
 
+private:
   //! write access has been granted, overwrite the stripe chunks that have the wrong version
-  void stripeRepair(const std::chrono::seconds& timeout, const StripeOperation_GET& drive_versions);
-
-  virtual void createAsyncOperation(size_t index, const std::shared_ptr<const std::string>& drive_version, kinetic::WriteMode writeMode) = 0;
+  bool attemptStripeRepair(const std::chrono::seconds& timeout, const StripeOperation_GET& drive_versions);
 };
 
 //--------------------------------------------------------------------------

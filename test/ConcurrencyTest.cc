@@ -63,9 +63,9 @@ SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
     c.reset(1);
     c.reset(2);
 
-    for (int instances = 4; instances <= 4; instances *= 4) {
-      for (int numblocks = 4; numblocks <= 4; numblocks *= 4) {
-        for (int numthreads = 1; numthreads <= 1; numthreads *= 4) {
+    for (int instances = 1; instances <= 16; instances *= 4) {
+      for (int numblocks = 1; numblocks <= 16; numblocks *= 4) {
+        for (int numthreads = 1; numthreads <= 4; numthreads *= 4) {
           WHEN(utility::Convert::toString(
               "We create ", instances, " instances of the same cluster, ",
               numblocks, " instances of DataBlock(s) with the same key for each of the cluster instances, ",
@@ -96,7 +96,7 @@ SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
               }
             }
             REQUIRE(dblocks.size() == (size_t) instances * numblocks);
-
+            sleep(1);
 
             vector<std::thread> threads;
             for (auto it = dblocks.begin(); it != dblocks.end(); it++) {
@@ -109,7 +109,6 @@ SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
             }
           }
         }
-
       }
     }
   }

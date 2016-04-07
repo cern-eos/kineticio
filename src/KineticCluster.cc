@@ -257,7 +257,7 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
  /* If another client is concurrently writing, we could have read in a mix of chunks. We do not want to return IO
   * error in this case but simply wait until the other client completes and return the valid result at that point.
   * Let's take a nap and see if there are changes to the stripe version after. */
-  usleep(100*1000);
+  usleep(200*1000);
   StripeOperation_GET getop_concurrency_check(key, skip_value, connections, redundancy[type], redundancy[type]->size());
   try {
     return execute_get(getop_concurrency_check, key, version, value, type);
@@ -266,7 +266,7 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
   }
 
   if(getop.mostFrequentVersion() != getop_concurrency_check.mostFrequentVersion()) {
-    kio_notice("Concurrent write detected. Re-starting get operation for key ", *key, ".");
+    kio_warning("Concurrent write detected. Re-starting get operation for key ", *key, ".");
     return do_get(key, version, value, type, skip_value);
   }
 
@@ -275,7 +275,7 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
     try {
       return execute_get(getop, key, version, value, type);
     } catch (std::exception& e) {
-      kio_debug("Failed getting stripe for key ", *key, " even with handoff chunks: ", e.what());
+      kio_error("Failed getting stripe for key ", *key, " even with handoff chunks: ", e.what());
     }
   }
   return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key " + *key + " not accessible.");
@@ -321,7 +321,7 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
 
   /* Do not use version_out variable directly in case the client uses the same pointer for version and version_out. */
   auto version_new = utility::uuidGenerateEncodeSize(value->size());
-  kio_debug("expected = ",*version, "  new =",*version_new);
+  kio_debug("expected = ",*version, "  new = ",*version_new);
 
   StripeOperation_PUT putOp(key, version_new, version, stripe, mode, connections, redundancy[type], redundancy[type]->size());
   auto status = putOp.execute(operation_timeout);
