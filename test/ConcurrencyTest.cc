@@ -27,11 +27,11 @@ using namespace kinetic;
 using namespace kio;
 
 
-void write_100(DataBlock& dataBlock)
+void write_x(DataBlock& dataBlock, int x)
 {
   std::string value = "value";
   try {
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < x; i++) {
       dataBlock.write(value.c_str(), 0, value.length());
       dataBlock.flush();
     }
@@ -66,6 +66,7 @@ SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
     for (int instances = 1; instances <= 16; instances *= 4) {
       for (int numblocks = 1; numblocks <= 16; numblocks *= 4) {
         for (int numthreads = 1; numthreads <= 4; numthreads *= 4) {
+
           WHEN(utility::Convert::toString(
               "We create ", instances, " instances of the same cluster, ",
               numblocks, " instances of DataBlock(s) with the same key for each of the cluster instances, ",
@@ -95,13 +96,15 @@ SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
                 );
               }
             }
-            REQUIRE(dblocks.size() == (size_t) instances * numblocks);
-            sleep(1);
+            REQUIRE(dblocks.size() * numthreads == (size_t) instances * numblocks * numthreads);
+
+            const int total_put_operations = 1000;
+            int x = total_put_operations / (dblocks.size()*numthreads);
 
             vector<std::thread> threads;
             for (auto it = dblocks.begin(); it != dblocks.end(); it++) {
               for (int t = 0; t < numthreads; t++) {
-                threads.push_back(std::thread(std::bind(write_100, std::ref(*(it->get())))));
+                threads.push_back(std::thread(std::bind(write_x, std::ref(*(it->get())), x)));
               }
             }
             for (size_t t = 0; t < threads.size(); t++) {

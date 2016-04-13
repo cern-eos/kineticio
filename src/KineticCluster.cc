@@ -254,22 +254,6 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
     kio_debug("Failed getting stripe for key ", *key, " even with parities: ", e.what());
   }
 
- /* If another client is concurrently writing, we could have read in a mix of chunks. We do not want to return IO
-  * error in this case but simply wait until the other client completes and return the valid result at that point.
-  * Let's take a nap and see if there are changes to the stripe version after. */
-  usleep(200*1000);
-  StripeOperation_GET getop_concurrency_check(key, skip_value, connections, redundancy[type], redundancy[type]->size());
-  try {
-    return execute_get(getop_concurrency_check, key, version, value, type);
-  } catch (std::exception& e) {
-    kio_debug("Failed getting stripe for key ", *key, " after sleeping to resolve concurrency: ", e.what());
-  }
-
-  if(getop.mostFrequentVersion() != getop_concurrency_check.mostFrequentVersion()) {
-    kio_warning("Concurrent write detected. Re-starting get operation for key ", *key, ".");
-    return do_get(key, version, value, type, skip_value);
-  }
-
   /* As a last ditch effort try to use handoff chunks if any are available to serve the request */
   if (getop.insertHandoffChunks()) {
     try {
@@ -278,7 +262,31 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
       kio_error("Failed getting stripe for key ", *key, " even with handoff chunks: ", e.what());
     }
   }
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key " + *key + " not accessible.");
+
+ /* If other clients are writing concurrently, we could have read in a mix of chunks. We do not want to return IO
+  * error in this case but simply wait until the other client completes and return the valid result at that point.
+  * Let's see if there are changes to the stripe version before the configured timeout time. */
+  auto start_time = std::chrono::system_clock::now();
+  do {
+    usleep(200 * 1000);
+    StripeOperation_GET getop_concurrency_check(key, skip_value, connections, redundancy[type], redundancy[type]->size());
+
+    try {
+      return execute_get(getop_concurrency_check, key, version, value, type);
+    } catch (std::exception& e) {
+      kio_debug("Failed getting stripe for key ", *key, ": ", e.what());
+      continue;
+    }
+
+    if (getop.mostFrequentVersion() != getop_concurrency_check.mostFrequentVersion()) {
+      kio_warning("Concurrent write detected. Re-starting get operation for key ", *key, ".");
+      return do_get(key, version, value, type, skip_value);
+    }
+  }while(std::chrono::system_clock::now() < start_time + operation_timeout);
+
+  kio_warning("No concurrent write: Both pre and post timeout most frequent version is ",
+              *getop.mostFrequentVersion().version);
+    return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key " + *key + " not accessible.");
 }
 
 kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::string>& key,
@@ -295,7 +303,10 @@ kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::stri
                                            std::shared_ptr<const std::string>& value, KeyType type)
 {
   auto status =  do_get(key, version, value, type, false);
-  kio_debug("Get DATA request of key ", *key, " completed with status: ", status);
+  if(status.ok())
+    kio_debug("Get DATA request of key ", *key, " completed with status: ", status, " version (",*version,")");
+  else
+    kio_debug("Get DATA request of key ", *key, " completed with status: ", status);
   return status;
 }
 

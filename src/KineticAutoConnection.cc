@@ -47,7 +47,8 @@ const std::string& KineticAutoConnection::getName() const
   return logstring;
 }
 
-void KineticAutoConnection::setError(std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>& errorConnection)
+void KineticAutoConnection::setError(
+    std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>& errorConnection)
 {
   std::lock_guard<std::mutex> lock(mutex);
   if (!healthy) {
@@ -95,30 +96,30 @@ std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection> KineticAutoConn
 }
 
 namespace {
-class ConnectCallback : public kinetic::SimpleCallbackInterface {
-public:
-  void Success()
-  { _done = _success = true; }
+  class ConnectCallback : public kinetic::SimpleCallbackInterface {
+  public:
+    void Success()
+    { _done = _success = true; }
 
-  void Failure(kinetic::KineticStatus error)
-  { _done = true; }
+    void Failure(kinetic::KineticStatus error)
+    { _done = true; }
 
-  ConnectCallback() : _done(false), _success(false)
-  { }
+    ConnectCallback() : _done(false), _success(false)
+    { }
 
-  ~ConnectCallback()
-  { }
+    ~ConnectCallback()
+    { }
 
-  bool done()
-  { return _done; }
+    bool done()
+    { return _done; }
 
-  bool ok()
-  { return _success; }
+    bool ok()
+    { return _success; }
 
-private:
-  bool _done;
-  bool _success;
-};
+  private:
+    bool _done;
+    bool _success;
+  };
 }
 
 void KineticAutoConnection::connect()
@@ -136,16 +137,21 @@ void KineticAutoConnection::connect()
 
   if (factory.NewThreadsafeNonblockingConnection(primary, tmpcon).ok() ||
       factory.NewThreadsafeNonblockingConnection(secondary, tmpcon).ok()) {
-    auto cb = std::make_shared<ConnectCallback>();
-    tmpcon->NoOp(cb);
 
-    /* Get the fd */
+    /* Get the fd:
+     * If Run() returns true but does not set tmpfd, another thread is still listening to the same fd and removed
+     * the message. I do not quite understand how this can happen. A fix is to simply re-issue the noop request
+     * to obtain the fd. */
     fd_set x;
-    int y;
-    tmpcon->Run(&x, &x, &tmpfd);
+    std::shared_ptr<ConnectCallback> cb;
+    do {
+      cb = std::make_shared<ConnectCallback>();
+      tmpcon->NoOp(cb);
+    } while (tmpcon->Run(&x, &x, &tmpfd) && tmpfd == 0);
 
-    /* wait on noop reply... we actually don't want to add drives where the connection succeeds
+    /* wait on noop result to validate the connection... we don't want to add drives where the connection succeeds
      * but requests don't (e.g. drive is in locked state or has an error) */
+    int y;
     while (tmpcon->Run(&x, &x, &y) && !cb->done()) {
       struct timeval tv{5, 0};
       if (select(tmpfd, &x, &x, NULL, &tv) <= 0) {
@@ -155,6 +161,7 @@ void KineticAutoConnection::connect()
     if (!cb->ok()) {
       tmpfd = 0;
     }
+    kio_debug("Noop cb for connection ", logstring, " is: done=", cb->done(), " ok=",cb->ok(), " and FD=", tmpfd-1);
   }
   else {
     kio_debug("Factory did not return a connection. ", logstring);

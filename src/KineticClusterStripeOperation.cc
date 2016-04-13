@@ -59,25 +59,26 @@ void KineticClusterStripeOperation::expandOperationVector(std::size_t size, std:
 
 namespace {
 
-std::shared_ptr<KineticRecord> makeRecord(const std::shared_ptr<const std::string>& value,
-                                          const std::shared_ptr<const std::string>& version)
-{
-  /* Generate Checksum */
-  auto checksum = crc32c(0, value->c_str(), value->length());
-  auto tag = std::make_shared<string>(
-      std::to_string((long long unsigned int) checksum)
-  );
+  std::shared_ptr<KineticRecord> makeRecord(const std::shared_ptr<const std::string>& value,
+                                            const std::shared_ptr<const std::string>& version)
+  {
+    /* Generate Checksum */
+    auto checksum = crc32c(0, value->c_str(), value->length());
+    auto tag = std::make_shared<string>(
+        std::to_string((long long unsigned int) checksum)
+    );
 
-  /* Construct record structure. */
-  return std::make_shared<KineticRecord>(
-      value, version, tag, com::seagate::kinetic::client::proto::Command_Algorithm_CRC32
-  );
-}
+    /* Construct record structure. */
+    return std::make_shared<KineticRecord>(
+        value, version, tag, com::seagate::kinetic::client::proto::Command_Algorithm_CRC32
+    );
+  }
 
-bool validStatusCode(const kinetic::StatusCode& code)
-{
-  return code == StatusCode::OK || code == StatusCode::REMOTE_NOT_FOUND || code == StatusCode::REMOTE_VERSION_MISMATCH;
-}
+  bool validStatusCode(const kinetic::StatusCode& code)
+  {
+    return code == StatusCode::OK || code == StatusCode::REMOTE_NOT_FOUND ||
+           code == StatusCode::REMOTE_VERSION_MISMATCH;
+  }
 
 }
 
@@ -202,8 +203,9 @@ kinetic::KineticStatus StripeOperation_PUT::execute(const std::chrono::seconds& 
 void StripeOperation_PUT::putHandoffKeys()
 {
   for (size_t opnum = 0; opnum < values.size(); opnum++) {
-    if (operations[opnum].callback->getResult().statusCode() != StatusCode::OK) {
-
+    auto scode = operations[opnum].callback->getResult().statusCode();
+    if ( scode != StatusCode::OK && scode != StatusCode::REMOTE_VERSION_MISMATCH ) {
+      kio_debug("Creating handoff key due to status code ", scode, " on connection ", operations[opnum].connection->getName());
       auto handoff_key = make_shared<const string>(
           utility::Convert::toString("handoff=", *key, "version=", *version_new, "chunk=", opnum)
       );
@@ -235,7 +237,8 @@ bool WriteStripeOperation::attemptStripeRepair(const std::chrono::seconds& timeo
   return rmap[StatusCode::REMOTE_VERSION_MISMATCH] == 0;
 }
 
-/* Three step algorithm
+/* Resolve version missmatch errors due to concurrency
+ * Three step algorithm
  *  1) -> update
  *  2) supplied version is not on backend at all ? ->
  *      a) initial write was successful -> has been updated by another client -> return ok
@@ -260,8 +263,9 @@ void WriteStripeOperation::resolvePartialWrite(const std::chrono::seconds& timeo
 
     /* 1) supplied version is most frequent version -> our turn to repair partial write */
     if (*version == *most_frequent.version) {
-      if( attemptStripeRepair(timeout, getVersions) ) {
+      if (attemptStripeRepair(timeout, getVersions)) {
         /* if repair is completely successful (there are no version missmatches left in stripe), we are done. */
+        kio_debug("Stripe repair completed successfully for key ", *key);
         return;
       }
     }
@@ -279,6 +283,7 @@ void WriteStripeOperation::resolvePartialWrite(const std::chrono::seconds& timeo
      * client, or (assuming >= nData chunks of the version had been written initially), the stripe has
      * already been overwritten by another client.. nothing we need to do here, original evaluation */
     if (position < 0) {
+      kio_debug("Stripe for key ", *key, " has been completely overwritten by someone else. Aborting.");
       return;
     }
 
@@ -294,7 +299,10 @@ void WriteStripeOperation::resolvePartialWrite(const std::chrono::seconds& timeo
   kio_warning("Client crash detected. Overwriting with version ", *version);
   StripeOperation_GET getVersions(key, true, connections, redundancy, redundancy->size());
   getVersions.executeOperationVector(timeout);
-  attemptStripeRepair(timeout, getVersions);
+  if (!attemptStripeRepair(timeout, getVersions)) {
+    kio_warning("Failed repairing stripe.");
+  }
+
 }
 
 StripeOperation_DEL::StripeOperation_DEL(const std::shared_ptr<const std::string>& key,
@@ -433,7 +441,7 @@ bool StripeOperation_GET::insertHandoffChunks()
 
   for (size_t i = 0; i < range.operations.size(); i++) {
     auto& opkeys = std::static_pointer_cast<RangeCallback>(range.operations[i].callback)->getKeys();
-    //kio_debug("found ", opkeys ? opkeys->size() : 0, " handoff keys on connection #", i);
+    kio_debug("found ", opkeys ? opkeys->size() : 0, " handoff keys on connection #", i);
 
     if (opkeys) {
       for (auto opkey = opkeys->begin(); opkey != opkeys->end(); opkey++) {
