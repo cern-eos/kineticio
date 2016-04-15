@@ -88,7 +88,7 @@ bool KineticAdminCluster::removeIndicatorKey(const std::shared_ptr<const string>
 bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyType keyType,
                                   KeyCountsInternal& key_counts)
 {
-  StripeOperation_GET getV(key, true, connections, redundancy[keyType], redundancy[keyType]->size());
+  StripeOperation_GET getV(key, true, connections, redundancy[keyType]);
   auto rmap = getV.executeOperationVector(operation_timeout);
   auto valid_results = rmap[StatusCode::OK] + rmap[StatusCode::REMOTE_NOT_FOUND];
   auto target_version = getV.mostFrequentVersion();
@@ -113,16 +113,6 @@ bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyT
     kio_notice("Key \"", *key, "\" requires repair or removal. ", debugstring);
     key_counts.need_action++;
     return true;
-  }
-  else if (getV.insertHandoffChunks()) {
-    rmap = getV.executeOperationVector(operation_timeout);
-    valid_results = rmap[StatusCode::OK] + rmap[StatusCode::REMOTE_NOT_FOUND];
-    if (target_version.frequency >= redundancy[keyType]->numData() ||
-        rmap[StatusCode::REMOTE_NOT_FOUND] >= redundancy[keyType]->numData()) {
-      kio_notice("Key \"", *key, "\" requires repair or removal. ", debugstring);
-      key_counts.need_action++;
-      return true;
-    }
   }
 
   kio_error("Key ", *key, " is unfixable. ", debugstring);

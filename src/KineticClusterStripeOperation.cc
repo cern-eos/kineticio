@@ -59,26 +59,26 @@ void KineticClusterStripeOperation::expandOperationVector(std::size_t size, std:
 
 namespace {
 
-  std::shared_ptr<KineticRecord> makeRecord(const std::shared_ptr<const std::string>& value,
-                                            const std::shared_ptr<const std::string>& version)
-  {
-    /* Generate Checksum */
-    auto checksum = crc32c(0, value->c_str(), value->length());
-    auto tag = std::make_shared<string>(
-        std::to_string((long long unsigned int) checksum)
-    );
+std::shared_ptr<KineticRecord> makeRecord(const std::shared_ptr<const std::string>& value,
+                                          const std::shared_ptr<const std::string>& version)
+{
+  /* Generate Checksum */
+  auto checksum = crc32c(0, value->c_str(), value->length());
+  auto tag = std::make_shared<string>(
+      std::to_string((long long unsigned int) checksum)
+  );
 
-    /* Construct record structure. */
-    return std::make_shared<KineticRecord>(
-        value, version, tag, com::seagate::kinetic::client::proto::Command_Algorithm_CRC32
-    );
-  }
+  /* Construct record structure. */
+  return std::make_shared<KineticRecord>(
+      value, version, tag, com::seagate::kinetic::client::proto::Command_Algorithm_CRC32
+  );
+}
 
-  bool validStatusCode(const kinetic::StatusCode& code)
-  {
-    return code == StatusCode::OK || code == StatusCode::REMOTE_NOT_FOUND ||
-           code == StatusCode::REMOTE_VERSION_MISMATCH;
-  }
+bool validStatusCode(const kinetic::StatusCode& code)
+{
+  return code == StatusCode::OK || code == StatusCode::REMOTE_NOT_FOUND ||
+         code == StatusCode::REMOTE_VERSION_MISMATCH;
+}
 
 }
 
@@ -140,18 +140,21 @@ StripeOperation_PUT::StripeOperation_PUT(const std::shared_ptr<const std::string
                                          std::vector<std::shared_ptr<const std::string>>& values,
                                          kinetic::WriteMode writeMode,
                                          std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                                         std::shared_ptr<RedundancyProvider>& redundancy,
-                                         std::size_t size, size_t offset)
+                                         std::shared_ptr<RedundancyProvider>& redundancy)
     : WriteStripeOperation(connections, key, redundancy), version_new(version_new), values(values)
 {
-  expandOperationVector(size, offset);
+  if (values.size() != redundancy->size()) {
+    kio_error("Invalid input. Stripe of ", values.size(), " is not compatible with redundancy of ", redundancy->size());
+    throw std::system_error(std::make_error_code(std::errc::invalid_argument));
+  }
+  expandOperationVector(values.size(), 0);
   for (size_t i = 0; i < operations.size(); i++) {
-    createAsyncOperation(i, version_old, writeMode);
+    fillOperation(i, version_old, writeMode);
   }
 }
 
-void StripeOperation_PUT::createAsyncOperation(size_t index, const shared_ptr<const string>& drive_version,
-                                               kinetic::WriteMode writeMode)
+void StripeOperation_PUT::fillOperation(size_t index, const shared_ptr<const string>& drive_version,
+                                        kinetic::WriteMode writeMode)
 {
 
   auto record = makeRecord(values[index], version_new);
@@ -204,8 +207,9 @@ void StripeOperation_PUT::putHandoffKeys()
 {
   for (size_t opnum = 0; opnum < values.size(); opnum++) {
     auto scode = operations[opnum].callback->getResult().statusCode();
-    if ( scode != StatusCode::OK && scode != StatusCode::REMOTE_VERSION_MISMATCH ) {
-      kio_debug("Creating handoff key due to status code ", scode, " on connection ", operations[opnum].connection->getName());
+    if (scode != StatusCode::OK && scode != StatusCode::REMOTE_VERSION_MISMATCH) {
+      kio_debug("Creating handoff key due to status code ", scode, " on connection ",
+                operations[opnum].connection->getName());
       auto handoff_key = make_shared<const string>(
           utility::Convert::toString("handoff=", *key, "version=", *version_new, "chunk=", opnum)
       );
@@ -229,7 +233,7 @@ bool WriteStripeOperation::attemptStripeRepair(const std::chrono::seconds& timeo
     if (operations[opnum].callback->getResult().statusCode() == StatusCode::REMOTE_VERSION_MISMATCH) {
       auto drive_version = drive_versions.getVersionAt(opnum);
       if (drive_version) {
-        createAsyncOperation(opnum, drive_version, kinetic::WriteMode::REQUIRE_SAME_VERSION);
+        fillOperation(opnum, drive_version, kinetic::WriteMode::REQUIRE_SAME_VERSION);
       }
     }
   }
@@ -251,7 +255,7 @@ void WriteStripeOperation::resolvePartialWrite(const std::chrono::seconds& timeo
   auto position = 0;
 
   do {
-    StripeOperation_GET getVersions(key, true, connections, redundancy, redundancy->size());
+    StripeOperation_GET getVersions(key, true, connections, redundancy);
     auto rmap = getVersions.executeOperationVector(timeout);
     auto most_frequent = getVersions.mostFrequentVersion();
 
@@ -273,7 +277,7 @@ void WriteStripeOperation::resolvePartialWrite(const std::chrono::seconds& timeo
     position = -1;
     for (size_t i = 0; i < redundancy->size(); i++) {
       auto drive_version = getVersions.getVersionAt(i);
-      if (drive_version && *version == *drive_version) {
+      if ((drive_version && *version == *drive_version) || (!drive_version && version->empty())) {
         position = i;
         break;
       }
@@ -297,7 +301,7 @@ void WriteStripeOperation::resolvePartialWrite(const std::chrono::seconds& timeo
   } while (std::chrono::system_clock::now() < start_time + timeout * (position + 1));
 
   kio_warning("Client crash detected. Overwriting with version ", *version);
-  StripeOperation_GET getVersions(key, true, connections, redundancy, redundancy->size());
+  StripeOperation_GET getVersions(key, true, connections, redundancy);
   getVersions.executeOperationVector(timeout);
   if (!attemptStripeRepair(timeout, getVersions)) {
     kio_warning("Failed repairing stripe.");
@@ -315,12 +319,12 @@ StripeOperation_DEL::StripeOperation_DEL(const std::shared_ptr<const std::string
 {
   expandOperationVector(size, offset);
   for (size_t i = 0; i < operations.size(); i++) {
-    createAsyncOperation(i, version, writeMode);
+    fillOperation(i, version, writeMode);
   }
 }
 
-void StripeOperation_DEL::createAsyncOperation(size_t index, const std::shared_ptr<const std::string>& drive_version,
-                                               kinetic::WriteMode writeMode)
+void StripeOperation_DEL::fillOperation(size_t index, const std::shared_ptr<const std::string>& drive_version,
+                                        kinetic::WriteMode writeMode)
 {
   auto cb = std::make_shared<DeleteCallback>(sync);
   operations[index].callback = cb;
@@ -343,16 +347,22 @@ kinetic::KineticStatus StripeOperation_DEL::execute(const std::chrono::seconds& 
 {
   auto rmap = executeOperationVector(timeout);
 
+  /* Partial stripe remove has to be resolved */
+  if (rmap[StatusCode::OK] && rmap[StatusCode::REMOTE_VERSION_MISMATCH]) {
+    auto empty_version = make_shared<const string>();
+    resolvePartialWrite(timeout, empty_version);
+    /* re-compute results map */
+    rmap.clear();
+    for (auto it = operations.cbegin(); it != operations.cend(); it++) {
+      rmap[it->callback->getResult().statusCode()]++;
+    }
+  }
+
   /* If we didn't find the key on a drive (e.g. because that drive was replaced)
-    * we can just consider that key to be properly deleted on that drive. */
+  * we can just consider that key to be properly deleted on that drive. */
   if (rmap[StatusCode::OK] && rmap[StatusCode::REMOTE_NOT_FOUND]) {
     rmap[StatusCode::OK] += rmap[StatusCode::REMOTE_NOT_FOUND];
     rmap[StatusCode::REMOTE_NOT_FOUND] = 0;
-  }
-
-  /* Partial stripe remove has to be resolved */
-  if (rmap[StatusCode::OK] && rmap[StatusCode::REMOTE_VERSION_MISMATCH]) {
-    throw std::runtime_error("Partial stripe remove detected.");
   }
 
   for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
@@ -370,17 +380,10 @@ kinetic::KineticStatus StripeOperation_DEL::execute(const std::chrono::seconds& 
 
 StripeOperation_GET::StripeOperation_GET(const std::shared_ptr<const std::string>& key, bool skip_value,
                                          std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                                         std::shared_ptr<RedundancyProvider>& redundancy,
-                                         std::size_t size, size_t offset)
+                                         std::shared_ptr<RedundancyProvider>& redundancy)
     : KineticClusterStripeOperation(connections, key, redundancy), skip_value(skip_value)
 {
-  expandOperationVector(size, offset);
-  fillOperationVector();
-}
-
-void StripeOperation_GET::extend(std::size_t size)
-{
-  expandOperationVector(size, operations.size());
+  expandOperationVector(skip_value ? redundancy->size() : redundancy->numData(), 0);
   fillOperationVector();
 }
 
@@ -598,7 +601,8 @@ StripeOperation_GET::VersionCount StripeOperation_GET::mostFrequentVersion() con
   return v;
 }
 
-kinetic::KineticStatus StripeOperation_GET::execute(const std::chrono::seconds& timeout)
+
+kinetic::KineticStatus StripeOperation_GET::do_execute(const std::chrono::seconds& timeout)
 {
   auto rmap = executeOperationVector(timeout);
   version = mostFrequentVersion();
@@ -621,6 +625,40 @@ kinetic::KineticStatus StripeOperation_GET::execute(const std::chrono::seconds& 
     }
   }
   throw std::runtime_error("No valid result.");
+}
+
+
+kinetic::KineticStatus StripeOperation_GET::execute(const std::chrono::seconds& timeout)
+{
+/* Skip attempting to read without parities for replicated keys, version verification is required to validate result */
+  if (redundancy->numData() > 1) {
+    try {
+      return do_execute(timeout);
+    } catch (std::exception& e) {
+      kio_debug("Failed getting stripe for key ", *key, " without parities: ", e.what());
+    }
+  }
+
+  /* Add parity chunks to get request (already obtained chunks will not be re-fetched). */
+  if (operations.size() < redundancy->size()) {
+    expandOperationVector(redundancy->numParity(), operations.size());
+    fillOperationVector();
+    try {
+      return do_execute(timeout);
+    } catch (std::exception& e) {
+      kio_debug("Failed getting stripe for key ", *key, " even with parities: ", e.what());
+    }
+  }
+
+  /* As a last ditch effort try to use handoff chunks if any are available to serve the request */
+  if (this->insertHandoffChunks()) {
+    try {
+      return do_execute(timeout);
+    } catch (std::exception& e) {
+      kio_debug("Failed getting stripe for key ", *key, " even with handoff chunks: ", e.what());
+    }
+  }
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key " + *key + " not accessible.");
 }
 
 std::shared_ptr<const std::string> StripeOperation_GET::getVersion() const

@@ -124,37 +124,14 @@ public:
   //--------------------------------------------------------------------------
   explicit StripeOperation_GET(const std::shared_ptr<const std::string>& key, bool skip_value,
                                std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                               std::shared_ptr<RedundancyProvider>& redundancy,
-                               std::size_t size, std::size_t offset = 0);
-
-  //--------------------------------------------------------------------------
-  //! Extend the operation vector set up by the constructor by size elements.
-  //! This function can be used to add parity chunks to the operation vector.
-  //! Already successfully executed operations will not be re-tried.
-  //!
-  //! @param connections the connection vector of the calling cluster
-  //! @size the number of operations to add to the operation vector
-  //--------------------------------------------------------------------------
-  void extend(std::size_t size);
-
-  //--------------------------------------------------------------------------
-  //! Searches all supplied connections for existing handoff keys. If any are
-  //! found for the currently most frequent version, the stripe operation's
-  //! operation vector will be modified so that the next call to execution()
-  //! will access the handoff keys instead of the 'normal' keys for a chunk.
-  //!
-  //! @param connections the connection vector of the calling cluster
-  //! @return true if any operations were modified, false otherwise
-  //--------------------------------------------------------------------------
-  bool insertHandoffChunks();
+                               std::shared_ptr<RedundancyProvider>& redundancy);
 
   //--------------------------------------------------------------------------
   //! Execute the operation vector set up in the constructor and evaluate
   //! results. Will throw if version / value can not be read in
   //!
   //! @param timeout the network timeout
-  //! @param redundancy nData & nParity information
-  //! @return either returns a valid status (ok, not available) or throws
+  //! @return returns operation status
   //--------------------------------------------------------------------------
   kinetic::KineticStatus execute(const std::chrono::seconds& timeout);
 
@@ -183,8 +160,8 @@ public:
   //! Structure to store a version and it's frequency in the operation vector
   //--------------------------------------------------------------------------
   struct VersionCount {
-      std::shared_ptr<const std::string> version;
-      size_t frequency;
+    std::shared_ptr<const std::string> version;
+    size_t frequency;
   };
 
   //--------------------------------------------------------------------------
@@ -215,6 +192,19 @@ private:
   //--------------------------------------------------------------------------
   void reconstructValue();
 
+  //--------------------------------------------------------------------------
+  //! Searches all supplied connections for existing handoff keys. If any are
+  //! found for the currently most frequent version, the stripe operation's
+  //! operation vector will be modified so that the next call to execution()
+  //! will access the handoff keys instead of the 'normal' keys for a chunk.
+  //!
+  //! @param connections the connection vector of the calling cluster
+  //! @return true if any operations were modified, false otherwise
+  //--------------------------------------------------------------------------
+  bool insertHandoffChunks();
+
+  kinetic::KineticStatus do_execute(const std::chrono::seconds& timeout);
+
   //! metadata only get
   bool skip_value;
   //! the most frequent version in the operation vector
@@ -224,22 +214,50 @@ private:
 };
 
 
+//----------------------------------------------------------------------------
+//! Abstract base class for modifying stripe operations (put, del). Implements
+//! resolving of partial writes (concurrency / race conditions).
+//----------------------------------------------------------------------------
 class WriteStripeOperation : public KineticClusterStripeOperation {
-
-public:
+protected:
+  //--------------------------------------------------------------------------
+  //! Constructor.
+  //!
+  //! @params... all the params
+  //--------------------------------------------------------------------------
   explicit WriteStripeOperation(
       std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
       const std::shared_ptr<const std::string>& key,
       std::shared_ptr<RedundancyProvider>& redundancy
   );
 
-protected:
-  virtual void createAsyncOperation(size_t index, const std::shared_ptr<const std::string>& drive_version, kinetic::WriteMode writeMode) = 0;
+  //--------------------------------------------------------------------------
+  //! Pure virtual method specifying interface to fill in the asynchronous
+  //! operation at the given index.
+  //!
+  //! @param index index into the operation vector
+  //! @param drive_version the version expected to be encountered on the drive
+  //! @param writeMode versioned or force put
+  //--------------------------------------------------------------------------
+  virtual void fillOperation(
+      size_t index,
+      const std::shared_ptr<const std::string>& drive_version,
+      kinetic::WriteMode writeMode
+  ) = 0;
 
+  //--------------------------------------------------------------------------
   //! Concurrency resolution: In case of partial stripe writes / removes due
   //! to concurrent write accesses, decide which client wins the race based
   //! on achieved write pattern and using remote versions as a tie breaker.
-  void resolvePartialWrite(const std::chrono::seconds& timeout, const std::shared_ptr<const std::string>& version);
+  //!
+  //! @param timeout the timeout value to use for any put / get operations
+  //! @param version the target version of the stripe, a size zero string
+  //!   indicates that the stripe should be removed.
+  //--------------------------------------------------------------------------
+  void resolvePartialWrite(
+      const std::chrono::seconds& timeout,
+      const std::shared_ptr<const std::string>& version
+  );
 
 private:
   //! write access has been granted, overwrite the stripe chunks that have the wrong version
@@ -273,17 +291,23 @@ public:
   //!
   //! @params... all the params
   //--------------------------------------------------------------------------
-  explicit StripeOperation_PUT(const std::shared_ptr<const std::string>& key,
-                               const std::shared_ptr<const std::string>& version_new,
-                               const std::shared_ptr<const std::string>& version_old,
-                               std::vector<std::shared_ptr<const std::string>>& values,
-                               kinetic::WriteMode writeMode,
-                               std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                               std::shared_ptr<RedundancyProvider>& redundancy,
-                               std::size_t size, std::size_t offset = 0);
+  explicit StripeOperation_PUT(
+      const std::shared_ptr<const std::string>& key,
+      const std::shared_ptr<const std::string>& version_new,
+      const std::shared_ptr<const std::string>& version_old,
+      std::vector<std::shared_ptr<const std::string>>& values,
+      kinetic::WriteMode writeMode,
+      std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
+      std::shared_ptr<RedundancyProvider>& redundancy
+  );
 
 private:
-  void createAsyncOperation(size_t index, const std::shared_ptr<const std::string>& drive_version, kinetic::WriteMode writeMode);
+  //! see parent class
+  void fillOperation(
+      size_t index,
+      const std::shared_ptr<const std::string>& drive_version,
+      kinetic::WriteMode writeMode
+  );
 
 private:
   //! remember target version in case we need to write handoff keys
@@ -311,15 +335,22 @@ public:
   //!
   //! @params... all the params
   //--------------------------------------------------------------------------
-  explicit StripeOperation_DEL(const std::shared_ptr<const std::string>& key,
-                               const std::shared_ptr<const std::string>& version,
-                               kinetic::WriteMode writeMode,
-                               std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                               std::shared_ptr<RedundancyProvider>& redundancy,
-                               std::size_t size, std::size_t offset = 0);
+  explicit StripeOperation_DEL(
+      const std::shared_ptr<const std::string>& key,
+      const std::shared_ptr<const std::string>& version,
+      kinetic::WriteMode writeMode,
+      std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
+      std::shared_ptr<RedundancyProvider>& redundancy,
+      std::size_t size, std::size_t offset = 0
+  );
 
 private:
-  void createAsyncOperation(size_t index, const std::shared_ptr<const std::string>& drive_version, kinetic::WriteMode writeMode);
+  //! see parent class
+  void fillOperation(
+      size_t index,
+      const std::shared_ptr<const std::string>& drive_version,
+      kinetic::WriteMode writeMode
+  );
 };
 
 }

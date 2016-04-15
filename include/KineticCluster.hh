@@ -120,15 +120,14 @@ public:
   virtual ~KineticCluster();
 
 protected:
+  //--------------------------------------------------------------------------
+  //! Single implementation functions for functionality with
+  //! multiple interface functions.
+  //--------------------------------------------------------------------------
   kinetic::KineticStatus do_remove(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
       KeyType type, kinetic::WriteMode mode);
-
-  kinetic::KineticStatus execute_get(kio::StripeOperation_GET& op,
-                                       const std::shared_ptr<const std::string>& key,
-                                       std::shared_ptr<const std::string>& version,
-                                       std::shared_ptr<const std::string>& value, KeyType type);
 
   kinetic::KineticStatus do_get(
       const std::shared_ptr<const std::string>& key,
