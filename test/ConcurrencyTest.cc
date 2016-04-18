@@ -57,7 +57,6 @@ void delete_x(std::vector<std::shared_ptr<KineticCluster>>& clusters, int x)
   }
 }
 
-
 SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
 {
   auto& c = SimulatorController::getInstance();
@@ -114,7 +113,7 @@ SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
         }
 
         int numthreads = 4;
-        REQUIRE(dblocks.size() * numthreads == (size_t) instances * numblocks * numthreads);
+        REQUIRE((dblocks.size() * numthreads == (size_t) instances * numblocks * numthreads));
         const int total_put_operations = 1000;
         int x = total_put_operations / (dblocks.size()*numthreads);
 
