@@ -28,6 +28,16 @@
 #define KINETIC_DRIVE_SECURITY KINETIC_DRIVE_LOCATION
 #define KINETIC_CLUSTER_DEFINITION KINETIC_DRIVE_LOCATION
 
+#define KNRM  "\x1B[0m"
+#define KRED  "\x1B[31m"
+#define KGRN  "\x1B[32m"
+#define KYEL  "\x1B[33m"
+#define KBLU  "\x1B[34m"
+#define KMAG  "\x1B[35m"
+#define KCYN  "\x1B[36m"
+#define KWHT  "\x1B[37m"
+#define RESET "\033[0m"
+
 
 bool tshouldLog(const char *name, int level){
   return true;
@@ -37,24 +47,33 @@ static void tlog(const char* func, const char* file, int line, int priority, con
 {
   switch(priority) {
     case LOG_DEBUG:
-      printf("    DEBUG: ");
+      printf(KGRN "DEBUG ");
       break;
     case LOG_NOTICE:
-      printf("  NOTICE: ");
+      printf(KBLU "NOTICE ");
       break;
     case LOG_WARNING:
-      printf(" WARNING: ");
+      printf(KYEL " WARNING ");
       break;
     case LOG_ERR:
-      printf("ERROR: ");
+      printf(KRED "ERROR ");
       break;
     default:
-      printf("Unknown Log Level! ");
+      printf(KMAG "Unknown Log Level! ");
   }
-  printf("%s /// %s (%s:%d)\n",msg,func,file,line);
+
+  std::stringstream ss;
+  ss << std::this_thread::get_id();
+
+  printf("%s@%s:%d",func,strrchr(file,'/')+1,line);
+
+  printf(" (tid:%s) " RESET, ss.str().c_str() + ss.str().size() - 4);
+
+  printf("%s  ",msg);
+  printf("\n");
 }
 
-int main( int argc, char* const argv[] )
+int main( int argc, char const* argv[] )
 {
   // Set environment variables so that KineticIo can find the simulator.
   std::string location(getenv("KINETIC_DRIVE_LOCATION") ? getenv("KINETIC_DRIVE_LOCATION") : "" );
@@ -76,7 +95,7 @@ int main( int argc, char* const argv[] )
     argc--;
   }
 
-  int result = Catch::Session().run( argc, (const char**) argv );
+  int result = Catch::Session().run( argc, argv );
 
   // Reset environment variables back to the initial values.
   setenv("KINETIC_DRIVE_LOCATION", location.c_str(), 1);

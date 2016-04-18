@@ -23,11 +23,11 @@
 #define  KINETICIO_KINETICCLUSTER_HH
 
 #include "ClusterInterface.hh"
+#include "KineticClusterStripeOperation.hh"
 #include "KineticAutoConnection.hh"
 #include "KineticCallbacks.hh"
 #include "SocketListener.hh"
 #include "RedundancyProvider.hh"
-#include "StripeOperation.hh"
 #include <utility>
 #include <chrono>
 #include <mutex>
@@ -120,15 +120,14 @@ public:
   virtual ~KineticCluster();
 
 protected:
+  //--------------------------------------------------------------------------
+  //! Single implementation functions for functionality with
+  //! multiple interface functions.
+  //--------------------------------------------------------------------------
   kinetic::KineticStatus do_remove(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
       KeyType type, kinetic::WriteMode mode);
-
-  kinetic::KineticStatus execute_get(kio::StripeOperation_GET& op,
-                                       const std::shared_ptr<const std::string>& key,
-                                       std::shared_ptr<const std::string>& version,
-                                       std::shared_ptr<const std::string>& value, KeyType type);
 
   kinetic::KineticStatus do_get(
       const std::shared_ptr<const std::string>& key,
@@ -157,20 +156,6 @@ protected:
       const std::string& value, KeyType type
   );
 
-  //--------------------------------------------------------------------------
-  //! Concurrency resolution: In case of partial stripe writes / removes due
-  //! to concurrent write accesses, decide which client wins the race based
-  //! on achieved write pattern and using remote versions as a tie breaker.
-  //!
-  //! @param key the key of the stripe
-  //! @param version the version the stripe chunks should have, empty
-  //!   signifies deleted.
-  //! @param rmap the results of the partial put / delete operation causing
-  //!   a call to mayForce.
-  //! @return true if client may force-overwrite
-  //--------------------------------------------------------------------------
-  bool mayForce(const std::shared_ptr<const std::string>& key, KeyType type,
-                const std::shared_ptr<const std::string>& version, size_t counter = 0);
 
 protected:
   //! cluster id

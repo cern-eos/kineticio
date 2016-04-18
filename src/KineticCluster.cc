@@ -117,7 +117,7 @@ KineticStatus KineticCluster::range(const std::shared_ptr<const std::string>& st
 
   ClusterRangeOp rangeop(start_key, end_key, max_elements, connections);
 
-  auto status = rangeop.execute(operation_timeout, redundancy[type]);
+  auto status = rangeop.execute(operation_timeout, connections.size() - redundancy[type]->numParity());
   if (status.ok()) {
     rangeop.getKeys(keys);
   }
@@ -133,24 +133,18 @@ KineticStatus KineticCluster::do_remove(const std::shared_ptr<const std::string>
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
   }
 
-  StripeOperation_DEL delOp(key, version, wmode, connections, redundancy[type]->size());
-  try {
-    auto status = delOp.execute(operation_timeout, redundancy[type]);
-    if (delOp.needsIndicator()) {
-      delOp.putIndicatorKey(connections);
-    }
-    kio_debug("Remove request of key ", *key, " completed with status: ", status);
-    return status;
-  } catch (std::exception& e) {
-    if (wmode == WriteMode::IGNORE_VERSION) {
-      kio_error("Irrecoverable error in delete operation for key ", *key, " : ", e.what());
-      return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "");
-    }
-    if (mayForce(key, type, make_shared<const string>())) {
-      return do_remove(key, version, type, WriteMode::IGNORE_VERSION);
-    }
-    return KineticStatus(StatusCode::REMOTE_VERSION_MISMATCH, "Another client won a concurrent put.");
+  StripeOperation_DEL delOp(key, version, wmode, connections, redundancy[type], redundancy[type]->size());
+  auto status = delOp.execute(operation_timeout);
+  if (delOp.needsIndicator()) {
+    delOp.putIndicatorKey();
   }
+  kio_debug("Remove request of key ", *key, " completed with status: ", status);
+  return status;
+}
+
+KineticStatus KineticCluster::remove(const std::shared_ptr<const std::string>& key, KeyType type)
+{
+  return do_remove(key, make_shared<const string>(), type, WriteMode::IGNORE_VERSION);
 }
 
 KineticStatus KineticCluster::remove(const std::shared_ptr<const std::string>& key,
@@ -158,11 +152,6 @@ KineticStatus KineticCluster::remove(const std::shared_ptr<const std::string>& k
                                      KeyType type)
 {
   return do_remove(key, version, type, WriteMode::REQUIRE_SAME_VERSION);
-}
-
-kinetic::KineticStatus KineticCluster::remove(const std::shared_ptr<const std::string>& key, KeyType type)
-{
-  return do_remove(key, make_shared<const string>(), type, WriteMode::IGNORE_VERSION);
 }
 
 std::vector<std::shared_ptr<const std::string>> KineticCluster::valueToStripe(const std::string& value, KeyType type)
@@ -206,115 +195,6 @@ std::vector<std::shared_ptr<const std::string>> KineticCluster::valueToStripe(co
   return stripe;
 }
 
-/* Handle races, 2 or more clients attempting to put/remove the same key at the same time. */
-bool KineticCluster::mayForce(const std::shared_ptr<const std::string>& key, KeyType type,
-                              const std::shared_ptr<const std::string>& version, size_t counter)
-{
-  StripeOperation_GET getVersions(key, true, connections, redundancy[type]->size());
-  auto rmap = getVersions.executeOperationVector(operation_timeout);
-  auto most_frequent = getVersions.mostFrequentVersion();
-
-  /* Remote not found does not reflect in most_frequent */
-  if (version->empty() && rmap[StatusCode::REMOTE_NOT_FOUND] > most_frequent.frequency) {
-    most_frequent.version = make_shared<const string>();
-    most_frequent.frequency = rmap[StatusCode::REMOTE_NOT_FOUND];
-  }
-
-  if (most_frequent.frequency && *version == *most_frequent.version) {
-    return true;
-  }
-
-  if (most_frequent.frequency >= redundancy[type]->numData()) {
-    return false;
-  }
-
-  /* Super-Corner-Case: It could be that the client that should win the most_frequent match has crashed. For this
-   * reason, all competing clients will wait, polling the key versions. As multiple clients
-   * could theoretically be in this loop concurrently, we specify the maximum number of polls by the position of the first
-   * occurrence of the supplied version for a chunk. If the situation does not clear up by end of polling period,
-   * overwrite permission will be given. */
-  if (counter > 10 * getVersions.versionPosition(version)) {
-    return true;
-  }
-
-  /* 100 ms sleep time */
-  usleep(100 * 1000);
-  return mayForce(key, type, version, ++counter);
-}
-
-
-kinetic::KineticStatus KineticCluster::execute_get(kio::StripeOperation_GET& getop,
-                                                   const std::shared_ptr<const std::string>& key,
-                                                   std::shared_ptr<const std::string>& version,
-                                                   std::shared_ptr<const std::string>& value, KeyType type)
-{
-  auto status = getop.execute(operation_timeout, redundancy[type]);
-
-  if (status.ok()) {
-    value = getop.getValue();
-    version = getop.getVersion();
-  }
-  if (getop.needsIndicator()) {
-    getop.putIndicatorKey(connections);
-  }
-  return status;
-}
-
-kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::string>& key,
-                                              std::shared_ptr<const std::string>& version,
-                                              std::shared_ptr<const std::string>& value, KeyType type, bool skip_value)
-{
-  if (!key) {
-    return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input, key has to be supplied.");;
-  }
-  StripeOperation_GET getop(key, skip_value, connections, redundancy[type]->numData());
-
-  /* Skip attempting to read without parities for replicated keys, version verification is required to validate result */
-  if (redundancy[type]->numData() > 1) {
-    try {
-      return execute_get(getop, key, version, value, type);
-    } catch (std::exception& e) {
-      kio_debug("Failed getting stripe for key ", *key, " without parities: ", e.what());
-    }
-  }
-
-  /* Add parity chunks to get request (already obtained chunks will not be re-fetched). */
-  getop.extend(connections, redundancy[type]->numParity());
-  try {
-    return execute_get(getop, key, version, value, type);
-  } catch (std::exception& e) {
-    kio_debug("Failed getting stripe for key ", *key, " even with parities: ", e.what());
-  }
-
-  /* Try to use handoff chunks if any are available to serve the request */
-  if (getop.insertHandoffChunks(connections)) {
-    try {
-      return execute_get(getop, key, version, value, type);
-    } catch (std::exception& e) {
-      kio_debug("Failed getting stripe for key ", *key, " even with handoff chunks: ", e.what());
-    }
-  }
-
-  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Key " + *key + " not accessible.");
-}
-
-kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::string>& key,
-                                           std::shared_ptr<const std::string>& version, KeyType type)
-{
-  std::shared_ptr<const string> value;
-  auto status = do_get(key, version, value, type, true);
-  kio_debug("Get VERSION request of key ", *key, " completed with status: ", status);
-  return status;
-}
-
-kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::string>& key,
-                                           std::shared_ptr<const std::string>& version,
-                                           std::shared_ptr<const std::string>& value, KeyType type)
-{
-  auto status =  do_get(key, version, value, type, false);
-  kio_debug("Get DATA request of key ", *key, " completed with status: ", status);
-  return status;
-}
 
 KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& key,
                                      const std::shared_ptr<const std::string>& version,
@@ -327,9 +207,7 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
   }
 
-  /* Do not use version_out variable directly in case the client
-     supplies the same pointer for version and version_out. */
-  auto version_new = utility::uuidGenerateEncodeSize(value->size());
+  /* Compute Stripe */
   std::vector<std::shared_ptr<const string>> stripe;
   try {
     stripe = valueToStripe(*value, type);
@@ -338,27 +216,20 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
   }
 
-  StripeOperation_PUT putOp(key, version_new, version, stripe, mode, connections, redundancy[type]->size());
-  try {
-    auto status = putOp.execute(operation_timeout, redundancy[type]);
-    if (putOp.needsIndicator()) {
-      putOp.putIndicatorKey(connections);
-      putOp.putHandoffKeys(connections);
-    }
-    if (status.ok()) {
-      version_out = version_new;
-    }
-    return status;
-  } catch (std::exception& e) {
-    if (mode == WriteMode::IGNORE_VERSION) {
-      kio_error("Irrecoverable error in put operation for key ", *key, " : ", e.what());
-      return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "Invalid.");
-    }
-    if (mayForce(key, type, version_new)) {
-      return do_put(key, version, value, version_out, type, WriteMode::IGNORE_VERSION);
-    }
-    return KineticStatus(StatusCode::REMOTE_VERSION_MISMATCH, "Another client won the put race.");
+  /* Do not use version_out variable directly in case the client uses the same pointer for version and version_out. */
+  auto version_new = utility::uuidGenerateEncodeSize(value->size());
+
+  StripeOperation_PUT putOp(key, version_new, version, stripe, mode, connections, redundancy[type]);
+
+  auto status = putOp.execute(operation_timeout);
+  if (putOp.needsIndicator()) {
+    putOp.putIndicatorKey();
+    putOp.putHandoffKeys();
   }
+  if (status.ok()) {
+    version_out = version_new;
+  }
+  return status;
 }
 
 kinetic::KineticStatus KineticCluster::put(const std::shared_ptr<const std::string>& key,
@@ -378,8 +249,83 @@ kinetic::KineticStatus KineticCluster::put(const std::shared_ptr<const std::stri
                                            KeyType type)
 {
   auto status = do_put(key, version ? version : make_shared<const string>(), value, version_out, type,
-                WriteMode::REQUIRE_SAME_VERSION);
+                       WriteMode::REQUIRE_SAME_VERSION);
   kio_debug("Versioned put request for key ", *key, " completed with status: ", status);
+  return status;
+}
+
+bool operator==(const StripeOperation_GET::VersionCount& lhs, const StripeOperation_GET::VersionCount& rhs)
+{
+  if (!lhs.frequency || !rhs.frequency)
+    return false;
+  if (lhs.frequency != rhs.frequency)
+    return false;
+  if (*lhs.version != *rhs.version)
+    return false;
+  return true;
+}
+
+bool operator!=(const StripeOperation_GET::VersionCount& lhs, const StripeOperation_GET::VersionCount& rhs)
+{
+  return !(lhs == rhs);
+}
+
+kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::string>& key,
+                                              std::shared_ptr<const std::string>& version,
+                                              std::shared_ptr<const std::string>& value, KeyType type, bool skip_value)
+{
+  if (!key) {
+    return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input, key has to be supplied.");;
+  }
+  StripeOperation_GET getop(key, skip_value, connections, redundancy[type]);
+
+  auto status = getop.execute(operation_timeout);
+
+  if(status.statusCode() == StatusCode::CLIENT_IO_ERROR) {
+    /* If other clients are writing concurrently, we could have read in a mix of chunks. We do not want to return IO
+     * error in this case but simply wait until the other client completes and return the valid result at that point.
+     * Let's see if there are changes to the stripe version before the configured timeout time. */
+    auto start_time = std::chrono::system_clock::now();
+    do {
+      usleep(200 * 1000);
+      StripeOperation_GET getop_concurrency_check(key, skip_value, connections, redundancy[type]);
+      getop_concurrency_check.execute(operation_timeout);
+      if (getop.mostFrequentVersion() != getop_concurrency_check.mostFrequentVersion()) {
+        kio_warning("Concurrent write detected. Re-starting get operation for key ", *key, ".");
+        return do_get(key, version, value, type, skip_value);
+      }
+    } while (std::chrono::system_clock::now() < start_time + operation_timeout);
+    kio_warning("No concurrent write: Both pre and post timeout most frequent version is ",
+                *getop.mostFrequentVersion().version);
+  }
+
+  if (status.ok()) {
+    value = getop.getValue();
+    version = getop.getVersion();
+    kio_debug("status ok for key ", *key, " version is ", *version);
+  }
+  if (getop.needsIndicator()) {
+    getop.putIndicatorKey();
+  }
+  return status;
+}
+
+kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::string>& key,
+                                           std::shared_ptr<const std::string>& version, KeyType type)
+{
+  std::shared_ptr<const string> value;
+  auto status = do_get(key, version, value, type, true);
+  kio_debug("Get VERSION request of key ", *key, " completed with status: ", status);
+  return status;
+}
+
+kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::string>& key,
+                                           std::shared_ptr<const std::string>& version,
+                                           std::shared_ptr<const std::string>& value, KeyType type)
+{
+  auto status = do_get(key, version, value, type, false);
+  if (status.ok())
+  kio_debug("Get DATA request of key ", *key, " completed with status: ", status);
   return status;
 }
 
