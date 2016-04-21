@@ -88,7 +88,7 @@ bool KineticAdminCluster::removeIndicatorKey(const std::shared_ptr<const string>
 bool KineticAdminCluster::scanKey(const std::shared_ptr<const string>& key, KeyType keyType,
                                   KeyCountsInternal& key_counts)
 {
-  StripeOperation_GET getV(key, true, connections, redundancy[keyType]);
+  StripeOperation_GET getV(key, true, connections, redundancy[keyType], true);
   auto rmap = getV.executeOperationVector(operation_timeout);
   auto valid_results = rmap[StatusCode::OK] + rmap[StatusCode::REMOTE_NOT_FOUND];
   auto target_version = getV.mostFrequentVersion();

@@ -124,7 +124,7 @@ public:
   //--------------------------------------------------------------------------
   explicit StripeOperation_GET(const std::shared_ptr<const std::string>& key, bool skip_value,
                                std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                               std::shared_ptr<RedundancyProvider>& redundancy);
+                               std::shared_ptr<RedundancyProvider>& redundancy, bool skip_partial_get = false);
 
   //--------------------------------------------------------------------------
   //! Execute the operation vector set up in the constructor and evaluate
@@ -172,7 +172,7 @@ public:
   //--------------------------------------------------------------------------
   VersionCount mostFrequentVersion() const;
 
-private:
+protected:
   //--------------------------------------------------------------------------
   //! Fill in functions and callbacks for operations that only have their
   //! connection set.

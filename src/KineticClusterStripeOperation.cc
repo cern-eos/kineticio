@@ -255,7 +255,7 @@ void WriteStripeOperation::resolvePartialWrite(const std::chrono::seconds& timeo
   auto position = 0;
 
   do {
-    StripeOperation_GET getVersions(key, true, connections, redundancy);
+    StripeOperation_GET getVersions(key, true, connections, redundancy, true);
     auto rmap = getVersions.executeOperationVector(timeout);
     auto most_frequent = getVersions.mostFrequentVersion();
 
@@ -301,7 +301,7 @@ void WriteStripeOperation::resolvePartialWrite(const std::chrono::seconds& timeo
   } while (std::chrono::system_clock::now() < start_time + timeout * (position + 1));
 
   kio_warning("Client crash detected. Overwriting with version ", *version);
-  StripeOperation_GET getVersions(key, true, connections, redundancy);
+  StripeOperation_GET getVersions(key, true, connections, redundancy, true);
   getVersions.executeOperationVector(timeout);
   if (!attemptStripeRepair(timeout, getVersions)) {
     kio_warning("Failed repairing stripe.");
@@ -380,10 +380,15 @@ kinetic::KineticStatus StripeOperation_DEL::execute(const std::chrono::seconds& 
 
 StripeOperation_GET::StripeOperation_GET(const std::shared_ptr<const std::string>& key, bool skip_value,
                                          std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
-                                         std::shared_ptr<RedundancyProvider>& redundancy)
+                                         std::shared_ptr<RedundancyProvider>& redundancy, bool skip_partial_get)
     : KineticClusterStripeOperation(connections, key, redundancy), skip_value(skip_value)
 {
-  expandOperationVector(skip_value ? redundancy->size() : redundancy->numData(), 0);
+  if (skip_partial_get) {
+    expandOperationVector(redundancy->size(), 0);
+  }
+  else {
+    expandOperationVector(redundancy->numData(), 0);
+  }
   fillOperationVector();
 }
 
@@ -630,7 +635,7 @@ kinetic::KineticStatus StripeOperation_GET::do_execute(const std::chrono::second
 
 kinetic::KineticStatus StripeOperation_GET::execute(const std::chrono::seconds& timeout)
 {
-/* Skip attempting to read without parities for replicated keys, version verification is required to validate result */
+  /* Skip attempting to read without parities for replicated keys. Version verification is required to validate result */
   if (redundancy->numData() > 1) {
     try {
       return do_execute(timeout);
@@ -640,14 +645,14 @@ kinetic::KineticStatus StripeOperation_GET::execute(const std::chrono::seconds& 
   }
 
   /* Add parity chunks to get request (already obtained chunks will not be re-fetched). */
-  if (operations.size() < redundancy->size()) {
+  if (operations.size() == redundancy->numData()) {
     expandOperationVector(redundancy->numParity(), operations.size());
     fillOperationVector();
-    try {
-      return do_execute(timeout);
-    } catch (std::exception& e) {
-      kio_debug("Failed getting stripe for key ", *key, " even with parities: ", e.what());
-    }
+  }
+  try {
+    return do_execute(timeout);
+  } catch (std::exception& e) {
+    kio_debug("Failed getting stripe for key ", *key, " even with parities: ", e.what());
   }
 
   /* As a last ditch effort try to use handoff chunks if any are available to serve the request */
