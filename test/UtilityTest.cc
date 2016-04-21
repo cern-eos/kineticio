@@ -32,12 +32,14 @@ SCENARIO("Utility Test.", "[Utility]"){
     THEN("uuid decode accepts deprecated binary uuid encoding for backwards compability (eosgenome)"){
       std::ostringstream ss;
       ss << std::setw(10) << std::setfill('0') << target_size;
+      REQUIRE((ss.str().size() == 10));
+
       uuid_t uuid;
       uuid_generate(uuid);
-      auto selfconstructedversion = std::make_shared<const string>(
-          ss.str() + utility::Convert::toString(uuid)
-      );
+      auto uuid_str = std::string(reinterpret_cast<const char*>(uuid), sizeof(uuid_t));
+      REQUIRE((uuid_str.size() == 16));
 
+      auto selfconstructedversion = std::make_shared<const string>(ss.str() + uuid_str);
       REQUIRE((selfconstructedversion->size() == 26));
 
       auto extracted_size = utility::uuidDecodeSize(selfconstructedversion);

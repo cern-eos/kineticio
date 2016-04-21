@@ -256,10 +256,13 @@ kinetic::KineticStatus KineticCluster::put(const std::shared_ptr<const std::stri
 
 bool operator==(const StripeOperation_GET::VersionCount& lhs, const StripeOperation_GET::VersionCount& rhs)
 {
-  if (!lhs.frequency || !rhs.frequency)
-    return false;
   if (lhs.frequency != rhs.frequency)
     return false;
+
+  /* special case of both counts showing a 0 frequency */
+  if (!lhs.frequency && !rhs.frequency)
+    return true;
+
   if (*lhs.version != *rhs.version)
     return false;
   return true;
@@ -281,7 +284,7 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
 
   auto status = getop.execute(operation_timeout);
 
-  if(status.statusCode() == StatusCode::CLIENT_IO_ERROR) {
+  if(status.statusCode() == StatusCode::CLIENT_IO_ERROR && getop.mostFrequentVersion().frequency) {
     /* If other clients are writing concurrently, we could have read in a mix of chunks. We do not want to return IO
      * error in this case but simply wait until the other client completes and return the valid result at that point.
      * Let's see if there are changes to the stripe version before the configured timeout time. */
@@ -290,7 +293,7 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
       usleep(200 * 1000);
       StripeOperation_GET getop_concurrency_check(key, skip_value, connections, redundancy[type]);
       getop_concurrency_check.execute(operation_timeout);
-      if (getop.mostFrequentVersion() != getop_concurrency_check.mostFrequentVersion()) {
+        if (getop.mostFrequentVersion() != getop_concurrency_check.mostFrequentVersion()) {
         kio_warning("Concurrent write detected. Re-starting get operation for key ", *key, ".");
         return do_get(key, version, value, type, skip_value);
       }
