@@ -65,6 +65,7 @@ bool KineticAdminCluster::removeIndicatorKey(const std::shared_ptr<const string>
                       std::make_shared<const std::string>("handoff=" + *key + "~"),
                       100, connections);
   auto status = hofs.execute(operation_timeout, connections.size() - redundancy[KeyType::Data]->numData());
+
   if (status.ok()) {
     std::unique_ptr<std::vector<std::string>> keys;
     hofs.getKeys(keys);
@@ -189,8 +190,6 @@ void KineticAdminCluster::applyOperation(
         case Operation::REPAIR: {
           if (scanKey(key, keyType, key_counts) || target == OperationTarget::INDICATOR) {
             repairKey(key, keyType, key_counts);
-          }
-          if (target == OperationTarget::INDICATOR) {
             removeIndicatorKey(key);
           }
           break;

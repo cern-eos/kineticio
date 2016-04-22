@@ -25,6 +25,31 @@ using std::make_shared;
 using namespace kinetic;
 using namespace kio;
 
+bool indicator_exists(std::shared_ptr<ClusterInterface> cluster)
+{
+  std::unique_ptr<std::vector<string>> keys;
+  auto status = cluster->range(
+      utility::makeIndicatorKey(""),
+      utility::makeIndicatorKey("~"),
+      keys,
+      KeyType::Data);
+  REQUIRE(status.ok());
+  return !keys->empty();
+}
+
+bool handoff_exists(std::shared_ptr<ClusterInterface> cluster)
+{
+  std::unique_ptr<std::vector<string>> keys;
+  auto status = cluster->range(
+      std::make_shared<const std::string>("hand"),
+      std::make_shared<const std::string>("hand~"),
+      keys,
+      KeyType::Data);
+  REQUIRE(status.ok());
+  return !keys->empty();
+}
+
+
 SCENARIO("Admin integration test.", "[Admin]")
 {
   auto& c = SimulatorController::getInstance();
@@ -58,6 +83,7 @@ SCENARIO("Admin integration test.", "[Admin]")
                                                          std::make_shared<RedundancyProvider>(1, nParity+1)
     );
 
+
     WHEN("Putting a key-value pair with one drive down") {
       c.block(0);
 
@@ -82,7 +108,6 @@ SCENARIO("Admin integration test.", "[Admin]")
         type = KeyType::Metadata;
       }
 
-
       shared_ptr<const string> putversion;
       auto status = cluster->put(
           key,
@@ -101,19 +126,37 @@ SCENARIO("Admin integration test.", "[Admin]")
         REQUIRE((kc.repaired == 0));
         REQUIRE((kc.unrepairable == 0));
       }
+      THEN("An indicator key and a handoff key will have been generated.") {
+        REQUIRE(indicator_exists(cluster));
+        REQUIRE(handoff_exists(cluster));
+      }
       THEN("We can't repair it while the drive is down.") {
         auto kc = cluster->repair(target);
         REQUIRE((kc.repaired == 0));
+        AND_THEN("The repair attempt should not remove existing indicator or handoff keys."){
+          REQUIRE(indicator_exists(cluster));
+          REQUIRE(handoff_exists(cluster));
+        }
       }
       THEN("We can still remove it by resetting the cluster.") {
         auto kc = cluster->reset(target);
         REQUIRE((kc.removed == 1));
+        AND_THEN("Target reset should not remove existing indicator or handoff keys."){
+          REQUIRE(indicator_exists(cluster));
+          REQUIRE(handoff_exists(cluster));
+          AND_THEN("Attempting to repair will lead to removal."){
+            auto kc = cluster->repair(AdminClusterInterface::OperationTarget::INDICATOR);
+            REQUIRE(kc.removed == 1);
+            REQUIRE(!indicator_exists(cluster));
+            REQUIRE(!handoff_exists(cluster));
+          }
+        }
       }
 
       AND_WHEN("The drive comes up again.") {
         c.start(0);
 
-        THEN("It is no longer marked as incomplete but as need_actionafter a scan") {
+        THEN("It is no longer marked as incomplete but as need_action after a scan") {
           auto kc = cluster->scan(target);
           REQUIRE((kc.total == 1));
           REQUIRE((kc.incomplete == 0));
@@ -122,9 +165,21 @@ SCENARIO("Admin integration test.", "[Admin]")
           REQUIRE((kc.repaired == 0));
           REQUIRE((kc.unrepairable == 0));
         }
-        THEN("We can repair the key.") {
+        THEN("We can repair the key providing the key type as target.") {
           auto kc = cluster->repair(target);
           REQUIRE((kc.repaired == 1));
+          AND_THEN("The associated indicator and handoff keys should be removed after successfull repair") {
+            REQUIRE(!indicator_exists(cluster));
+            REQUIRE(!handoff_exists(cluster));
+          }
+        }
+        THEN("We can repair the key providing indicator as target.") {
+          auto kc = cluster->repair(AdminClusterInterface::OperationTarget::INDICATOR);
+          REQUIRE((kc.repaired == 1));
+          AND_THEN("The associated indicator and handoff keys should be removed after successfull repair") {
+            REQUIRE(!indicator_exists(cluster));
+            REQUIRE(!handoff_exists(cluster));
+          }
         }
         THEN("We can reset the cluster.") {
           auto kc = cluster->reset(target);
