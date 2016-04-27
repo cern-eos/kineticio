@@ -121,12 +121,31 @@ void KineticIoSingleton::loadConfiguration()
   std::string cluster_data = cluster[0] == '/' || cluster[0] == '.' ? readfile(cluster) : cluster;
 
   typedef std::unique_ptr<json_object, void (*)(json_object*)> unique_json_ptr;
-  unique_json_ptr location_root(json_tokener_parse(location_data.c_str()), &put_json);
-  unique_json_ptr security_root(json_tokener_parse(security_data.c_str()), &put_json);
-  unique_json_ptr cluster_root(json_tokener_parse(cluster_data.c_str()), &put_json);
 
-  if (!location_root || !security_root || !cluster_root) {
-    kio_error("Failed initializing json token parser.");
+  unique_json_ptr location_root(json_tokener_parse(location_data.c_str()), &put_json);
+  if (!location_root) {
+    kio_error("Failed initializing json token parser for location information."
+              " KINETIC_DRIVE_LOCATION is set to ", location,
+              " and location_data is set to ", location_data
+    );
+    throw std::system_error(std::make_error_code(std::errc::executable_format_error));
+  }
+
+  unique_json_ptr security_root(json_tokener_parse(security_data.c_str()), &put_json);
+  if (!security_root) {
+    kio_error("Failed initializing json token parser for security information."
+              " KINETIC_DRIVE_SECURITY is set to ", security,
+              " and location_data is set to ", security_data
+    );
+    throw std::system_error(std::make_error_code(std::errc::executable_format_error));
+  }
+
+  unique_json_ptr cluster_root(json_tokener_parse(cluster_data.c_str()), &put_json);
+  if (!cluster_root) {
+    kio_error("Failed initializing json token parser for security information."
+                  " KINETIC_CLUSTER_DEFINITION is set to ", cluster,
+                  " and location_data is set to ", cluster_data
+    );
     throw std::system_error(std::make_error_code(std::errc::executable_format_error));
   }
 
