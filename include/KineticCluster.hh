@@ -20,7 +20,7 @@
  ************************************************************************/
 
 #ifndef KINETICIO_KINETICCLUSTER_HH
-#define  KINETICIO_KINETICCLUSTER_HH
+#define KINETICIO_KINETICCLUSTER_HH
 
 #include "ClusterInterface.hh"
 #include "KineticClusterStripeOperation.hh"

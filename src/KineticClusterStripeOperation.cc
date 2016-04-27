@@ -82,10 +82,10 @@ bool validStatusCode(const kinetic::StatusCode& code)
 
 }
 
-// todo: try_put
-kinetic::KineticStatus KineticClusterStripeOperation::createSingleKey(std::shared_ptr<const std::string> keyname,
-                                                                      std::shared_ptr<const std::string> keyversion,
-                                                                      std::shared_ptr<const std::string> keyvalue)
+kinetic::KineticStatus KineticClusterStripeOperation::createSingleKey(
+    std::shared_ptr<const std::string> keyname,
+    std::shared_ptr<const std::string> keyversion,
+    std::shared_ptr<const std::string> keyvalue)
 {
   auto record = makeRecord(keyvalue, keyversion);
   size_t count = 0;
@@ -113,9 +113,7 @@ kinetic::KineticStatus KineticClusterStripeOperation::createSingleKey(std::share
         PersistMode::WRITE_BACK);
 
     executeOperationVector(std::chrono::seconds(5));
-  } while (!operations.back().callback->getResult().ok() &&
-           operations.back().callback->getResult().statusCode() != StatusCode::REMOTE_VERSION_MISMATCH &&
-           count < connections.size());
+  } while (!validStatusCode(operations.back().callback->getResult().statusCode()) && count < connections.size());
 
   kio_notice("Single key put ", *keyname, " with result ", operations.back().callback->getResult());
   return operations.back().callback->getResult();
@@ -125,14 +123,14 @@ void KineticClusterStripeOperation::putIndicatorKey()
 {
   createSingleKey(utility::makeIndicatorKey(*key),
                   make_shared<const string>("indicator"),
-                  make_shared<const string>());
+                  make_shared<const string>()
+  );
 }
 
 bool KineticClusterStripeOperation::needsIndicator()
 {
   return need_indicator;
 }
-
 
 StripeOperation_PUT::StripeOperation_PUT(const std::shared_ptr<const std::string>& key,
                                          const std::shared_ptr<const std::string>& version_new,

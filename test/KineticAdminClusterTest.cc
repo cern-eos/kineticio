@@ -146,7 +146,7 @@ SCENARIO("Admin integration test.", "[Admin]")
           REQUIRE(handoff_exists(cluster));
           AND_THEN("Attempting to repair will lead to removal."){
             auto kc = cluster->repair(AdminClusterInterface::OperationTarget::INDICATOR);
-            REQUIRE(kc.removed == 1);
+            REQUIRE((kc.removed == 1));
             REQUIRE(!indicator_exists(cluster));
             REQUIRE(!handoff_exists(cluster));
           }
