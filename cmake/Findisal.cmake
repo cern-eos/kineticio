@@ -3,8 +3,16 @@ if(ISAL_INCLUDE_DIRS AND ISAL_LIBRARIES)
 set(ISAL_FIND_QUIETLY TRUE)
 endif(ISAL_INCLUDE_DIRS AND ISAL_LIBRARIES)
 
-find_path(ISAL_INCLUDE_DIR isa-l.h)
-find_library(ISAL_LIBRARY isal)
+find_path(ISAL_INCLUDE_DIR isa-l.h
+    HINTS
+    /usr/include/isa-l/
+    /usr/local/include/isa-l/
+)
+find_library(ISAL_LIBRARY isal
+    HINTS
+    /usr/lib/
+    /usr/local/lib/
+)
 
 set(ISAL_INCLUDE_DIRS ${ISAL_INCLUDE_DIR})
 set(ISAL_LIBRARIES ${ISAL_LIBRARY})
