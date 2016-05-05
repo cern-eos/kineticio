@@ -97,7 +97,6 @@ target_link_libraries(admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
 if(BUILD_TEST)
     include(ExternalProject)
     find_package(z REQUIRED)
-    find_package(Java REQUIRED)
 
     add_custom_command(OUTPUT ivy.jar
         COMMAND wget -q https://repo.maven.apache.org/maven2/org/apache/ivy/ivy/2.4.0/ivy-2.4.0.jar -O ivy.jar
