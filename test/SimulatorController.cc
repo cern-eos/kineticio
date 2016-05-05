@@ -53,21 +53,26 @@ bool SimulatorController::start(size_t index)
     std::string home = "tmp" + std::to_string((long long int) index);
     std::string port = std::to_string((long long int) 8123 + index);
     std::string tls = std::to_string((long long int) 8443 + index);
+    std::string classpath = ".:";
+    classpath += TESTSIMULATOR_LOCATION;
+    classpath += "/*";
     char* const args[] = {
-        (char*) "startSimulator.sh",
+        (char*) "/usr/bin/java",
+        (char*) "-cp", (char*) classpath.c_str(),
+        (char*) "com.seagate.kinetic.simulator.internal.SimulatorRunner",
         (char*) "-port", (char*) port.c_str(),
         (char*) "-tlsport", (char*) tls.c_str(),
         (char*) "-home", (char*) home.c_str(),
         (char*) 0
     };
-    execv("vendor/src/kinetic_simulator/bin/startSimulator.sh", args);
+    execv("/usr/bin/java", args);
   }
   else {
     if (pids.size() < index + 1) {
       pids.resize(index + 1);
     }
     pids[index] = pid;
-    kio_debug("Starting Simulator on port ", 8123 + index, " with pid ", pids[index]);
+    kio_debug("Starting Simulator on port ", 8123 + index, " with pid ", pids[index], " using simulator directory ", TESTSIMULATOR_LOCATION);
     usleep(1000 * 2000);
     return true;
   }

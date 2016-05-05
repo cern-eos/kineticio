@@ -95,10 +95,19 @@ target_link_libraries(admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
 ################################################################################
 # Compile test & test dependencies if requested
 if(BUILD_TEST)
-    find_package(z REQUIRED)
-    include_directories(${Z_INCLUDE_DIRS})
-    
     include(ExternalProject)
+    find_package(z REQUIRED)
+    find_package(Java REQUIRED)
+
+    add_custom_command(OUTPUT ivy.jar
+        COMMAND wget -q https://repo.maven.apache.org/maven2/org/apache/ivy/ivy/2.4.0/ivy-2.4.0.jar -O ivy.jar
+        COMMAND java -jar ivy.jar -dependency com.seagate.kinetic kinetic-all 0.8.0.5 -retrieve 'simulator/[artifact]-[revision](-[classifier]).[ext]'
+        COMMENT "Downloading simulator"
+    )
+    add_custom_target(kinetic-simulator DEPENDS ivy.jar)
+    add_definitions(-DTESTJSON_LOCATION="${kineticio_SOURCE_DIR}/test/localhost.json")
+    add_definitions(-DTESTSIMULATOR_LOCATION="${kineticio_BINARY_DIR}/simulator")
+
     ExternalProject_add(catch
        PREFIX catch
        DOWNLOAD_COMMAND wget -q https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp -O catch.hpp
@@ -107,20 +116,8 @@ if(BUILD_TEST)
        BUILD_COMMAND ""
        INSTALL_COMMAND ""
     )
+    include_directories(${Z_INCLUDE_DIRS})
     include_directories(${kineticio_BINARY_DIR}/catch/src)
-
-    if(NOT EXISTS "vendor/src/kinetic_simulator") 
-      ExternalProject_add(
-        kinetic_simulator
-        PREFIX "vendor"
-        GIT_REPOSITORY "https://github.com/kinetic/kinetic-java"
-        GIT_TAG "kinetic-java-0.8.0.5"
-        CONFIGURE_COMMAND ""
-        BUILD_IN_SOURCE 1
-        BUILD_COMMAND mvn package -Dmaven.test.skip=true -T 1C --quiet 
-        INSTALL_COMMAND ""
-      )
-    endif()
 
     add_executable(kio-test
         ${kineticio_SRC}
@@ -144,7 +141,8 @@ if(BUILD_TEST)
         ${Z_LIBRARIES}
         ${kineticio_LIB}
     )
-    add_dependencies(kio-test catch)
+    add_dependencies(kio-test catch kinetic-simulator)
+
     add_executable(replay ${kineticio_SRC} test/replay.cc)
     target_link_libraries(replay ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
 endif(BUILD_TEST)
