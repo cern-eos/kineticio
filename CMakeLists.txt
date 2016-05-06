@@ -100,7 +100,7 @@ if(BUILD_TEST)
 
     add_custom_command(OUTPUT ivy.jar
         COMMAND wget -q https://repo.maven.apache.org/maven2/org/apache/ivy/ivy/2.4.0/ivy-2.4.0.jar -O ivy.jar
-        COMMAND java -jar ivy.jar -dependency com.seagate.kinetic kinetic-all 0.8.0.5 -retrieve 'simulator/[artifact]-[revision](-[classifier]).[ext]'
+        COMMAND java -jar ivy.jar -error -dependency com.seagate.kinetic kinetic-all 0.8.0.5 -retrieve 'simulator/[artifact]-[revision](-[classifier]) .[ext]'
         COMMENT "Downloading simulator"
     )
     add_custom_target(kinetic-simulator DEPENDS ivy.jar)
