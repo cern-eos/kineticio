@@ -73,7 +73,8 @@ bool SimulatorController::start(size_t index)
     }
     pids[index] = pid;
     kio_debug("Starting Simulator on port ", 8123 + index, " with pid ", pids[index], " using simulator directory ", TESTSIMULATOR_LOCATION);
-    usleep(1000 * 2000);
+    /* Wait for simulator to come up before continuing */
+    usleep(1000 * 5000);
     return true;
   }
   throw std::logic_error("Unreachable");
