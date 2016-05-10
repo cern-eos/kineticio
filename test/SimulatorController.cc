@@ -60,18 +60,22 @@ void SimulatorController::startSimulators(size_t capacity)
   else {
     kio_debug("Starting Simulator in process with pid ", pid, " using simulator directory ", TESTSIMULATOR_LOCATION);
 
-    /* Wait for simulators to come up before continuing... We will assume starting simulators failed if
-     * they are not reachable after 10 tries with 1 second pauses in between. */
+    /* Wait for simulators to come up before continuing... */
     for(int i=0; i<10; i++){
-      if(enable(capacity-1)){
-        usleep(1000*1000);
+
+      if(reset(capacity-1)){
+        /* This extra wait really should be unnecessary, but let's just be extra certain that
+         * the java process is up and running completely even on slow build nodes in order to
+         * avoid false errors */
+        usleep(5000*1000);
         return;
       }
+
+      /* retry in a second */
       usleep(1000*1000);
     }
     throw std::runtime_error("Failed starting simulators.");
   }
-  throw std::logic_error("Unreachable");
 }
 
 void SimulatorController::stopSimulators()
