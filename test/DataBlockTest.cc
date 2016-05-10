@@ -24,7 +24,6 @@ using namespace kio;
 SCENARIO("DataBlock integration test.", "[Data]")
 {
   auto& c = SimulatorController::getInstance();
-  c.start(0);
   REQUIRE(c.reset(0));
 
   SocketListener listener;

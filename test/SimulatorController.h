@@ -21,10 +21,12 @@
 
 class SimulatorController {
 public:
-  bool start(size_t index);
-  bool stop(size_t index);
-  bool reset(size_t index);
+  void startSimulators(size_t capacity);
+  void stopSimulators();
+
+  bool enable(size_t index);
   bool block(size_t index);
+  bool reset(size_t index);
 
   kinetic::ConnectionOptions get(int index);
 
@@ -36,8 +38,9 @@ public:
   ~SimulatorController();
 
 private:
+  int capacity;
+  int pid;
   SimulatorController();
-  std::vector<int> pids;
 };
 
 #endif //KINETICIO_SIMULATORCONTROLLER_H

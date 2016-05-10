@@ -19,79 +19,67 @@
 #include "Logging.hh"
 #include "SimulatorController.h"
 
-bool SimulatorController::start(size_t index)
+
+
+void SimulatorController::startSimulators(size_t capacity)
 {
-  if (pids.size() > index) {
-    if (pids[index]) {
-      kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
-      std::shared_ptr<kinetic::BlockingKineticConnection> con;
-      if (factory.NewBlockingConnection(get(index), con, 30).ok()) {
-        con->UnlockDevice("NULL");
-      }
-      return false;
-    }
+  if(pid) {
+    throw std::runtime_error("Simulators already started.");
   }
 
-  int pid;
-  if ((pid = fork()) < 0) {
-    return false;
+  pid = fork();
+
+  if (pid < 0) {
+    pid=0;
+    throw std::runtime_error("fork() returned error code.");
   }
+
+  /* forked process */
   else if (pid == 0) {
-    int tmpFd = open("/dev/null", O_WRONLY);
-    if (tmpFd == -1) {
-      printf("Failed Opening /dev/null\n");
-    }
-    if (dup2(tmpFd, 1) != 1) {
-      printf("dup2 failed for fd 1\n");
-    }
-    if (dup2(tmpFd, 2) != 1) {
-      printf("dup2 failed for fd 2\n");
-    }
-    close(tmpFd);
+    /* pipe simulator output to /dev/null */
+    int fd = open("/dev/null", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    dup2(fd, 1);   // make stdout go to file
+    dup2(fd, 2);   // make stderr go to file
+    close(fd);     // fd no longer needed - the dup'ed handles are sufficient
 
+    std::string classpath = kio::utility::Convert::toString(".:",TESTSIMULATOR_LOCATION,"/*");
+    std::string capacity_str = kio::utility::Convert::toString(capacity);
 
-    std::string home = "tmp" + std::to_string((long long int) index);
-    std::string port = std::to_string((long long int) 8123 + index);
-    std::string tls = std::to_string((long long int) 8443 + index);
-    std::string classpath = ".:";
-    classpath += TESTSIMULATOR_LOCATION;
-    classpath += "/*";
     char* const args[] = {
         (char*) "/usr/bin/java",
         (char*) "-cp", (char*) classpath.c_str(),
-        (char*) "com.seagate.kinetic.simulator.internal.SimulatorRunner",
-        (char*) "-port", (char*) port.c_str(),
-        (char*) "-tlsport", (char*) tls.c_str(),
-        (char*) "-home", (char*) home.c_str(),
+        (char*) "com.seagate.kinetic.example.openstorage.VirtualDrives",
+        (char*) capacity_str.c_str(),
         (char*) 0
     };
     execv("/usr/bin/java", args);
+    throw std::runtime_error("Error in execv");
   }
+
+  /* original process */
   else {
-    if (pids.size() < index + 1) {
-      pids.resize(index + 1);
+    kio_debug("Starting Simulator in process with pid ", pid, " using simulator directory ", TESTSIMULATOR_LOCATION);
+
+    /* Wait for simulators to come up before continuing... We will assume starting simulators failed if
+     * they are not reachable after 10 tries with 1 second pauses in between. */
+    for(int i=0; i<10; i++){
+      usleep(1000*1000);
+      if(enable(0)){
+        return;
+      }
     }
-    pids[index] = pid;
-    kio_debug("Starting Simulator on port ", 8123 + index, " with pid ", pids[index], " using simulator directory ", TESTSIMULATOR_LOCATION);
-    /* Wait for simulator to come up before continuing */
-    usleep(1000 * 5000);
-    return true;
+    throw std::runtime_error("Failed starting simulators.");
   }
   throw std::logic_error("Unreachable");
 }
 
-bool SimulatorController::stop(size_t index)
+void SimulatorController::stopSimulators()
 {
-  if (pids.size() <= index || !pids[index]) {
-    return false;
+  if(pid) {
+    kio_debug("Killing Simulators");
+    kill(pid, SIGTERM);
+    pid = 0;
   }
-
-  kio_debug("Killing Simulator on port ", 8123 + index, " with pid ", pids[index]);
-  kill(pids[index], SIGTERM);
-
-  pids[index] = 0;
-  usleep(1000 * 1000);
-  return true;
 }
 
 bool SimulatorController::reset(size_t index)
@@ -101,6 +89,16 @@ bool SimulatorController::reset(size_t index)
   if (factory.NewBlockingConnection(get(index), con, 30).ok()) {
     con->UnlockDevice("NULL");
     return con->InstantErase("NULL").ok();
+  }
+  return false;
+}
+
+bool SimulatorController::enable(size_t index)
+{
+  kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
+  std::shared_ptr<kinetic::BlockingKineticConnection> con;
+  if (factory.NewBlockingConnection(get(index), con, 30).ok()) {
+    return con->UnlockDevice("NULL").ok();
   }
   return false;
 }
@@ -117,7 +115,7 @@ bool SimulatorController::block(size_t index)
 
 kinetic::ConnectionOptions SimulatorController::get(int index)
 {
-  return kinetic::ConnectionOptions{"localhost", 8443 + index, true, 1, "asdfasdf"};
+  return kinetic::ConnectionOptions{"localhost", 18123 + index, true, 1, "asdfasdf"};
 }
 
 SimulatorController::SimulatorController()
@@ -125,7 +123,7 @@ SimulatorController::SimulatorController()
 
 SimulatorController::~SimulatorController()
 {
-  for (size_t i = 0; i < pids.size(); i++) {
-    stop(i);
+  if(pid) {
+    stopSimulators();
   }
 }

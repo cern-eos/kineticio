@@ -60,9 +60,6 @@ void delete_x(std::vector<std::shared_ptr<KineticCluster>>& clusters, int x)
 SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
 {
   auto& c = SimulatorController::getInstance();
-  c.start(0);
-  c.start(1);
-  c.start(2);
   SocketListener listener;
 
   /* Maybe make that configurable?

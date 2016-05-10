@@ -53,10 +53,6 @@ bool handoff_exists(std::shared_ptr<ClusterInterface> cluster)
 SCENARIO("Admin integration test.", "[Admin]")
 {
   auto& c = SimulatorController::getInstance();
-  c.start(0);
-  c.start(1);
-  c.start(2);
-
   SocketListener listener;
 
   GIVEN ("A valid admin cluster") {
@@ -154,7 +150,7 @@ SCENARIO("Admin integration test.", "[Admin]")
       }
 
       AND_WHEN("The drive comes up again.") {
-        c.start(0);
+        c.enable(0);
 
         THEN("It is no longer marked as incomplete but as need_action after a scan") {
           auto kc = cluster->scan(target);

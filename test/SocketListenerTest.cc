@@ -48,7 +48,6 @@ private:
 SCENARIO("Listener Test.", "[Listen]"){
 
   auto& c = SimulatorController::getInstance();
-  c.start(0);
   REQUIRE( c.reset(0) );
 
   GIVEN ("stuff"){

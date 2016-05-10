@@ -29,10 +29,6 @@ SCENARIO("Cluster integration test.", "[Cluster]")
 {
 
   auto& c = SimulatorController::getInstance();
-  c.start(0);
-  c.start(1);
-  c.start(2);
-
   SocketListener listener;
 
   GIVEN ("A valid drive cluster") {
@@ -197,7 +193,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
 
           AND_WHEN("The missing drives are available again.") {
             for (size_t i = 0; i < nParity; i++) {
-              c.start(i);
+              c.enable(i);
             }
 
             THEN("The key is still considered not available.") {

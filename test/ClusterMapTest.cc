@@ -15,16 +15,10 @@
 
 #include "catch.hpp"
 #include "KineticIoSingleton.hh"
-#include "SimulatorController.h"
 
 using namespace kio;
 
 SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
-  auto& c = SimulatorController::getInstance();
-  c.start(0);
-  c.start(1);
-  c.start(2);
-  
   GIVEN("A valid path."){
     auto& kcm = kio::kio().cmap();
     THEN("An existing id returns a cluster."){

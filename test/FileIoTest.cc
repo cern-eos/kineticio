@@ -27,9 +27,6 @@ SCENARIO("KineticIo Integration Test", "[Io]")
 {
 
   auto& c = SimulatorController::getInstance();
-  c.start(0);
-  c.start(1);
-  c.start(2);
   REQUIRE(c.reset(0));
   REQUIRE(c.reset(1));
   REQUIRE(c.reset(2));
@@ -277,9 +274,6 @@ SCENARIO("KineticIo Integration Test", "[Io]")
 SCENARIO("FileIo Attribute Integration Test", "[Attr]")
 {
   auto& c = SimulatorController::getInstance();
-  c.start(0);
-  c.start(1);
-  c.start(2);
   REQUIRE(c.reset(0));
   REQUIRE(c.reset(1));
   REQUIRE(c.reset(2));

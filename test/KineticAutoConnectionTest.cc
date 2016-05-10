@@ -56,7 +56,7 @@ private:
 SCENARIO("Connection Test", "[Con]")
 {
   auto& c = SimulatorController::getInstance();
-  c.start(0);
+  c.enable(0);
 
   SocketListener listener;
   fd_set x;

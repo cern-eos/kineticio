@@ -152,9 +152,6 @@ public:
 SCENARIO("Cache Performance Test.", "[Cache]")
 {
   auto& c = SimulatorController::getInstance();
-  c.start(0);
-  c.start(1);
-  c.start(2);
 
   GIVEN("A Cache Object and a mocked FileIo object") {
 
