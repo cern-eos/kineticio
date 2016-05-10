@@ -63,10 +63,11 @@ void SimulatorController::startSimulators(size_t capacity)
     /* Wait for simulators to come up before continuing... We will assume starting simulators failed if
      * they are not reachable after 10 tries with 1 second pauses in between. */
     for(int i=0; i<10; i++){
-      usleep(1000*1000);
-      if(enable(0)){
+      if(enable(capacity-1)){
+        usleep(1000*1000);
         return;
       }
+      usleep(1000*1000);
     }
     throw std::runtime_error("Failed starting simulators.");
   }
