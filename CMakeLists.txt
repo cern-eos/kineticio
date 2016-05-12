@@ -1,16 +1,24 @@
 cmake_minimum_required(VERSION 2.8.6)
 project(kineticio CXX C)
 
+execute_process(
+        COMMAND git log --oneline
+        COMMAND wc -l
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_COMMITS
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+set(PROJECT_VERSION_MAJOR 1)
+set(PROJECT_VERSION_MINOR 0)
+set(PROJECT_VERSION_PATCH ${GIT_COMMITS})
+set(PROJECT_VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH})
+message(STATUS "Project version set to ${PROJECT_VERSION}")
+
+
 ################################################################################
 # Options
 option(BUILD_TEST "Build test executables." off)
 message(STATUS "Set Options: BUILD_TEST=${BUILD_TEST}")
-
-################################################################################
-# Force /usr/ installation prefix, same as EOS
-set(CMAKE_INSTALL_PREFIX /usr)
-set(CMAKE_INSTALL_SYSCONFDIR /etc)
-set(CMAKE_INSTALL_SBINDIR /sbin)
 
 ################################################################################
 # Check for Gcc >=4.4
@@ -84,7 +92,17 @@ set(kineticio_LIB
 
 add_library(kineticio SHARED ${kineticio_SRC})
 target_link_libraries(kineticio ${kineticio_LIB})
-install(TARGETS kineticio LIBRARY DESTINATION lib64)
+
+# Set lib or lib64 depending on architecture
+get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)
+set(LIBSUFFIX "")
+if ("${LIB64}" STREQUAL "TRUE" AND "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
+    set(LIBSUFFIX 64)
+endif()
+message(STATUS "Library installation directory is set to ${CMAKE_INSTALL_PREFIX}/lib${LIBSUFFIX}")
+
+set_target_properties(kineticio PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
+install(TARGETS kineticio LIBRARY DESTINATION lib${LIBSUFFIX})
 install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
 
 ################################################################################
@@ -150,20 +168,11 @@ endif(BUILD_TEST)
 ################################################################################
 # RPM generation rules 
 
-execute_process(
-  COMMAND git log --oneline
-  COMMAND wc -l
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE GIT_COMMITS
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
 set(CPACK_GENERATOR "RPM")
 set(CPACK_PACKAGE_CONTACT "paul.lensing@gmail.com")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A byte-range IO library for a kinetic backend.")
-set(CPACK_PACKAGE_VERSION "0.${GIT_COMMITS}")
-set(CPACK_RPM_PACKAGE_REQUIRES "isal, kinetic_cpp_client, json-c, libuuid")
 set(CPACK_PACKAGE_NAME ${CMAKE_PROJECT_NAME})
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A byte-range IO library for a kinetic backend.")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_RPM_PACKAGE_REQUIRES "isal, kinetic_cpp_client, json-c, libuuid")
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}")
-
 include(CPack)

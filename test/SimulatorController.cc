@@ -62,15 +62,9 @@ void SimulatorController::startSimulators(size_t capacity)
 
     /* Wait for simulators to come up before continuing... */
     for(int i=0; i<10; i++){
-
       if(reset(capacity-1)){
-        /* This extra wait really should be unnecessary, but let's just be extra certain that
-         * the java process is up and running completely even on slow build nodes in order to
-         * avoid false errors */
-        usleep(5000*1000);
         return;
       }
-
       /* retry in a second */
       usleep(1000*1000);
     }
