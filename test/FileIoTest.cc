@@ -82,7 +82,7 @@ SCENARIO("KineticIo Integration Test", "[Io]")
 
     THEN("Statfs succeeds") {
       /* wait for io stats to update in freshly generated cluster */
-      usleep(1000 * 1000);
+      usleep(100 * 1000);
       struct statfs sfs;
       REQUIRE_NOTHROW(fileio->Statfs(&sfs));
       REQUIRE((sfs.f_bavail > 0));

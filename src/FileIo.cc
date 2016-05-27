@@ -544,9 +544,9 @@ void FileIo::Statfs(struct statfs* sfs)
   /* Free blocks available to non root user */
   sfs->f_bfree = sfs->f_bavail;
   /* Total inodes */
-  sfs->f_files = s.bytes_total;
+  sfs->f_files = (size_t) (s.bytes_total / sfs->f_frsize);
   /* Free inodes */
-  sfs->f_ffree = s.bytes_free;
+  sfs->f_ffree = (size_t) (s.bytes_free / sfs->f_frsize);
 }
 
 std::vector<std::string> FileIo::ListFiles(std::string subtree, size_t max)

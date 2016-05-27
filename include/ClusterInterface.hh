@@ -45,8 +45,8 @@ struct ClusterLimits {
 
 struct ClusterStats {
     /* Current size values */
-    size_t bytes_total;
-    size_t bytes_free;
+    uint64_t bytes_total;
+    uint64_t bytes_free;
 
     /* IO stats total */
     uint64_t read_ops_total;

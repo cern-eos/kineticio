@@ -358,7 +358,7 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
     }
     const auto& log = cbs[i]->getLog();
 
-    auto bytes_used = static_cast<size_t>(log->capacity.nominal_capacity_in_bytes * log->capacity.portion_full);
+    auto bytes_used = static_cast<uint64_t>(log->capacity.nominal_capacity_in_bytes * log->capacity.portion_full);
     bytes_total += log->capacity.nominal_capacity_in_bytes;
     bytes_free += log->capacity.nominal_capacity_in_bytes - bytes_used;
 
@@ -390,4 +390,6 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
 
   statistics_snapshot.bytes_free = bytes_free;
   statistics_snapshot.bytes_total = bytes_total;
+
+  kio_debug("Updated cluster statistics. bytes_free=", bytes_free);
 }
