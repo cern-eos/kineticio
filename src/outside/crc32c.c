@@ -220,6 +220,17 @@ static void crc32c_init_hw(void)
   crc32c_zeros(crc32c_short, SHORT);
 }
 
+/* This is an alteration of the original sources: hardware acceleration has been taken out completely for 32-bit
+ * systems in order to prevent problems during the build process. */
+#if UINTPTR_MAX == 0xffffffff
+static uint32_t crc32c_hw(uint32_t crc, const void *buf, size_t len)
+{
+  return 0;
+}
+#define SSE42(have) \
+    do { (have) = 0; \
+    } while (0)
+#else
 /* Compute CRC-32C using the Intel hardware instruction. */
 static uint32_t crc32c_hw(uint32_t crc, const void *buf, size_t len)
 {
@@ -324,6 +335,7 @@ static uint32_t crc32c_hw(uint32_t crc, const void *buf, size_t len)
                 : "%ebx", "%edx"); \
         (have) = (ecx >> 20) & 1; \
     } while (0)
+#endif
 
 /* Compute a CRC-32C.  If the crc32 instruction is available, use the hardware
    version.  Otherwise, use the software version. */
