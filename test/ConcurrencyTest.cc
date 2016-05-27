@@ -77,10 +77,10 @@ SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
     c.reset(2);
 
     for (int instances = 1; instances <= 16; instances *= 4) {
-    for (int numblocks = 1; numblocks <= 16; numblocks *= 4) {
+    for (int numblocks = 1; numblocks <= 8; numblocks *= 4) {
     WHEN(utility::Convert::toString(
-        "We create ", instances, " instances of the same cluster, ", numblocks, " instances of DataBlock(s) ",
-        "(with the same key for each of the cluster instances)"))
+        "We create ", instances, " instances of the same cluster and ", numblocks, " instances of DataBlock(s) ",
+        "with the same key for each of the cluster instances"))
     {
 
         std::vector<std::shared_ptr<KineticCluster>> clusters;
@@ -109,7 +109,7 @@ SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
           }
         }
 
-        int numthreads = 4;
+        int numthreads = 2;
         REQUIRE((dblocks.size() * numthreads == (size_t) instances * numblocks * numthreads));
         const int total_put_operations = 1000;
         int x = total_put_operations / (dblocks.size()*numthreads);
