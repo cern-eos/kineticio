@@ -92,12 +92,12 @@ int main(int argc, char** argv)
 
     if(config.write){
       int bytes = fio->Write(offset, buffer.data(), length);
-      printf("written %d bytes. Requested (offset,length) : (%ld,%ld)\n", bytes, offset, length);
+      printf("written %d bytes. Requested (offset,length) : (%d,%d)\n", bytes, (int)offset, (int)length);
     }
     
     if(config.read){
       int bytes = fio->Read(offset, buffer.data(), length);
-      printf("read %d bytes. Requested (offset,length) : (%ld,%ld)\n", bytes, offset, length);
+      printf("read %d bytes. Requested (offset,length) : (%d,%d)\n", bytes, (int)offset, (int)length);
     }
 
   }  

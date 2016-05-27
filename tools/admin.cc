@@ -266,8 +266,8 @@ int main(int argc, char** argv)
                   v.drives_failed);
           fprintf(stdout, "kinetic.redundancy_factor=%u\n", v.redundancy_factor);
           fprintf(stdout, "kinetic.indicator_exist=%s\n", v.indicator_exist ? "YES" : "NO");
-          for (size_t i = 0; i < v.connected.size(); i++) {
-            fprintf(stdout, "kinetic.drive.index=%lu kinetic.drive.status=%s\n", i, v.connected[i] ? "OK" : "FAILED");
+          for (unsigned int i = 0; i < v.connected.size(); i++) {
+            fprintf(stdout, "kinetic.drive.index=%u kinetic.drive.status=%s\n", i, v.connected[i] ? "OK" : "FAILED");
           }
         }
         else {
@@ -277,8 +277,8 @@ int main(int argc, char** argv)
           fprintf(stdout, "# \tRedundancy Factor: %u\n", v.redundancy_factor);
           fprintf(stdout, "# \tIndicator keys: %s \n", v.indicator_exist ? "EXIST" : "NONE");
           fprintf(stdout, "# ------------------------------------------------------------------------\n");
-          for (size_t i = 0; i < v.connected.size(); i++) {
-            fprintf(stdout, "# drive %2ld : %s %s\n", i, v.connected[i] ? "OK" : "FAILED", v.location[i].c_str());
+          for (unsigned int i = 0; i < v.connected.size(); i++) {
+            fprintf(stdout, "# drive %2u : %s %s\n", i, v.connected[i] ? "OK" : "FAILED", v.location[i].c_str());
           }
         }
         break;
