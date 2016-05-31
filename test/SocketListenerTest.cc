@@ -28,21 +28,24 @@ using namespace kinetic;
 class AnotherSimpleCallback : public kinetic::SimpleCallbackInterface {
 public:
     void Success() {
+      std::lock_guard<std::mutex> lock(mutex);
       rdy=true;
       cv.notify_one();
     }
 
     void Failure(kinetic::KineticStatus error) {
+      std::lock_guard<std::mutex> lock(mutex);
       rdy=true;
       cv.notify_one();
     }
 
-    AnotherSimpleCallback(std::condition_variable& cv, bool& rdy) :
-    cv(cv),rdy(rdy){};
+    AnotherSimpleCallback(std::condition_variable& cv, std::mutex& mutex, bool& rdy) :
+    cv(cv), mutex(mutex), rdy(rdy) {};
 
 private:
     std::condition_variable& cv;
-    bool & rdy;
+    std::mutex& mutex;
+    bool& rdy;
 };
 
 SCENARIO("Listener Test.", "[Listen]"){
@@ -50,28 +53,33 @@ SCENARIO("Listener Test.", "[Listen]"){
   auto& c = SimulatorController::getInstance();
   REQUIRE( c.reset(0) );
 
-  GIVEN ("stuff"){
+  GIVEN ("A Socket Listener"){
     kio::SocketListener listen;
-    kio::KineticAutoConnection con(
-      listen,
-      std::pair<ConnectionOptions,ConnectionOptions>(c.get(0),c.get(0)),
-      std::chrono::seconds(10));
 
-    THEN(" We can register the connection"){
+    THEN("We can create a connection that will register with the listener"){
+      kio::KineticAutoConnection con(
+        listen,
+        std::pair<ConnectionOptions,ConnectionOptions>(c.get(0),c.get(0)),
+        std::chrono::seconds(10)
+      );
+      REQUIRE_NOTHROW(con.get());
 
-      AND_THEN("Callback will be automatically called."){
+      AND_THEN("Callbacks will be automatically be called."){
         std::condition_variable cv;
-        bool ready;
-        auto cb = make_shared<AnotherSimpleCallback>(cv, ready);
+        std::mutex mtx;
+        bool ready = false;
+        auto cb = make_shared<AnotherSimpleCallback>(cv, mtx, ready);
 
         con.get()->NoOp(cb);
         fd_set a; int fd;
         con.get()->Run(&a,&a,&fd);
 
-        std::mutex mtx;
+        std::chrono::system_clock::time_point timeout_time = std::chrono::system_clock::now() + std::chrono::seconds(10);
         std::unique_lock<std::mutex> lck(mtx);
-        while (!ready) cv.wait(lck);
-        
+        while (!ready && std::chrono::system_clock::now() < timeout_time) {
+          cv.wait_until(lck, timeout_time);
+        }
+        REQUIRE(ready);
       }
     }
   }
