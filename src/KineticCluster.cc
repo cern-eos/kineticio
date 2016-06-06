@@ -390,6 +390,4 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
 
   statistics_snapshot.bytes_free = bytes_free;
   statistics_snapshot.bytes_total = bytes_total;
-
-  kio_debug("Updated cluster statistics. bytes_free=", bytes_free);
 }

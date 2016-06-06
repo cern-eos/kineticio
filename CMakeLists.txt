@@ -153,6 +153,7 @@ if(BUILD_TEST)
         test/DataCacheTest.cc
         test/KineticAutoConnectionTest.cc
         test/ConcurrencyTest.cc
+        test/ConcurrencyAppendTest.cc
         )
     target_link_libraries(kio-test
         ${Z_LIBRARIES}
