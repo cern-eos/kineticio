@@ -214,6 +214,15 @@ public:
       KeyType type) = 0;
 
   //----------------------------------------------------------------------------
+  //! Flush all connections associated with this cluster. A successful flush
+  //! operation guarantees that all previous put and remove operations are
+  //! permanently persisted.
+  //!
+  //! @return status of operation
+  //----------------------------------------------------------------------------
+  virtual kinetic::KineticStatus flush() = 0;
+
+  //----------------------------------------------------------------------------
   //! Obtain keys in the supplied range [start,...,end]
   //!
   //! @param start  the start point of the requested key range, supplied key

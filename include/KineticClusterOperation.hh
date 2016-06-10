@@ -123,6 +123,7 @@ protected:
 class ClusterRangeOp : public KineticClusterOperation {
   /* Allow StripeOperation_GET access to internals in order to identify connections for handoff keys */
   friend class StripeOperation_GET;
+
 public:
   //--------------------------------------------------------------------------
   //! Return the keys
@@ -192,6 +193,36 @@ public:
       std::size_t size, std::size_t offset = 0
   );
 };
+
+
+//--------------------------------------------------------------------------
+//! A flush operation
+//--------------------------------------------------------------------------
+class ClusterFlushOp : public KineticClusterOperation {
+public:
+  //--------------------------------------------------------------------------
+  //! Executes the operation set up in the constructor and returns the overall
+  //! status.
+  //!
+  //! @param timeout the network timeout
+  //! @param quorum_size the minimum number of aligned replies required
+  //! @return status of the execution
+  //--------------------------------------------------------------------------
+  kinetic::KineticStatus execute(const std::chrono::seconds& timeout, size_t quorum_size);
+
+  //--------------------------------------------------------------------------
+  //! Constructor
+  //!
+  //! @param start_key start key
+  //! @param end_key end key
+  //! @param maxRequestedPerDrive maximum number of keys to be returned
+  //! @param connections connection vector of the calling cluster
+  //--------------------------------------------------------------------------
+  ClusterFlushOp(
+      std::vector<std::unique_ptr<KineticAutoConnection>>& connections
+  );
+};
+
 
 }
 

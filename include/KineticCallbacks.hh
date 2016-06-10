@@ -179,15 +179,15 @@ public:
   ~PutCallback();
 };
 
-class DeleteCallback : public KineticCallback, public kinetic::SimpleCallbackInterface {
+class BasicCallback : public KineticCallback, public kinetic::SimpleCallbackInterface {
 public:
   void Success();
 
   void Failure(kinetic::KineticStatus error);
 
-  explicit DeleteCallback(std::shared_ptr<CallbackSynchronization> s);
+  explicit BasicCallback(std::shared_ptr<CallbackSynchronization> s);
 
-  ~DeleteCallback();
+  ~BasicCallback();
 };
 
 class RangeCallback : public KineticCallback, public kinetic::GetKeyRangeCallbackInterface {

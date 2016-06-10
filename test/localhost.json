@@ -24,22 +24,30 @@
     "cluster_comment":"Array of cluster definitions, located at $KINETIC_CLUSTER_DEFINITION",
     "cluster":[
       {"clusterID":"Cluster1",
-       "numData":1,"numParity":1,"chunkSizeKB":1,
-       "minReconnectInterval":2,"timeout":11,
-       "drives":[
-           {"wwn":"WWN1"},
-           {"wwn":"WWN3"}
-       ]
+        "numData":1,"numParity":1,
+        "chunkSizeKB":1,
+        "timeout":30,"minReconnectInterval":15,
+        "drives":[
+         {"wwn":"WWN1"},
+         {"wwn":"WWN3"}
+        ]
       },
       {"clusterID":"Cluster2",
-       "numData":1,"numParity":1,"chunkSizeKB":1024,
-       "minReconnectInterval":2,"timeout":12,
-       "drives":[{"wwn":"WWN1"},{"wwn":"WWN2"}]
+        "numData":1,"numParity":1,
+        "chunkSizeKB":1024,
+        "timeout":30,"minReconnectInterval":15,
+        "drives":[
+         {"wwn":"WWN1"},
+         {"wwn":"WWN2"}
+        ]
       },
       {"clusterID":"Cluster3",
-       "numData":1,"numParity":0,"chunkSizeKB":512,
-       "minReconnectInterval":2,"timeout":13,
-       "drives":[{"wwn":"WWN1"}]
+        "numData":1,"numParity":0,
+        "chunkSizeKB":512,
+        "timeout":30,"minReconnectInterval":15,
+        "drives":[
+         {"wwn":"WWN1"}
+        ]
       }
     ]
 }

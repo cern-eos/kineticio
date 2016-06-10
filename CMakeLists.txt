@@ -22,18 +22,18 @@ message(STATUS "Set Options: BUILD_TEST=${BUILD_TEST}")
 
 ################################################################################
 # Check for Gcc >=4.4
-if(CMAKE_COMPILER_IS_GNUCXX)
-  exec_program(
-      ${CMAKE_CXX_COMPILER}
-      ARGS                    --version
-      OUTPUT_VARIABLE _compiler_output)
-  string(REGEX REPLACE ".* ([0-9]\\.[0-9]\\.[0-9]) .*" "\\1"
-	 gcc_compiler_version ${_compiler_output})
-  message(STATUS "C++ compiler version: ${gcc_compiler_version} [${CMAKE_CXX_COMPILER}]")
+if (CMAKE_COMPILER_IS_GNUCXX)
+    exec_program(
+            ${CMAKE_CXX_COMPILER}
+            ARGS --version
+            OUTPUT_VARIABLE _compiler_output)
+    string(REGEX REPLACE ".* ([0-9]\\.[0-9]\\.[0-9]) .*" "\\1"
+            gcc_compiler_version ${_compiler_output})
+    message(STATUS "C++ compiler version: ${gcc_compiler_version} [${CMAKE_CXX_COMPILER}]")
 
-  if(gcc_compiler_version MATCHES "4\\.[0-3]\\.[0-9]")
-    message(FATAL_ERROR "Error: you need atleast gcc 4.4.x to compile EOS!")
-  endif (gcc_compiler_version MATCHES "4\\.[0-3]\\.[0-9]")
+    if (gcc_compiler_version MATCHES "4\\.[0-3]\\.[0-9]")
+        message(FATAL_ERROR "Error: you need atleast gcc 4.4.x to compile EOS!")
+    endif (gcc_compiler_version MATCHES "4\\.[0-3]\\.[0-9]")
 endif (CMAKE_COMPILER_IS_GNUCXX)
 
 ################################################################################
@@ -54,41 +54,41 @@ find_package(Git REQUIRED)
 ################################################################################
 # Compile main project 
 include_directories(
-    include/kio
-    include
-    ${KINETIC-C++_INCLUDE_DIRS}
-    ${JSONC_INCLUDE_DIRS}
-    ${UUID_INCLUDE_DIRS}
-    ${ISAL_INCLUDE_DIRS}
+        include/kio
+        include
+        ${KINETIC-C++_INCLUDE_DIRS}
+        ${JSONC_INCLUDE_DIRS}
+        ${UUID_INCLUDE_DIRS}
+        ${ISAL_INCLUDE_DIRS}
 )
 set(kineticio_SRC
-    src/FileIo.cc
-    src/KineticIoFactory.cc
-    src/DataBlock.cc
-    src/DataCache.cc
-    src/ClusterMap.cc
-    src/KineticIoSingleton.cc
-    src/KineticAutoConnection.cc
-    src/KineticClusterOperation.cc
-    src/KineticClusterStripeOperation.cc
-    src/KineticCallbacks.cc
-    src/KineticCluster.cc
-    src/KineticAdminCluster.cc
-    src/SocketListener.cc
-    src/RedundancyProvider.cc
-    src/PrefetchOracle.cc
-    src/BackgroundOperationHandler.cc
-    src/Utility.cc
-    src/outside/crc32c.c
-    src/outside/MurmurHash3.cpp
-)
+        src/FileIo.cc
+        src/KineticIoFactory.cc
+        src/DataBlock.cc
+        src/DataCache.cc
+        src/ClusterMap.cc
+        src/KineticIoSingleton.cc
+        src/KineticAutoConnection.cc
+        src/KineticClusterOperation.cc
+        src/KineticClusterStripeOperation.cc
+        src/KineticCallbacks.cc
+        src/KineticCluster.cc
+        src/KineticAdminCluster.cc
+        src/SocketListener.cc
+        src/RedundancyProvider.cc
+        src/PrefetchOracle.cc
+        src/BackgroundOperationHandler.cc
+        src/Utility.cc
+        src/outside/crc32c.c
+        src/outside/MurmurHash3.cpp
+        )
 set(kineticio_LIB
-    ${JSONC_LIBRARIES}
-    ${UUID_LIBRARIES}
-    ${ISAL_LIBRARIES}
-    ${KINETIC-C++_LIBRARIES}
-    ${CMAKE_THREAD_LIBS_INIT}
-)
+        ${JSONC_LIBRARIES}
+        ${UUID_LIBRARIES}
+        ${ISAL_LIBRARIES}
+        ${KINETIC-C++_LIBRARIES}
+        ${CMAKE_THREAD_LIBS_INIT}
+        )
 
 add_library(kineticio SHARED ${kineticio_SRC})
 target_link_libraries(kineticio ${kineticio_LIB})
@@ -98,7 +98,7 @@ get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)
 set(LIBSUFFIX "")
 if ("${LIB64}" STREQUAL "TRUE" AND "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
     set(LIBSUFFIX 64)
-endif()
+endif ()
 message(STATUS "Library installation directory is set to ${CMAKE_INSTALL_PREFIX}/lib${LIBSUFFIX}")
 
 set_target_properties(kineticio PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
@@ -112,58 +112,58 @@ target_link_libraries(admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
 
 ################################################################################
 # Compile test & test dependencies if requested
-if(BUILD_TEST)
+if (BUILD_TEST)
     include(ExternalProject)
     find_package(z REQUIRED)
 
     add_custom_command(OUTPUT ivy.jar
-        COMMAND wget -q https://repo.maven.apache.org/maven2/org/apache/ivy/ivy/2.4.0/ivy-2.4.0.jar -O ivy.jar
-        COMMAND java -jar ivy.jar -error -dependency com.seagate.kinetic kinetic-all 0.8.0.5 -retrieve 'simulator/[artifact]-[revision](-[classifier]) .[ext]'
-        COMMENT "Downloading simulator"
-    )
+            COMMAND wget -q https://repo.maven.apache.org/maven2/org/apache/ivy/ivy/2.4.0/ivy-2.4.0.jar -O ivy.jar
+            COMMAND java -jar ivy.jar -error -dependency com.seagate.kinetic kinetic-all 0.8.0.5 -retrieve 'simulator/[artifact]-[revision] (-[classifier]) .[ext]'
+            COMMENT "Downloading simulator"
+            )
     add_custom_target(kinetic-simulator DEPENDS ivy.jar)
     add_definitions(-DTESTJSON_LOCATION="${kineticio_SOURCE_DIR}/test/localhost.json")
     add_definitions(-DTESTSIMULATOR_LOCATION="${kineticio_BINARY_DIR}/simulator")
 
     ExternalProject_add(catch
-       PREFIX catch
-       DOWNLOAD_COMMAND wget -q https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp -O catch.hpp
-       CONFIGURE_COMMAND ""
-       BUILD_IN_SOURCE 1
-       BUILD_COMMAND ""
-       INSTALL_COMMAND ""
-    )
+            PREFIX catch
+            DOWNLOAD_COMMAND wget -q https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp -O catch.hpp
+            CONFIGURE_COMMAND ""
+            BUILD_IN_SOURCE 1
+            BUILD_COMMAND ""
+            INSTALL_COMMAND ""
+            )
     include_directories(${Z_INCLUDE_DIRS})
     include_directories(${kineticio_BINARY_DIR}/catch/src)
 
     add_executable(kio-test
-        ${kineticio_SRC}
-        test/TestMain.cc
-        test/DataBlockTest.cc
-        test/FileIoTest.cc
-        test/ClusterMapTest.cc
-        test/KineticClusterTest.cc
-        test/SocketListenerTest.cc
-        test/RedundancyProviderTest.cc
-        test/UtilityTest.cc
-        test/PrefetchOracleTest.cc
-        test/SimulatorController.cc
-        test/LoggingTest.cc
-        test/KineticAdminClusterTest.cc
-        test/DataCacheTest.cc
-        test/KineticAutoConnectionTest.cc
-        test/ConcurrencyTest.cc
-        test/ConcurrencyAppendTest.cc
-        )
+            ${kineticio_SRC}
+            test/TestMain.cc
+            test/DataBlockTest.cc
+            test/FileIoTest.cc
+            test/ClusterMapTest.cc
+            test/KineticClusterTest.cc
+            test/SocketListenerTest.cc
+            test/RedundancyProviderTest.cc
+            test/UtilityTest.cc
+            test/PrefetchOracleTest.cc
+            test/SimulatorController.cc
+            test/LoggingTest.cc
+            test/KineticAdminClusterTest.cc
+            test/DataCacheTest.cc
+            test/KineticAutoConnectionTest.cc
+            test/ConcurrencyTest.cc
+            test/ConcurrencyAppendTest.cc
+            )
     target_link_libraries(kio-test
-        ${Z_LIBRARIES}
-        ${kineticio_LIB}
-    )
+            ${Z_LIBRARIES}
+            ${kineticio_LIB}
+            )
     add_dependencies(kio-test catch kinetic-simulator)
 
     add_executable(replay ${kineticio_SRC} test/replay.cc)
     target_link_libraries(replay ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
-endif(BUILD_TEST)
+endif (BUILD_TEST)
 
 
 ################################################################################
@@ -174,6 +174,6 @@ set(CPACK_PACKAGE_CONTACT "paul.lensing@gmail.com")
 set(CPACK_PACKAGE_NAME ${CMAKE_PROJECT_NAME})
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A byte-range IO library for a kinetic backend.")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
-set(CPACK_RPM_PACKAGE_REQUIRES "isal, kinetic_cpp_client, json-c, libuuid")
+set(CPACK_RPM_PACKAGE_REQUIRES "isal, kinetic_cpp_client >= 0.2.0, json-c, libuuid")
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}")
 include(CPack)

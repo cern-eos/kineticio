@@ -91,6 +91,8 @@ public:
       const std::shared_ptr<const std::string>& key,
       KeyType type);
 
+  kinetic::KineticStatus flush();
+
   //! See documentation in superclass.
   kinetic::KineticStatus range(
       const std::shared_ptr<const std::string>& start_key,

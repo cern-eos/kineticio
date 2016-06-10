@@ -324,7 +324,7 @@ StripeOperation_DEL::StripeOperation_DEL(const std::shared_ptr<const std::string
 void StripeOperation_DEL::fillOperation(size_t index, const std::shared_ptr<const std::string>& drive_version,
                                         kinetic::WriteMode writeMode)
 {
-  auto cb = std::make_shared<DeleteCallback>(sync);
+  auto cb = std::make_shared<BasicCallback>(sync);
   operations[index].callback = cb;
   operations[index].function = std::bind<HandlerKey(ThreadsafeNonblockingKineticConnection::*)(
       const shared_ptr<const string>,

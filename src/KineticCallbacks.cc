@@ -176,18 +176,18 @@ void PutCallback::Failure(KineticStatus error)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-DeleteCallback::DeleteCallback(std::shared_ptr<CallbackSynchronization> s) : KineticCallback(std::move(s))
+BasicCallback::BasicCallback(std::shared_ptr<CallbackSynchronization> s) : KineticCallback(std::move(s))
 { }
 
-DeleteCallback::~DeleteCallback()
+BasicCallback::~BasicCallback()
 { }
 
-void DeleteCallback::Success()
+void BasicCallback::Success()
 {
   OnResult(KineticStatus(StatusCode::OK, ""));
 }
 
-void DeleteCallback::Failure(KineticStatus error)
+void BasicCallback::Failure(KineticStatus error)
 {
   OnResult(error);
 }

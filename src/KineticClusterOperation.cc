@@ -112,6 +112,37 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> KineticClusterOperation
   return rmap;
 }
 
+
+ClusterFlushOp::ClusterFlushOp(std::vector<std::unique_ptr<KineticAutoConnection>>& connections)
+    : KineticClusterOperation(connections)
+{
+  expandOperationVector(connections.size(), 0);
+  for (auto o = operations.begin(); o != operations.end(); o++) {
+    auto cb = std::make_shared<BasicCallback>(sync);
+    o->callback = cb;
+    o->function = std::bind(&ThreadsafeNonblockingKineticConnection::Flush, std::placeholders::_1, cb);
+
+//        std::bind< HandlerKey(ThreadsafeNonblockingKineticConnection::*)(const shared_ptr<SimpleCallbackInterface>) >
+//        (
+//        &ThreadsafeNonblockingKineticConnection::Flush,
+//        std::placeholders::_1,
+//        cb );
+  }
+
+}
+
+KineticStatus ClusterFlushOp::execute(const std::chrono::seconds& timeout, size_t quorum_size)
+{
+  auto rmap = executeOperationVector(timeout);
+
+  for (auto it = rmap.cbegin(); it != rmap.cend(); it++) {
+    if (it->second >= quorum_size) {
+      return KineticStatus(it->first, "");
+    }
+  }
+  return KineticStatus(StatusCode::CLIENT_IO_ERROR, "Flush request failed");
+}
+
 ClusterLogOp::ClusterLogOp(const std::vector<kinetic::Command_GetLog_Type> types,
                            std::vector<std::unique_ptr<KineticAutoConnection>>& connections,
                            std::size_t size, size_t offset) : KineticClusterOperation(connections)

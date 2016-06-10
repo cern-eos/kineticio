@@ -107,7 +107,7 @@ void FileIo::Close(uint16_t timeout)
 {
   /* If we would need more than one cluster::range request in the stat operation to find the correct fill size
    * create or update the size_hint attribute.
-   * This conditional size_hint attribut ewill minimize IO for stat but at the same time avoid unecessary attribute
+   * This conditional size_hint attribute will minimize IO for stat but at the same time avoid unnecessary attribute
    * IO on every close. */
   size_t hint_difference = std::abs(eof_blocknumber - size_hint);
   size_t max_request_size = cluster->limits(KeyType::Data).max_range_elements;
@@ -117,13 +117,15 @@ void FileIo::Close(uint16_t timeout)
 
   eof_blocknumber = size_hint = 0;
   opened = false;
-  kio().cache().flush(this);
+
+  Sync(timeout);
   kio().cache().drop(this);
 }
 
 void FileIo::Sync(uint16_t timeout)
 {
   kio().cache().flush(this);
+  cluster->flush();
 }
 
 void do_readahead(std::shared_ptr<kio::DataBlock> data)

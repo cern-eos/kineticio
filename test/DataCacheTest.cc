@@ -104,6 +104,11 @@ public:
     return KineticStatus(StatusCode::OK, "");
   }
 
+  kinetic::KineticStatus flush()
+  {
+    return KineticStatus(StatusCode::OK, "");
+  }
+
   kinetic::KineticStatus range(
       const std::shared_ptr<const std::string>& start_key,
       const std::shared_ptr<const std::string>& end_key,
