@@ -107,8 +107,8 @@ install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
 
 ################################################################################
 # Compile cluster admin tool 
-add_executable(admin ${kineticio_SRC} tools/admin.cc)
-target_link_libraries(admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
+add_executable(kineticio-admin ${kineticio_SRC} tools/admin.cc)
+target_link_libraries(kineticio-admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
 
 ################################################################################
 # Compile test & test dependencies if requested
