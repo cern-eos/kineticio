@@ -576,7 +576,7 @@ std::vector<std::string> FileIo::ListFiles(std::string subtree, size_t max)
   std::vector<std::string> names;
   auto subtree_base = utility::urlToPath(subtree);
   auto start = utility::makeMetadataKey(cluster->id(), subtree_base);
-  auto end = utility::makeMetadataKey(cluster->id(), subtree_base + "~");
+  auto end = utility::makeMetadataKey(cluster->id(), "~");
 
   do {
     auto status = cluster->range(start, end, keys, KeyType::Metadata);

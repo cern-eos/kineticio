@@ -133,10 +133,27 @@ SCENARIO("KineticIo Integration Test", "[Io]")
       }
     }
 
-    THEN("ListFiles returns the file name.") {
-      auto list = fileio->ListFiles(full_url, 100);
-      REQUIRE((list.size() == 1));
-      REQUIRE((list.front() == full_url));
+    THEN("ListFiles returns the file name") {
+      auto baseio = kio::KineticIoFactory::makeFileIo(base_url);
+      WHEN("Using a baseio object with the full url.") {
+        auto list = baseio->ListFiles(full_url, 100);
+        REQUIRE((list.size() == 1));
+        REQUIRE((list.front() == full_url));
+      }
+      WHEN("Using a baseio object with the base url.") {
+        auto list = baseio->ListFiles(base_url, 100);
+        REQUIRE((list.size() == 1));
+        REQUIRE((list.front() == full_url));
+      }
+      WHEN("Using the same object wiht the full url") {
+        auto list = fileio->ListFiles(full_url, 100);
+        REQUIRE((list.size() == 1));
+        REQUIRE((list.front() == full_url));
+      }
+    }
+
+    THEN("ListFiles throws when using a non-child url for the io object"){
+      REQUIRE_THROWS(fileio->ListFiles(base_url,100));
     }
 
     THEN("Attempting to read an empty file reads 0 bytes.") {
@@ -255,8 +272,6 @@ SCENARIO("KineticIo Integration Test", "[Io]")
           REQUIRE((stbuf.st_size == stbuf.st_blksize - 32 + buf_size));
         }
       }
-
-
 
       THEN("The file can can be removed again.") {
         REQUIRE_NOTHROW(fileio->Remove());
