@@ -458,8 +458,8 @@ std::string FileIo::attrGet(std::string name)
     if(stats.robustness < 0) color = "red";
     auto stringhealth = utility::Convert::toString(
         "robust=",stats.robustness,
-        "indicator=",stats.indicator,
-        "color=",color
+        ",indicator=",stats.indicator,
+        ",color=",color
     );
     kio_debug(stringhealth);
     return stringhealth;

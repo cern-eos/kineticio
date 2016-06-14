@@ -332,13 +332,22 @@ SCENARIO("FileIo Attribute Integration Test", "[Attr]")
     THEN("Attempting to read in a non-existing attribute throws.") {
       REQUIRE_THROWS(fileio->attrGet("nope"));
     }
-    AND_THEN("Attempting to remove a non-existing attribute name is ok.") {
+
+    THEN("Attempting to remove a non-existing attribute name is ok.") {
       REQUIRE_NOTHROW(fileio->attrDelete("nope"));
     }
 
-    AND_THEN("We can use the attr interface to request io stats") {
+    THEN("We can use the attr interface to request io stats") {
       auto stats = fileio->attrGet("sys.iostats");
       REQUIRE(stats.size());
+    }
+
+    THEN("We can use the attr interface to request health stats") {
+      auto health = fileio->attrGet("sys.health");
+      // Using Cluster2: one drive unreachable -> no robustness, orange, indicator
+      REQUIRE((health.find(",color=orange") != std::string::npos));
+      REQUIRE((health.find("indicator=1") != std::string::npos));
+      REQUIRE((health.find("robust=0") != std::string::npos));
     }
   }
 }
