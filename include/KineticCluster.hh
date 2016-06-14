@@ -144,9 +144,9 @@ protected:
       KeyType type, kinetic::WriteMode mode);
 
   //--------------------------------------------------------------------------
-  //! Update the clusterio statistics and capacity information.
+  //! Update the clusterio statistics, capacity and health information.
   //--------------------------------------------------------------------------
-  void updateStatistics(std::shared_ptr<DestructionMutex> dm);
+  void updateSnapshot(std::shared_ptr<DestructionMutex> dm);
 
   //--------------------------------------------------------------------------
   //! Turn a single value into a stripe, complete with redundancy information
@@ -181,7 +181,7 @@ protected:
   //! erasure coding / replication
   std::map<KeyType, std::shared_ptr<RedundancyProvider>, CompareEnum> redundancy;
 
-  //! time point the clusterio statistics have been last scheduled to be updated
+  //! time point the statistic snapshots have been last scheduled to be updated
   std::chrono::system_clock::time_point statistics_scheduled;
 
   //! the cluster statistics

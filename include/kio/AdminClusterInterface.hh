@@ -27,13 +27,13 @@
 
 namespace kio {
 
-struct ClusterStatus{
-    bool indicator_exist;
-    uint32_t redundancy_factor;
-    uint32_t drives_total;
-    uint32_t drives_failed;
-    std::vector<bool> connected;
-    std::vector<std::string> location;
+struct ClusterStatus {
+  bool indicator_exist;
+  uint32_t redundancy_factor;
+  uint32_t drives_total;
+  uint32_t drives_failed;
+  std::vector<bool> connected;
+  std::vector<std::string> location;
 };
 
 //------------------------------------------------------------------------------
@@ -45,7 +45,7 @@ public:
   //----------------------------------------------------------------------------
   //! Specify which types of keys should be targeted in an operation. 
   //----------------------------------------------------------------------------
-  enum class OperationTarget{
+  enum class OperationTarget {
     DATA, METADATA, ATTRIBUTE, INDICATOR, INVALID
   };
 
@@ -129,7 +129,8 @@ public:
   //--------------------------------------------------------------------------
   virtual ClusterStatus status() = 0;
 
-  virtual ~AdminClusterInterface(){};
+  virtual ~AdminClusterInterface()
+  { };
 };
 
 }

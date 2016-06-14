@@ -48,6 +48,12 @@ struct ClusterStats {
     uint64_t bytes_total;
     uint64_t bytes_free;
 
+    /* Current health values */
+    //! one or more indicator keys exists
+    bool indicator;
+    //! percentage of redundancy online
+    double robustness;
+
     /* IO stats total */
     uint64_t read_ops_total;
     uint64_t read_bytes_total;

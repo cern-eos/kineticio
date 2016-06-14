@@ -61,12 +61,13 @@ SCENARIO("Cluster integration test.", "[Cluster]")
     }
 
     WHEN("Putting a key-value pair on a cluster with 1 drive failure") {
+      auto key = utility::makeDataKey(cluster->id(), "key", 0);
       auto value = make_shared<string>("this is a value");
       c.block(0);
 
       shared_ptr<const string> putversion;
       auto status = cluster->put(
-          make_shared<string>("key"),
+          key,
           value,
           putversion,
           KeyType::Data);
@@ -76,12 +77,19 @@ SCENARIO("Cluster integration test.", "[Cluster]")
       THEN("An indicator key will have been generated") {
         std::unique_ptr<std::vector<string>> keys;
         auto status = cluster->range(
-            utility::makeIndicatorKey(""),
-            utility::makeIndicatorKey("~"),
+            utility::makeIndicatorKey(cluster->id()+""),
+            utility::makeIndicatorKey(cluster->id()+"~"),
             keys,
-            KeyType::Data);
+            KeyType::Metadata);
         REQUIRE(status.ok());
         REQUIRE((keys->size() == 1));
+
+        AND_THEN("Indicator existence is reflected in stats"){
+          cluster->stats();
+          usleep(500*1000);
+          auto stats = cluster->stats();
+          REQUIRE(stats.indicator);
+        }
       }
 
       THEN("A handoff key will have been generated") {
@@ -97,17 +105,17 @@ SCENARIO("Cluster integration test.", "[Cluster]")
         AND_THEN("We can read it again") {
           shared_ptr<const string> getversion;
           shared_ptr<const string> getvalue;
-          auto status = cluster->get(make_shared<string>("key"), getversion, getvalue, KeyType::Data);
+          auto status = cluster->get(key, getversion, getvalue, KeyType::Data);
           REQUIRE(status.ok());
           REQUIRE((*getversion == *putversion));
           REQUIRE((*getvalue == *value));
 
           AND_THEN("We should be able to successfully read in the value even with > nParity drive failures") {
-            /* We know handoff key landed on drive index 1 in this case */
-            c.block(2);
+            /* We just know which drive the handoff key landed on. */
+            c.block(1);
             shared_ptr<const string> getversion;
             shared_ptr<const string> getvalue;
-            auto status = cluster->get(make_shared<string>("key"), getversion, getvalue, KeyType::Data);
+            auto status = cluster->get(key, getversion, getvalue, KeyType::Data);
             REQUIRE(status.ok());
             REQUIRE((*getversion == *putversion));
             REQUIRE((*getvalue == *value));
@@ -268,6 +276,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
         // sleep so that previous cluster->size background thread may finish
         usleep(500 * 1000);
         ClusterStats s = cluster->stats();
+        REQUIRE((s.robustness == (double)(nParity-i)/nParity));
         if (i == nData + nParity) {
           REQUIRE((s.bytes_total == 0));
         }

@@ -437,7 +437,6 @@ std::string FileIo::attrGet(std::string name)
     using namespace std::chrono;
     double time = duration_cast<seconds>(stats.io_end - stats.io_start).count();
     double MB = 1024 * 1024;
-
     auto stringstats = utility::Convert::toString(
         "read-mb-total=", stats.read_bytes_total / MB,
         ",read-ops-total=", stats.read_ops_total,
@@ -450,6 +449,20 @@ std::string FileIo::attrGet(std::string name)
     );
     kio_debug(stringstats);
     return stringstats;
+  }
+  if (name == "sys.health") {
+    auto stats = cluster->stats();
+    std::string color = "green";
+    if(stats.indicator) color = "yellow";
+    if(stats.robustness < 1) color = "orange";
+    if(stats.robustness < 0) color = "red";
+    auto stringhealth = utility::Convert::toString(
+        "robust=",stats.robustness,
+        "indicator=",stats.indicator,
+        "color=",color
+    );
+    kio_debug(stringhealth);
+    return stringhealth;
   }
 
   std::shared_ptr<const string> value;

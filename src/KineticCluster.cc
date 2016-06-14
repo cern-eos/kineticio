@@ -67,7 +67,7 @@ KineticCluster::KineticCluster(
 
   /* Start a bg update of cluster io statistics and capacity */
   statistics_snapshot.bytes_total = 1;
-  kio().threadpool().try_run(std::bind(&KineticCluster::updateStatistics, this, dmutex));
+  kio().threadpool().try_run(std::bind(&KineticCluster::updateSnapshot, this, dmutex));
 }
 
 KineticCluster::~KineticCluster()
@@ -96,7 +96,7 @@ ClusterStats KineticCluster::stats()
 
   using namespace std::chrono;
   if (duration_cast<seconds>(system_clock::now() - statistics_scheduled) > seconds(2)) {
-    kio().threadpool().run(std::bind(&KineticCluster::updateStatistics, this, dmutex));
+    kio().threadpool().run(std::bind(&KineticCluster::updateSnapshot, this, dmutex));
     statistics_scheduled = system_clock::now();
     kio_debug("Scheduled statistics update for cluster ", id());
   }
@@ -341,9 +341,23 @@ kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::stri
 }
 
 
-void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
+void KineticCluster::updateSnapshot(std::shared_ptr<DestructionMutex> dm)
 {
   std::lock_guard<DestructionMutex> dlock(*dm);
+
+  /* Test indicator existence */
+  auto indicator_start = utility::makeIndicatorKey(id());
+  auto indicator_end = utility::makeIndicatorKey(id() + "~");
+  ClusterRangeOp rangeop(indicator_start, indicator_end, 1, connections);
+  auto indicator_status = rangeop.execute(operation_timeout,
+                                          connections.size() - redundancy[KeyType::Data]->numParity()
+  );
+  bool indicator = false;
+  if (indicator_status.ok()) {
+    std::unique_ptr<std::vector<std::string>> keys;
+    rangeop.getKeys(keys);
+    indicator = keys->size() > 0;
+  }
 
   ClusterLogOp logop({Command_GetLog_Type::Command_GetLog_Type_CAPACITIES,
                       Command_GetLog_Type::Command_GetLog_Type_STATISTICS
@@ -351,6 +365,8 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
   auto cbs = logop.execute(operation_timeout);
 
   /* Set up temporary variables */
+  size_t may_fail = redundancy[KeyType::Data]->numParity();
+  size_t num_failed = 0;
   uint64_t bytes_total = 0;
   uint64_t bytes_free = 0;
   uint64_t read_ops_total = 0;
@@ -358,10 +374,11 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
   uint64_t write_ops_total = 0;
   uint64_t write_bytes_total = 0;
 
-  /* Evaluate Operation Results. */
+  /* Evaluate Log Operation Results. */
   for (size_t i = 0; i < cbs.size(); i++) {
     if (!cbs[i]->getResult().ok()) {
       kio_notice("Could not obtain statistics / capacity information for a drive: ", cbs[i]->getResult());
+      num_failed++;
       continue;
     }
     const auto& log = cbs[i]->getLog();
@@ -398,4 +415,7 @@ void KineticCluster::updateStatistics(std::shared_ptr<DestructionMutex> dm)
 
   statistics_snapshot.bytes_free = bytes_free;
   statistics_snapshot.bytes_total = bytes_total;
+
+  statistics_snapshot.indicator = indicator;
+  statistics_snapshot.robustness = may_fail ? static_cast<double>(may_fail - num_failed) / may_fail : 1 - num_failed;
 }
