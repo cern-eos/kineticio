@@ -102,13 +102,18 @@ endif ()
 message(STATUS "Library installation directory is set to ${CMAKE_INSTALL_PREFIX}/lib${LIBSUFFIX}")
 
 set_target_properties(kineticio PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
-install(TARGETS kineticio LIBRARY DESTINATION lib${LIBSUFFIX})
-install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
 
 ################################################################################
-# Compile cluster admin tool 
+# Compile cluster admin tool
 add_executable(kineticio-admin ${kineticio_SRC} tools/admin.cc)
 target_link_libraries(kineticio-admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
+
+################################################################################
+# make install targets
+install(TARGETS kineticio LIBRARY DESTINATION lib${LIBSUFFIX})
+install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
+install(TARGETS kineticio-admin RUNTIME DESTINATION bin)
+
 
 ################################################################################
 # Compile test & test dependencies if requested
