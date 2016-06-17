@@ -45,7 +45,7 @@ public:
   KeyCounts reset(OperationTarget target, callback_t callback = NULL, int numThreads = 1);
 
   //! See documentation of public interface in AdminClusterInterface
-  ClusterStatus status();
+  ClusterStatus status(int num_bench_keys = 0);
 
   //! Perfect forwarding is nice, and I am lazy. Look in KineticCluster.hh for the correct arguments
   template<typename... Args>

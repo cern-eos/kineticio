@@ -2,7 +2,9 @@
    "location_comment":"Array of drive locations {wwn,inet4,port}, located at $KINETIC_DRIVE_LOCATION",
    "location":[
         {"wwn":"WWN1","inet4":["localhost","127.0.0.1"],"port":8123},
-        {"wwn":"WWN2","inet4":["nohost","really"],"port":8123},
+	//{"wwn":"WWN1","inet4":["ember4","ember4"],"port":8123},
+       
+{"wwn":"WWN2","inet4":["nohost","really"],"port":8123},
         {"wwn":"WWN3","inet4":["localhost","127.0.0.1"],"port":8124}
     ],
 

@@ -27,6 +27,7 @@
 #include <memory>
 #include <functional>
 #include "kinetic/kinetic.h"
+#include <kio/AdminClusterInterface.hh>
 
 /* TODO: Do not use kinetic::KineticStatus directly, as it can't
  * represent cluster error states. Would also allow to decouple ClusterInterface
@@ -48,12 +49,6 @@ struct ClusterStats {
     uint64_t bytes_total;
     uint64_t bytes_free;
 
-    /* Current health values */
-    //! one or more indicator keys exists
-    bool indicator;
-    //! percentage of redundancy online
-    double robustness;
-
     /* IO stats total */
     uint64_t read_ops_total;
     uint64_t read_bytes_total;
@@ -67,6 +62,9 @@ struct ClusterStats {
     uint64_t read_bytes_period;
     uint64_t write_ops_period;
     uint64_t write_bytes_period;
+
+    /* Cluster health as defined in AdminClusterInterface */
+    ClusterStatus health;
 };
 
 enum class KeyType {

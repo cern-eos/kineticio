@@ -88,7 +88,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
           cluster->stats();
           usleep(500*1000);
           auto stats = cluster->stats();
-          REQUIRE(stats.indicator);
+          REQUIRE(stats.health.indicator_exist);
         }
       }
 
@@ -276,7 +276,7 @@ SCENARIO("Cluster integration test.", "[Cluster]")
         // sleep so that previous cluster->size background thread may finish
         usleep(500 * 1000);
         ClusterStats s = cluster->stats();
-        REQUIRE((s.robustness == (double)(nParity-i)/nParity));
+        REQUIRE((s.health.drives_failed == i));
         if (i == nData + nParity) {
           REQUIRE((s.bytes_total == 0));
         }

@@ -15,6 +15,8 @@
 
 #include "KineticAdminCluster.hh"
 #include <Logging.hh>
+#include <algorithm>
+#include <zconf.h>
 
 using namespace kio;
 using namespace kinetic;
@@ -24,37 +26,129 @@ KineticAdminCluster::~KineticAdminCluster()
 {
 }
 
-ClusterStatus KineticAdminCluster::status()
+namespace {
+/* Functions intended to benchmark individual connections */
+int finish_timed_operation(
+    std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>& con,
+    std::chrono::system_clock::time_point& run_start,
+    std::shared_ptr<CallbackSynchronization>& sync,
+    std::shared_ptr<kio::KineticCallback> cb
+)
 {
-  ClusterStatus clusterStatus;
+  fd_set x;  int y;
+  con->Run(&x, &x, &y);
 
-  clusterStatus.redundancy_factor = static_cast<uint32_t>(redundancy[KeyType::Data]->numParity());
-  clusterStatus.drives_total = static_cast<uint32_t>(connections.size());
-  clusterStatus.drives_failed = 0;
+  /* Wait until sufficient requests returned or we pass operation timeout. */
+  std::chrono::system_clock::time_point timeout_time = run_start + std::chrono::seconds(10);
+  sync->wait_until(timeout_time);
+  auto run_end = std::chrono::system_clock::now();
 
-  /* Set indicator existence */
-  std::shared_ptr<const string> indicator_start;
-  std::shared_ptr<const string> indicator_end;
-  initRangeKeys(OperationTarget::INDICATOR, indicator_start, indicator_end);
+  if (!cb->getResult().ok()) {
+    kio_debug(cb->getResult());
+    throw std::runtime_error("Failed timed operation.");
+  }
+  return (int) std::chrono::duration_cast<std::chrono::milliseconds>(run_end - run_start).count();
+};
 
-  std::unique_ptr<std::vector<string>> keys(new std::vector<string>());
-  auto status = range(indicator_start, indicator_end, keys, KeyType::Data, 1);
+int timed_put(
+    std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>& con,
+    std::string key,
+    int value_byte_size
+)
+{
+  auto sync = std::make_shared<CallbackSynchronization>();
+  auto cb = std::make_shared<kio::PutCallback>(sync);
+  std::string value(value_byte_size, 'x');
+  auto record = std::make_shared<KineticRecord>(
+      value, "", "", com::seagate::kinetic::client::proto::Command_Algorithm_INVALID_ALGORITHM
+  );
 
-  clusterStatus.indicator_exist = status.ok() && keys->size() > 0;
+  auto run_start = std::chrono::system_clock::now();
+  con->Put(key, "", WriteMode::IGNORE_VERSION, record, cb);
+  return finish_timed_operation(con,run_start,sync,cb);
+}
 
+int timed_remove(
+    std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>& con,
+    std::string key
+)
+{
+  auto sync = std::make_shared<CallbackSynchronization>();
+  auto cb = std::make_shared<kio::BasicCallback>(sync);
+
+  auto run_start = std::chrono::system_clock::now();
+  con->Delete(key, "", WriteMode::IGNORE_VERSION, cb);
+  return finish_timed_operation(con,run_start,sync,cb);
+}
+
+
+int timed_get(
+    std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>& con,
+    std::string key
+)
+{
+  auto sync = std::make_shared<CallbackSynchronization>();
+  auto cb = std::make_shared<kio::GetCallback>(sync);
+  auto run_start = std::chrono::system_clock::now();
+  con->Get(key,cb);
+  return finish_timed_operation(con,run_start,sync,cb);
+}
+}
+
+ClusterStatus KineticAdminCluster::status(int num_bench_keys)
+{
   /* Set individual connection info */
+  std::vector<std::string> location;
+  std::vector<bool> connected;
+
   for (auto it = connections.cbegin(); it != connections.cend(); it++) {
     auto& con = *it;
-    clusterStatus.location.push_back(con->getName());
+    location.push_back(con->getName());
     try {
-      con->get();
-      clusterStatus.connected.push_back(true);
+      auto async_con = con->get();
+
+      if (num_bench_keys) {
+        std::vector<std::string> keys;
+        for (int i = 0; i<num_bench_keys; i++){
+          keys.push_back( utility::Convert::toString(".perf_", i));
+        }
+        std::random_shuffle(keys.begin(), keys.end());
+        int put_times = 1;
+        for (auto key = keys.begin(); key != keys.end(); key++){
+          put_times += timed_put(async_con, *key, 1024 * 1024);
+        }
+        std::random_shuffle(keys.begin(), keys.end());
+        int get_times = 1;
+        for (auto key = keys.begin(); key != keys.end(); key++){
+          get_times += timed_get(async_con, *key);
+        }
+        std::random_shuffle(keys.begin(), keys.end());
+        int del_times = 0;
+        for (auto key = keys.begin(); key != keys.end(); key++){
+          del_times += timed_remove(async_con, *key);
+        }
+
+        location.back() += utility::Convert::toString(
+            " :: PUT=", keys.size() / (put_times / 1000.0), " MB/sec",
+            " :: GET=", keys.size() / (get_times / 1000.0), " MB/sec",
+            " :: DEL=", keys.size() / (del_times / 1000.0), " MB/sec"
+        );
+      }
+
+      connected.push_back(true);
     } catch (std::exception& e) {
-      clusterStatus.connected.push_back(false);
-      clusterStatus.drives_failed++;
+      kio_debug(e.what());
+      connected.push_back(false);
     }
   }
 
+  while(stats().bytes_total == 1){
+    usleep(100);
+  }
+
+  auto clusterStatus = stats().health;
+  clusterStatus.connected = connected;
+  clusterStatus.location = location;
   return clusterStatus;
 }
 
@@ -81,7 +175,7 @@ bool KineticAdminCluster::removeIndicatorKey(const std::shared_ptr<const string>
 
   /* Remove indicator key */
   StripeOperation_DEL rm(utility::makeIndicatorKey(*key), std::make_shared<const string>(), WriteMode::IGNORE_VERSION,
-                         connections,  redundancy[KeyType::Data], connections.size());
+                         connections, redundancy[KeyType::Data], connections.size());
   status = rm.execute(operation_timeout);
   return status.ok();
 }

@@ -123,11 +123,14 @@ public:
   //! Obtain the current status of connections to all drives attached to this
   //! cluster.
   //!
+  //! @param num_bench_keys if set put/get/del throughput will be tested for
+  //!   each individual connection of the cluster using specifided number of
+  //!   keys.
   //! @return a ClusterStatus structure containing the name and status of each
   //!   connection associated with the cluster, as well as if indicator keys
   //!   have been detected on any healthy connection.
   //--------------------------------------------------------------------------
-  virtual ClusterStatus status() = 0;
+  virtual ClusterStatus status(int num_bench_keys = 0) = 0;
 
   virtual ~AdminClusterInterface()
   { };

@@ -65,7 +65,10 @@ KineticCluster::KineticCluster(
     }
   }
 
-  /* Start a bg update of cluster io statistics and capacity */
+  /* Set initial values for cluster statistics and schedule an update. */
+  auto& h = statistics_snapshot.health;
+  h.drives_total = static_cast<uint32_t>(connections.size());
+  h.redundancy_factor = static_cast<uint32_t>(std::min(rp_data->numParity(), rp_metadata->numParity()));
   statistics_snapshot.bytes_total = 1;
   kio().threadpool().try_run(std::bind(&KineticCluster::updateSnapshot, this, dmutex));
 }
@@ -365,10 +368,11 @@ void KineticCluster::updateSnapshot(std::shared_ptr<DestructionMutex> dm)
   auto cbs = logop.execute(operation_timeout);
 
   /* Set up temporary variables */
-  size_t may_fail = redundancy[KeyType::Data]->numParity();
-  size_t num_failed = 0;
+  uint32_t num_failed = 0;
+
   uint64_t bytes_total = 0;
   uint64_t bytes_free = 0;
+
   uint64_t read_ops_total = 0;
   uint64_t read_bytes_total = 0;
   uint64_t write_ops_total = 0;
@@ -381,6 +385,7 @@ void KineticCluster::updateSnapshot(std::shared_ptr<DestructionMutex> dm)
       num_failed++;
       continue;
     }
+
     const auto& log = cbs[i]->getLog();
 
     auto bytes_used = static_cast<uint64_t>(log->capacity.nominal_capacity_in_bytes * log->capacity.portion_full);
@@ -416,6 +421,6 @@ void KineticCluster::updateSnapshot(std::shared_ptr<DestructionMutex> dm)
   statistics_snapshot.bytes_free = bytes_free;
   statistics_snapshot.bytes_total = bytes_total;
 
-  statistics_snapshot.indicator = indicator;
-  statistics_snapshot.robustness = may_fail ? static_cast<double>(may_fail - num_failed) / may_fail : 1 - num_failed;
+  statistics_snapshot.health.indicator_exist = indicator;
+  statistics_snapshot.health.drives_failed = num_failed;
 }

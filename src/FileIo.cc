@@ -451,15 +451,15 @@ std::string FileIo::attrGet(std::string name)
     return stringstats;
   }
   if (name == "sys.health") {
-    auto stats = cluster->stats();
-    std::string color = "green";
-    if(stats.indicator) color = "yellow";
-    if(stats.robustness < 1) color = "orange";
-    if(stats.robustness < 0) color = "red";
+    auto h = cluster->stats().health;
+    int redundancies = static_cast<int>(h.redundancy_factor) - h.drives_failed;
     auto stringhealth = utility::Convert::toString(
-        "robust=",stats.robustness,
-        ",indicator=",stats.indicator,
-        ",color=",color
+        "indicator=", h.indicator_exist, ",",
+        "drives_total=", h.drives_total, ",",
+        "drives_failed=", h.drives_failed, ",",
+        "redundancy_factor=", h.redundancy_factor, ",",
+        "summary=", h.indicator_exist ? "! " : "", h.drives_total - h.drives_failed, "/", h.drives_total,
+        " (", redundancies < 0 ? "" : "+", redundancies, ")"
     );
     kio_debug(stringhealth);
     return stringhealth;
