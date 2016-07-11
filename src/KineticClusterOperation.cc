@@ -40,70 +40,43 @@ void KineticClusterOperation::expandOperationVector(std::size_t size, std::size_
   }
 }
 
-// TODO: add healthy connection minimum number to function and don't attempt if not feasible
 std::map<kinetic::StatusCode, size_t, CompareStatusCode> KineticClusterOperation::executeOperationVector(
     const std::chrono::seconds& timeout)
 {
-  auto need_retry = false;
-  auto rounds_left = 2;
-  do {
-    rounds_left--;
-    std::vector<kinetic::HandlerKey> hkeys(operations.size());
-    std::vector<std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>> cons(operations.size());
+  fd_set a; int fd;
+  std::vector<std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>> cons(operations.size());
+  std::vector<kinetic::HandlerKey> hkeys(operations.size());
 
-
-    /* Call functions on connections */
-    for (size_t i = 0; i < operations.size(); i++) {
-      try {
-        if (operations[i].callback->finished()) {
-          continue;
-        }
-        cons[i] = operations[i].connection->get();
-        hkeys[i] = operations[i].function(cons[i]);
-
-        fd_set a;
-        int fd;
-        if (!cons[i]->Run(&a, &a, &fd)) {
-          throw std::runtime_error("Connection::Run(...) returned false");
-        }
-      }
-      catch (const std::exception& e) {
-        auto status = KineticStatus(StatusCode::CLIENT_IO_ERROR, e.what());
-        operations[i].callback->OnResult(status);
-        operations[i].connection->setError(cons[i]);
-        kio_notice("Failed executing async operation for connection ", operations[i].connection->getName(), status);
-      }
+  /* Call functions on connections. */
+  for (size_t i = 0; i < operations.size(); i++) {
+    try {
+      cons[i] = operations[i].connection->get();
+    }
+    catch (const std::system_error& e) {
+      operations[i].callback->OnResult(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Connection not available."));
+      continue;
     }
 
-    /* Wait until sufficient requests returned or we pass operation timeout. */
-    std::chrono::system_clock::time_point timeout_time = std::chrono::system_clock::now() + timeout;
-    sync->wait_until(timeout_time);
-
-    need_retry = false;
-    for (size_t i = 0; i < operations.size(); i++) {
-      /* timeout any unfinished request*/
-      if (!operations[i].callback->finished()) {
-        try {
-          operations[i].connection->get()->RemoveHandler(hkeys[i]);
-        } catch (const std::exception& e) {
-          kio_warning("Failed removing handle from connection ", operations[i].connection->getName(), "due to: ",
-                      e.what());
-        }
-        kio_warning("Network timeout for connection ", operations[i].connection->getName(),
-                    "timeout period is set to ", timeout, ", the absolute timeout value was: ",
-                    timeout_time.time_since_epoch().count());
-        auto status = KineticStatus(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
-        operations[i].callback->OnResult(status);
-      }
-
-      /* Retry operations with CLIENT_IO_ERROR code result. Something went wrong with the connection,
-       * we might just be able to reconnect and make the problem go away. */
-      if (rounds_left && operations[i].callback->getResult().statusCode() == StatusCode::CLIENT_IO_ERROR) {
-        operations[i].callback->reset();
-        need_retry = true;
-      }
+    hkeys[i] = operations[i].function(cons[i]);
+    if (!cons[i]->Run(&a, &a, &fd)) {
+      operations[i].callback->OnResult(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Run returned false."));
+      operations[i].connection->setError(cons[i]);
+      kio_notice("Failed executing async operation for connection ", operations[i].connection->getName());
     }
-  } while (need_retry && rounds_left);
+  }
+
+  /* Wait until sufficient requests returned or we pass operation timeout. */
+  std::chrono::system_clock::time_point timeout_time = std::chrono::system_clock::now() + timeout;
+  sync->wait_until(timeout_time);
+
+  /* Timeout any unfinished request. We do not assume entire connection to be in error state because of a timeout */
+  for (size_t i = 0; i < operations.size(); i++) {
+    if (!operations[i].callback->finished()) {
+      kio_warning("Network timeout for connection ", operations[i].connection->getName(), "timeout period is", timeout);
+      cons[i]->RemoveHandler(hkeys[i]);
+      operations[i].callback->OnResult(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
+    }
+  }
 
   std::map<kinetic::StatusCode, size_t, CompareStatusCode> rmap;
   for (auto it = operations.cbegin(); it != operations.cend(); it++) {
@@ -111,7 +84,6 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> KineticClusterOperation
   }
   return rmap;
 }
-
 
 ClusterFlushOp::ClusterFlushOp(std::vector<std::unique_ptr<KineticAutoConnection>>& connections)
     : KineticClusterOperation(connections)
@@ -121,12 +93,6 @@ ClusterFlushOp::ClusterFlushOp(std::vector<std::unique_ptr<KineticAutoConnection
     auto cb = std::make_shared<BasicCallback>(sync);
     o->callback = cb;
     o->function = std::bind(&ThreadsafeNonblockingKineticConnection::Flush, std::placeholders::_1, cb);
-
-//        std::bind< HandlerKey(ThreadsafeNonblockingKineticConnection::*)(const shared_ptr<SimpleCallbackInterface>) >
-//        (
-//        &ThreadsafeNonblockingKineticConnection::Flush,
-//        std::placeholders::_1,
-//        cb );
   }
 
 }
