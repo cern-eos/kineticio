@@ -122,7 +122,7 @@ private:
 
 class GetCallback : public KineticCallback, public kinetic::GetCallbackInterface {
 public:
-  const std::unique_ptr<kinetic::KineticRecord>& getRecord();
+  std::shared_ptr<kinetic::KineticRecord>& getRecord();
 
   void Success(const std::string& key, std::unique_ptr<kinetic::KineticRecord> r);
 
@@ -133,7 +133,7 @@ public:
   ~GetCallback();
 
 private:
-  std::unique_ptr<kinetic::KineticRecord> record;
+  std::shared_ptr<kinetic::KineticRecord> record;
 };
 
 class GetVersionCallback : public KineticCallback, public kinetic::GetVersionCallbackInterface {
@@ -154,7 +154,7 @@ private:
 
 class GetLogCallback : public KineticCallback, public kinetic::GetLogCallbackInterface {
 public:
-  std::unique_ptr<kinetic::DriveLog>& getLog();
+  std::shared_ptr<kinetic::DriveLog>& getLog();
 
   void Success(std::unique_ptr<kinetic::DriveLog> dlog);
 
@@ -165,7 +165,7 @@ public:
   ~GetLogCallback();
 
 private:
-  std::unique_ptr<kinetic::DriveLog> drive_log;
+  std::shared_ptr<kinetic::DriveLog> drive_log;
 };
 
 class PutCallback : public KineticCallback, public kinetic::PutCallbackInterface {

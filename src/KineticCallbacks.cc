@@ -103,7 +103,7 @@ void GetCallback::Failure(KineticStatus error)
   OnResult(error);
 };
 
-const std::unique_ptr<KineticRecord>& GetCallback::getRecord()
+std::shared_ptr<KineticRecord>& GetCallback::getRecord()
 {
   return record;
 }
@@ -151,7 +151,7 @@ void GetLogCallback::Failure(KineticStatus error)
   OnResult(error);
 }
 
-unique_ptr<DriveLog>& GetLogCallback::getLog()
+shared_ptr<DriveLog>& GetLogCallback::getLog()
 {
   return drive_log;
 }
