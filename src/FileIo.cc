@@ -427,6 +427,13 @@ void FileIo::Stat(struct stat* buf, uint16_t timeout)
   buf->st_blksize = cluster->limits(KeyType::Data).max_value_size;
   buf->st_blocks = eof_blocknumber + 1;
   buf->st_size = eof_blocknumber * buf->st_blksize + last_block->size();
+
+  kio_debug("Reported file size is ", buf->st_size, " bytes. Reasoning: ",
+            "Stripe capacity = ", cluster->limits(KeyType::Data).max_value_size, " bytes. ",
+            "Number of stripes = ", eof_blocknumber+1, ". ",
+            "Size of last stripe = ", last_block->size(), " bytes."
+  );
+
 }
 
 std::string FileIo::attrGet(std::string name)
