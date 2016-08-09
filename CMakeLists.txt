@@ -32,13 +32,14 @@ if (CMAKE_COMPILER_IS_GNUCXX)
     message(STATUS "C++ compiler version: ${gcc_compiler_version} [${CMAKE_CXX_COMPILER}]")
 
     if (gcc_compiler_version MATCHES "4\\.[0-3]\\.[0-9]")
-        message(FATAL_ERROR "Error: you need atleast gcc 4.4.x to compile EOS!")
+        message(FATAL_ERROR "Error: you need atleast gcc 4.4.x to compile kineticio")
     endif (gcc_compiler_version MATCHES "4\\.[0-3]\\.[0-9]")
 endif (CMAKE_COMPILER_IS_GNUCXX)
 
 ################################################################################
-# Set CXX flags
+# Set CXX flags and preprocessor definitions
 set(CMAKE_CXX_FLAGS "--std=c++0x -g -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Werror")
+add_definitions(-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64)
 
 ################################################################################
 # Dependencies
@@ -93,7 +94,7 @@ set(kineticio_LIB
 add_library(kineticio SHARED ${kineticio_SRC})
 target_link_libraries(kineticio ${kineticio_LIB})
 
-# Set lib or lib64 depending on architecture
+# set lib or lib64 as installation directory depending on architecture
 get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)
 set(LIBSUFFIX "")
 if ("${LIB64}" STREQUAL "TRUE" AND "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
@@ -101,6 +102,7 @@ if ("${LIB64}" STREQUAL "TRUE" AND "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64"
 endif ()
 message(STATUS "Library installation directory is set to ${CMAKE_INSTALL_PREFIX}/lib${LIBSUFFIX}")
 
+# set library versioning
 set_target_properties(kineticio PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
 
 ################################################################################
@@ -165,7 +167,6 @@ if (BUILD_TEST)
             ${kineticio_LIB}
             )
     add_dependencies(kio-test catch kinetic-simulator)
-
     add_executable(replay ${kineticio_SRC} test/replay.cc)
     target_link_libraries(replay ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
 endif (BUILD_TEST)
