@@ -17,6 +17,7 @@
 #include <string.h>
 #include <fstream>
 #include <sstream>
+#include <Logging.hh>
 
 using std::string;
 
@@ -69,7 +70,7 @@ int main(int argc, char** argv)
   
   struct stat s; 
   fio->Stat(&s);
-  printf("File is %ld bytes long.\n",s.st_size);
+  kio_notice("File is ", s.st_size, " bytes long.");
   
   std::ifstream fs(config.patternfile);
   std::string line; 
@@ -92,17 +93,16 @@ int main(int argc, char** argv)
 
     if(config.write){
       int bytes = fio->Write(offset, buffer.data(), length);
-      printf("written %d bytes. Requested (offset,length) : (%d,%d)\n", bytes, (int)offset, (int)length);
+      kio_notice("written ", bytes, " bytes. Requested (offset,length) : (",offset,",",length,")");
     }
     
     if(config.read){
       int bytes = fio->Read(offset, buffer.data(), length);
-      printf("read %d bytes. Requested (offset,length) : (%d,%d)\n", bytes, (int)offset, (int)length);
+      kio_notice("read ", bytes, " bytes. Requested (offset,length) : (",offset,",",length,")");
     }
-
   }  
   fio->Close();
-  
-  printf("done\n");
+
+  kio_notice("done");
   
 }
