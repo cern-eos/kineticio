@@ -54,7 +54,7 @@ This will generate the actual library files as well as the [kineticio command-li
 
 To build the test framework
 
-+ additional dependencies are [Maven](https://maven.apache.org), ```java-1.7.0-openjdk zlib```
++ additional dependencies are wget, zlib, java
 + run cmake with BUILD_TEST option enabled. e.g. `cmake -DBUILD_TEST=ON .`
 + Run `make`
 
