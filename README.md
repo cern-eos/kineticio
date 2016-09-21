@@ -37,7 +37,7 @@ Cluster health is monitored and a system to identify problematic keys has been i
 ## Dependencies
  + standard packages ``` cmake gcc gcc-c++ json-c json-c-devel libuuid libuuid-devel ```
  + [isa-l](https://01.org/intel%C2%AE-storage-acceleration-library-open-source-version) intel erasure coding library
- + [kinetic-cpp-client](https://github.com/kinetic/kinetic-cpp-client) (if you have trouble building / installing try [this](https://github.com/plensing/kinetic-cpp-client) fork)
+ + [kinetic-cpp-client](https://github.com/kinetic/kinetic-cpp-client)
 
 For supported linux distributions, prebuild rpm packages of isa-l and kinetic-cpp-client can be found in the [kineticio-depend](http://dss-ci-repo.web.cern.ch/dss-ci-repo/kinetic/kineticio-depend/) repository. 
 
