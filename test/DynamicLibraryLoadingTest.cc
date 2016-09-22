@@ -18,6 +18,7 @@
 #include "catch.hpp"
 #include <kio/KineticIoFactory.hh>
 #include <dlfcn.h>
+#include <system_error>
 
 SCENARIO("Kineticio Dynamic Loading Test", "[Dynload]") {
 
