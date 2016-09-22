@@ -103,7 +103,7 @@ bool DataBlock::validateVersion()
   return false;
 }
 
-/* This function is written a lot more complex than it should be at first glance. It all is 
+/* This function is written a lot more complex than it should be at first glance. It all is
  * to avoid / minimize memory allocations and copies as much as possible */
 void DataBlock::getRemoteValue()
 {
@@ -126,7 +126,7 @@ void DataBlock::getRemoteValue()
   /* We read in the value from the drive. Remember the time. */
   timestamp = system_clock::now();
 
-  /* If there are no local updates, there is no need to do any more work... just ensure that the 
+  /* If there are no local updates, there is no need to do any more work... just ensure that the
      local_value variable is empty so that all reads will be served from the remote_value */
   if (updates.empty()) {
     local_value.reset();
@@ -138,7 +138,7 @@ void DataBlock::getRemoteValue()
     return;
   }
 
-  /* Due to getting a <const string> returned from the cluster, we will have to create yet another string 
+  /* Due to getting a <const string> returned from the cluster, we will have to create yet another string
    * variable to merge the local changes. */
   auto merged_value = make_shared<string>(*remote_value);
 
@@ -235,7 +235,6 @@ void DataBlock::truncate(size_t offset)
 void DataBlock::flush()
 {
   std::lock_guard<std::mutex> lock(mutex);
-
   KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "invalid");
   do {
     if (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH || (!version && mode == Mode::STANDARD)) {

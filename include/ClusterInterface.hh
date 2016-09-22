@@ -26,7 +26,7 @@
 #include <string>
 #include <memory>
 #include <functional>
-#include "kinetic/kinetic.h"
+#include <kinetic/kinetic.h>
 #include <kio/AdminClusterInterface.hh>
 
 /* TODO: Do not use kinetic::KineticStatus directly, as it can't

@@ -62,8 +62,7 @@ SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
   auto& c = SimulatorController::getInstance();
   SocketListener listener;
 
-  /* Maybe make that configurable?
-   * also number instances of the cluster. */
+  /* Maybe make that configurable? */
   std::size_t nData = 2;
   std::size_t nParity = 1;
   std::size_t blocksize = 1024 * 1024;

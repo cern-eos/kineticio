@@ -610,7 +610,7 @@ kinetic::KineticStatus StripeOperation_GET::do_execute(const std::chrono::second
   auto rmap = executeOperationVector(timeout);
   version = mostFrequentVersion();
 
-  /* Indicator required if chunk versions of this stripe are not aligned */
+  /* Indicator should be written if chunk versions of this stripe are not aligned */
   if (rmap[StatusCode::OK] > version.frequency) {
     rmap[StatusCode::OK] = version.frequency;
     need_indicator = true;
