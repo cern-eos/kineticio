@@ -18,7 +18,8 @@ message(STATUS "Project version set to ${PROJECT_VERSION}")
 ################################################################################
 # Options
 option(BUILD_TEST "Build test executables." off)
-message(STATUS "Set Options: BUILD_TEST=${BUILD_TEST}")
+option(CPACK_HEADER_ONLY "make package builds a headers-only rpm instead of the full package." off)
+message(STATUS "Set Options: BUILD_TEST=${BUILD_TEST} CPACK_HEADER_ONLY=${CPACK_HEADER_ONLY}")
 
 ################################################################################
 # Check for Gcc >=4.4
@@ -110,9 +111,9 @@ target_link_libraries(kineticio-admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT}
 
 ################################################################################
 # make install targets
-install(TARGETS kineticio LIBRARY DESTINATION lib${LIBSUFFIX})
-install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include)
-install(TARGETS kineticio-admin RUNTIME DESTINATION bin)
+install(TARGETS kineticio LIBRARY DESTINATION lib${LIBSUFFIX} COMPONENT library)
+install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include COMPONENT devel)
+install(TARGETS kineticio-admin RUNTIME DESTINATION bin COMPONENT tools)
 
 
 ################################################################################
@@ -176,13 +177,26 @@ endif (BUILD_TEST)
 
 
 ################################################################################
-# RPM generation rules 
-
+# RPM generation rules
 set(CPACK_GENERATOR "RPM")
-set(CPACK_PACKAGE_CONTACT "paul.lensing@gmail.com")
 set(CPACK_PACKAGE_NAME ${CMAKE_PROJECT_NAME})
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A byte-range IO library for a kinetic backend.")
-set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
-set(CPACK_RPM_PACKAGE_REQUIRES "isal, kinetic_cpp_client >= 0.2.0, json-c, libuuid")
+set(CPACK_RPM_PACKAGE_GROUP "Development/Libraries")
+set(CPACK_RPM_PACKAGE_LICENSE "Mozilla Public License, v. 2.0")
+set(CPACK_PACKAGE_CONTACT "paul.lensing@gmail.com")
+
+if(CPACK_HEADER_ONLY)
+    set(CPACK_RPM_COMPONENT_INSTALL ON)
+    set(CPACK_COMPONENTS_ALL devel)
+    set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR})
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "kineticio library headers")
+    set(CPACK_RPM_PACKAGE_DESCRIPTION "C++ header files for kineticio library.")
+else()
+    set(CPACK_RPM_COMPONENT_INSTALL OFF)
+    set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "kineticio library")
+    set(CPACK_RPM_PACKAGE_DESCRIPTION "A byte-range IO library for a kinetic backend.")
+    set(CPACK_RPM_PACKAGE_REQUIRES "isal, kinetic_cpp_client >= 0.2.0, json-c, libuuid")
+endif(CPACK_HEADER_ONLY)
+
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}")
 include(CPack)
