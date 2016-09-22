@@ -9,7 +9,7 @@ execute_process(
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 set(PROJECT_VERSION_MAJOR 1)
-set(PROJECT_VERSION_MINOR 1)
+set(PROJECT_VERSION_MINOR 2)
 set(PROJECT_VERSION_PATCH ${GIT_COMMITS})
 set(PROJECT_VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH})
 message(STATUS "Project version set to ${PROJECT_VERSION}")
@@ -38,7 +38,7 @@ endif (CMAKE_COMPILER_IS_GNUCXX)
 
 ################################################################################
 # Set CXX flags and preprocessor definitions
-set(CMAKE_CXX_FLAGS "--std=c++0x -g -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Werror")
+set(CMAKE_CXX_FLAGS "--std=c++0x -pthread -g -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Werror")
 add_definitions(-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64)
 
 ################################################################################
@@ -49,7 +49,6 @@ find_package(jsonc REQUIRED)
 find_package(uuid REQUIRED)
 find_package(kinetic-c++ REQUIRED)
 find_package(isal REQUIRED)
-find_package(Threads REQUIRED)
 find_package(Git REQUIRED)
 
 ################################################################################
@@ -88,7 +87,6 @@ set(kineticio_LIB
         ${UUID_LIBRARIES}
         ${ISAL_LIBRARIES}
         ${KINETIC-C++_LIBRARIES}
-        ${CMAKE_THREAD_LIBS_INIT}
         )
 
 add_library(kineticio SHARED ${kineticio_SRC})
@@ -167,8 +165,13 @@ if (BUILD_TEST)
             ${kineticio_LIB}
             )
     add_dependencies(kio-test catch kinetic-simulator)
+
+    add_executable(kio-test-dynamic-load test/DynamicLibraryLoadingTest.cc)
+    target_link_libraries(kio-test-dynamic-load dl)
+    add_dependencies(kio-test-dynamic-load catch)
+
     add_executable(replay ${kineticio_SRC} test/replay.cc)
-    target_link_libraries(replay ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT})
+    target_link_libraries(replay ${kineticio_LIB})
 endif (BUILD_TEST)
 
 

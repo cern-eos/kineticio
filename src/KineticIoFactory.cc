@@ -21,7 +21,6 @@
 
 using namespace kio;
 
-
 std::unique_ptr<FileIoInterface> KineticIoFactory::makeFileIo(const std::string& path)
 {
   return std::unique_ptr<FileIoInterface>(new FileIo(path));
@@ -40,4 +39,39 @@ std::shared_ptr<AdminClusterInterface> KineticIoFactory::makeAdminCluster(const 
 void KineticIoFactory::reloadConfiguration()
 {
   kio().loadConfiguration();
+}
+
+namespace kio {
+class LoadableKineticIoFactory : public LoadableKineticIoFactoryInterface
+{
+  std::unique_ptr<FileIoInterface> makeFileIo(const std::string& path)
+  {
+    return KineticIoFactory::makeFileIo(path);
+  }
+
+  std::shared_ptr<AdminClusterInterface> makeAdminCluster(const std::string& cluster_id)
+  {
+    return KineticIoFactory::makeAdminCluster(cluster_id);
+  }
+
+  void registerLogFunction(logfunc_t log, shouldlogfunc_t shouldLog)
+  {
+    return KineticIoFactory::registerLogFunction(log, shouldLog);
+  }
+
+  void reloadConfiguration()
+  {
+    return KineticIoFactory::reloadConfiguration();
+  }
+};
+}
+
+extern "C" kio::LoadableKineticIoFactoryInterface* createKineticIoFactory()
+{
+  return new kio::LoadableKineticIoFactory();
+};
+
+extern "C" void destroyKineticIoFactory( kio::LoadableKineticIoFactoryInterface* ioFactory)
+{
+  delete ioFactory;
 }
