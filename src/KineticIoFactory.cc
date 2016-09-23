@@ -66,12 +66,8 @@ class LoadableKineticIoFactory : public LoadableKineticIoFactoryInterface
 };
 }
 
-extern "C" kio::LoadableKineticIoFactoryInterface* createKineticIoFactory()
+extern "C" kio::LoadableKineticIoFactoryInterface* getKineticIoFactory()
 {
-  return new kio::LoadableKineticIoFactory();
+  static kio::LoadableKineticIoFactory loadable_factory;
+  return &loadable_factory;
 };
-
-extern "C" void destroyKineticIoFactory( kio::LoadableKineticIoFactoryInterface* ioFactory)
-{
-  delete ioFactory;
-}

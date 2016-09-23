@@ -75,7 +75,7 @@ public:
 
 //----------------------------------------------------------------------------
 //! To make the factory usable when loading the kineticio library
-//! dynamically via dl_open, an abstract class interface is provided.
+//! dynamically via dlopen, an abstract class interface is provided.
 //! Using it really doesn't make sense when linking kineticio normally.
 //----------------------------------------------------------------------------
 class LoadableKineticIoFactoryInterface
@@ -96,19 +96,13 @@ public:
   virtual ~LoadableKineticIoFactoryInterface()
   {};
 };
-
-//----------------------------------------------------------------------------
-//! Factory creation method. Only usefull for dynamically loading the
-//! kineticio library.
-//----------------------------------------------------------------------------
-extern "C" LoadableKineticIoFactoryInterface* createKineticIoFactory;
-//----------------------------------------------------------------------------
-//! Factory destruction method. Only usefull for dynamically loading the
-//! kineticio library.
-//----------------------------------------------------------------------------
-extern "C" void destroyKineticIoFactory(kio::LoadableKineticIoFactoryInterface* ioFactory);
-
 }
+
+//----------------------------------------------------------------------------
+//! Only usefull for dynamically loading the kineticio library. Never attempt
+//! to free the returned pointer.
+//----------------------------------------------------------------------------
+extern "C" kio::LoadableKineticIoFactoryInterface* getKineticIoFactory();
 
 #endif	/* __KINETICIO_FACTORY_HH__ */
 

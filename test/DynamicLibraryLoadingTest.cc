@@ -35,17 +35,12 @@ SCENARIO("Kineticio Dynamic Loading Test", "[Dynload]") {
     void* handle = dlopen("./libkineticio.so", RTLD_NOW);
     REQUIRE(handle);
 
-    typedef void* (* create_factory_t)();
-    typedef void  (* destroy_factory_t)(kio::LoadableKineticIoFactoryInterface*);
-
-    create_factory_t create_factory = (create_factory_t) dlsym(handle, "createKineticIoFactory");
+    typedef kio::LoadableKineticIoFactoryInterface* (* function_t)();
+    function_t get_factory = (function_t) dlsym(handle, "getKineticIoFactory");
     REQUIRE_FALSE(dlerror());
 
-    destroy_factory_t destroy_factory = (destroy_factory_t) dlsym(handle, "destroyKineticIoFactory");
-    REQUIRE_FALSE(dlerror());
-
-    THEN("A factory object can be constructed.") {
-      auto ioFactory = reinterpret_cast<kio::LoadableKineticIoFactoryInterface*>(create_factory());
+    THEN("A factory object can be acessed.") {
+      auto ioFactory = get_factory();
       REQUIRE(ioFactory);
 
       AND_THEN("We can run some of the basic sanity tests on a fileio object constructed by the factory") {
@@ -71,8 +66,6 @@ SCENARIO("Kineticio Dynamic Loading Test", "[Dynload]") {
           }
         }
       }
-
-      destroy_factory(ioFactory);
     }
     dlclose(handle);
   }
