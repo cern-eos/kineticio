@@ -17,6 +17,7 @@
 #include <Logging.hh>
 #include <algorithm>
 #include <zconf.h>
+#include <iomanip>
 
 using namespace kio;
 using namespace kinetic;
@@ -37,8 +38,6 @@ int finish_timed_operation(
 {
   fd_set x;  int y;
   con->Run(&x, &x, &y);
-
-  /* Wait until sufficient requests returned or we pass operation timeout. */
   std::chrono::system_clock::time_point timeout_time = run_start + std::chrono::seconds(10);
   sync->wait_until(timeout_time);
   auto run_end = std::chrono::system_clock::now();
@@ -52,13 +51,12 @@ int finish_timed_operation(
 
 int timed_put(
     std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>& con,
-    std::string key,
-    int value_byte_size
+    std::string key
 )
 {
   auto sync = std::make_shared<CallbackSynchronization>();
   auto cb = std::make_shared<kio::PutCallback>(sync);
-  std::string value(value_byte_size, 'x');
+  std::string value(1024*1024, 'x');
   auto record = std::make_shared<KineticRecord>(
       value, "", "", com::seagate::kinetic::client::proto::Command_Algorithm_INVALID_ALGORITHM
   );
@@ -81,7 +79,6 @@ int timed_remove(
   return finish_timed_operation(con,run_start,sync,cb);
 }
 
-
 int timed_get(
     std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>& con,
     std::string key
@@ -93,6 +90,19 @@ int timed_get(
   con->Get(key,cb);
   return finish_timed_operation(con,run_start,sync,cb);
 }
+
+float benchmark_function(
+    std::vector<std::string> keys,
+    std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>& connection,
+    std::function<int(std::shared_ptr<kinetic::ThreadsafeNonblockingKineticConnection>&, std::string)> fun)
+{
+  int timing = 1;
+  for (auto key = keys.begin(); key != keys.end(); key++){
+    timing += fun(connection, *key);
+  }
+  return keys.size() / (timing / 1000.0);
+}
+
 }
 
 ClusterStatus KineticAdminCluster::status(int num_bench_keys)
@@ -107,34 +117,30 @@ ClusterStatus KineticAdminCluster::status(int num_bench_keys)
     try {
       auto async_con = con->get();
 
-      if (num_bench_keys) {
+      if(num_bench_keys) {
+        /* create benchmark keys */
         std::vector<std::string> keys;
-        for (int i = 0; i<num_bench_keys; i++){
-          keys.push_back( utility::Convert::toString(".perf_", i));
+        for (int i = 0; i < num_bench_keys; i++) {
+          std::stringstream ss;
+          ss << std::setw(10) << std::setfill('0') << i;
+          keys.push_back("benchmark_key_" + ss.str());
         }
+        auto seq_put = benchmark_function(keys, async_con, timed_put);
+        auto seq_get = benchmark_function(keys, async_con, timed_get);
+        benchmark_function(keys, async_con, timed_remove);
+
         std::random_shuffle(keys.begin(), keys.end());
-        int put_times = 1;
-        for (auto key = keys.begin(); key != keys.end(); key++){
-          put_times += timed_put(async_con, *key, 1024 * 1024);
-        }
+        auto rnd_put = benchmark_function(keys, async_con, timed_put);
         std::random_shuffle(keys.begin(), keys.end());
-        int get_times = 1;
-        for (auto key = keys.begin(); key != keys.end(); key++){
-          get_times += timed_get(async_con, *key);
-        }
+        auto rnd_get = benchmark_function(keys, async_con, timed_get);
         std::random_shuffle(keys.begin(), keys.end());
-        int del_times = 0;
-        for (auto key = keys.begin(); key != keys.end(); key++){
-          del_times += timed_remove(async_con, *key);
-        }
+        benchmark_function(keys, async_con, timed_remove);
 
         location.back() += utility::Convert::toString(
-            " :: PUT=", keys.size() / (put_times / 1000.0), " MB/sec",
-            " :: GET=", keys.size() / (get_times / 1000.0), " MB/sec",
-            " :: DEL=", keys.size() / (del_times / 1000.0), " MB/sec"
+            std::fixed, std::setprecision(1),
+            " :: MB/s seq_put=", seq_put, " seq_get=", seq_get, " rnd_put=", rnd_put, " rnd_get=", rnd_get
         );
       }
-
       connected.push_back(true);
     } catch (std::exception& e) {
       kio_debug(e.what());
