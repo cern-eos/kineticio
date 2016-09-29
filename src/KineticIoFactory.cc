@@ -29,6 +29,7 @@ std::unique_ptr<FileIoInterface> KineticIoFactory::makeFileIo(const std::string&
 void KineticIoFactory::registerLogFunction(logfunc_t log, shouldlogfunc_t shouldLog)
 {
   Logger::get().registerLogFunction(std::move(log), std::move(shouldLog));
+  kio_notice("Registered log function. Library Version = ", KIO_VERSION);
 }
 
 std::shared_ptr<AdminClusterInterface> KineticIoFactory::makeAdminCluster(const std::string& cluster_id)
