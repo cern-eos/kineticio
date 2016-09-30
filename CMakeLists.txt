@@ -178,19 +178,21 @@ endif (BUILD_TEST)
 
 ################################################################################
 # RPM generation rules
-set(CPACK_GENERATOR "RPM")
 set(CPACK_PACKAGE_NAME ${CMAKE_PROJECT_NAME})
 set(CPACK_RPM_PACKAGE_GROUP "Development/Libraries")
 set(CPACK_RPM_PACKAGE_LICENSE "Mozilla Public License, v. 2.0")
 set(CPACK_PACKAGE_CONTACT "paul.lensing@gmail.com")
 
 if(CPACK_HEADER_ONLY)
+    set(CPACK_GENERATOR TGZ RPM)
     set(CPACK_RPM_COMPONENT_INSTALL ON)
+    set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
     set(CPACK_COMPONENTS_ALL devel)
     set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR})
     set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "kineticio library headers")
     set(CPACK_RPM_PACKAGE_DESCRIPTION "C++ header files for kineticio library.")
 else()
+    set(CPACK_GENERATOR RPM)
     set(CPACK_RPM_COMPONENT_INSTALL OFF)
     set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
     set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "kineticio library")
