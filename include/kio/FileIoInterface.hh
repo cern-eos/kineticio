@@ -24,7 +24,11 @@
 
 #include <string>
 #include <vector>
+#ifdef __APPLE__
+#include <sys/mount.h>
+#else
 #include <sys/vfs.h>
+#endif
 #include <sys/stat.h>
 
 #ifndef SFS_O_CREAT
