@@ -38,7 +38,6 @@ public:
   ~SimulatorController();
 
 private:
-  int capacity;
   int pid;
   SimulatorController();
 };

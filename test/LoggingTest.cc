@@ -13,8 +13,8 @@
  * License for more details.                                            *
  ************************************************************************/
 
-#include "catch.hpp"
 #include "Logging.hh"
+#include "catch.hpp"
 
 using namespace kio;
 

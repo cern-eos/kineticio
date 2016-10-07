@@ -13,13 +13,13 @@
  * License for more details.                                            *
  ************************************************************************/
 
-#include "catch.hpp"
 #include "Utility.hh"
 #include <fcntl.h>
 #include <unistd.h>
 #include <zlib.h>
 #include <Logging.hh>
 #include <uuid.h>
+#include "catch.hpp"
 
 using namespace kio; 
 using std::string;

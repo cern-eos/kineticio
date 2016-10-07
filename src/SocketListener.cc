@@ -16,30 +16,48 @@
 #include "SocketListener.hh"
 #include "KineticAutoConnection.hh"
 #include "Logging.hh"
-#include <sys/eventfd.h>
-#include <sys/epoll.h>
 #include <unistd.h>
+
+#ifdef __APPLE__
+#include <sys/event.h>
+//#include <kqueue/sys/event.h>
+#else
+#include <sys/epoll.h>
+#endif
 
 using namespace kio;
 using kinetic::KineticStatus;
 using kinetic::StatusCode;
 
-void epoll_listen(int epoll_fd, bool* shutdown)
+void listener_thread(int main_fd, bool* shutdown)
 {
+  fd_set a;
+  int fd = 0;
   int max_events = 10;
+#ifdef __APPLE__
+  struct kevent events[max_events];
+#else
   struct epoll_event events[max_events];
+#endif
 
   while (1) {
-    int ret = epoll_wait(epoll_fd, events, max_events, -1);
+
+#ifdef __APPLE__
+    int ret = kevent(main_fd, NULL, 0, events, max_events, NULL);
+#else
+    int ret = epoll_wait(main_fd, events, max_events, -1);
+#endif
     if (*shutdown) {
       break;
     }
 
     for (int i = 0; i < ret; i++) {
-      auto con = (KineticAutoConnection*) events[i].data.ptr;
-      fd_set a;
-      int fd;
 
+#ifdef __APPLE__
+      auto con = (KineticAutoConnection*) events[i].udata;
+#else
+      auto con = (KineticAutoConnection*) events[i].data.ptr;
+#endif
       if (con) {
         try {
           if (!con->get()->Run(&a, &a, &fd)) {
@@ -49,43 +67,72 @@ void epoll_listen(int epoll_fd, bool* shutdown)
           kio_warning("Error ", e.what(), " for ", con->getName());
         }
       }
+      else{
+        kio_notice("listener thread triggered but no connection available.");
+      }
     }
   }
+  kio_notice("listener thread exiting.");
 }
 
 SocketListener::SocketListener() :
     shutdown(false)
 {
-  /* Create the epoll descriptor. Only one is needed, and is used to monitor all
-   * sockets. */
-  epoll_fd = epoll_create1(0);
+  /* Create the epoll / kqueue  descriptor. Only one is needed, and is used to monitor all sockets.*/
+#ifdef __APPLE__
+  listener_fd = kqueue();
+#else
+  listener_fd = epoll_create1(0);
+#endif
 
-  if (epoll_fd < 0) {
-    kio_error("epoll_create failed");
+  if (listener_fd < 0) {
+    kio_error("Failed setting up fd listener");
     throw std::system_error(errno, std::generic_category());
   }
+  kio_debug("set up listener_fd at ", listener_fd);
 
-  listener = std::thread(epoll_listen, epoll_fd, &shutdown);
+  listener = std::thread(listener_thread, listener_fd, &shutdown);
 }
 
 SocketListener::~SocketListener()
 {
-  int _eventfd = eventfd(0, EFD_NONBLOCK);
+  kio_notice("entering destructor");
+  int pipefd[2];
+  pipe(pipefd);
+
+#ifdef __APPLE__
+  struct kevent e;
+  EV_SET(&e, pipefd[0], EVFILT_READ, EV_ADD, 0, 0, NULL);
+  kevent(listener_fd, &e, 1, NULL, 0, NULL);
+#else
   struct epoll_event e;
   e.events = EPOLLIN | EPOLLOUT;
   e.data.ptr = NULL;
-
-  epoll_ctl(epoll_fd, EPOLL_CTL_ADD, _eventfd, &e);
+  epoll_ctl(listener_fd, EPOLL_CTL_ADD, pipefd[0], &e);
+#endif
 
   shutdown = true;
-  eventfd_write(_eventfd, 1);
+  write(pipefd[1], "0", 1);
+
   listener.join();
-  close(epoll_fd);
+  close(pipefd[0]);
+  close(pipefd[1]);
+  close(listener_fd);
+  listener_fd=0;
+  kio_notice("leaving destructor");
 }
+
 
 
 void SocketListener::subscribe(int fd, kio::KineticAutoConnection* connection)
 {
+  int rtn;
+#ifdef __APPLE__
+  struct kevent e[2];
+  EV_SET(&e[0], fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, connection);
+  EV_SET(&e[1], fd, EVFILT_READ, EV_ADD, 0, 0, connection);
+  rtn = kevent(listener_fd, &e[1], 1, 0, 0, 0);
+#else
   /* EPOLLIN: Ready to read
    * EPOLLOUT: Ready to write
    * EPOLLET: Edge triggered mode, only trigger when status changes. */
@@ -95,19 +142,30 @@ void SocketListener::subscribe(int fd, kio::KineticAutoConnection* connection)
 
   /* Add the descriptor into the monitoring list. We can do it even if another
     thread is waiting in epoll_wait - the descriptor will be properly added */
-  if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) != 0) {
-    kio_error("epoll_ctl_add failed for fd ", fd, " with ernno ", errno, " ", connection->getName());
+  rtn = epoll_ctl(listener_fd, EPOLL_CTL_ADD, fd, &ev);
+#endif
+  if(rtn < 0){
+    kio_error("failed adding fd ", fd, " to listener. ernno=", errno, " ", connection->getName());
     throw std::system_error(errno, std::generic_category());
   }
-  kio_debug("Added fd ", fd, " for connection ", connection->getName(), " to epoll listening queue.");
+  kio_debug("Added fd ", fd, " for connection ", connection->getName(), " to listening queue.");
 }
 
 void SocketListener::unsubscribe(int fd)
 {
+  int rtn;
+#ifdef __APPLE__
+  struct kevent e[2];
+  EV_SET(&e[0], fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+  EV_SET(&e[1], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+  rtn = kevent(listener_fd, &e[1], 1, 0, 0, 0);
+#else
   struct epoll_event ev;
-  if(epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, &ev))
-    kio_debug("epoll_ctl_del failed for fd ", fd, " with ernno ", errno);
-  else
-    kio_debug("epoll_ctl_del succeeded for fd ", fd);
-
+  rtn = epoll_ctl(listener_fd, EPOLL_CTL_DEL, fd, &ev);
+#endif
+  if(rtn < 0) {
+    kio_debug("failed to remove fd ", fd, " from listener. ernno=", errno);
+  } else {
+    kio_debug("succeessfully removed fd ", fd, " from listener.");
+  }
 }

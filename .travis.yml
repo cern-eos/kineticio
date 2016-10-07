@@ -1,25 +1,42 @@
 language: cpp
+
 compiler:
   - gcc
   - clang
 os:
   - linux
+  - osx
+
+sudo: required
+dist: trusty
 
 before_install:
-#install standard dependencies
-  - sudo apt-get install -y protobuf-compiler libprotobuf-dev libjson-c-dev libjson-c2 libuuid1 uuid-dev
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo apt-get install -y libprotobuf-dev protobuf-compiler yasm uuid-dev libjson-c-dev libgflags-dev libgoogle-glog-dev autoconf automake libtool; fi
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then export CC=`which $CC`; fi
+  - if [ "$TRAVIS_OS_NAME" == "osx" ]; then brew update; fi
+  - if [ "$TRAVIS_OS_NAME" == "osx" ]; then brew install json-c ossp-uuid yasm libtool automake protobuf gflags glog; fi
+
+#install isa-l library
+  - git clone https://github.com/01org/isa-l
+  - cd isa-l
+  - ./autogen.sh
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then ./configure; fi
+  - if [ "$TRAVIS_OS_NAME" == "osx" ]; then ./configure --prefix=/usr/local --target=darwin64-x86_64-cc; fi
+  - make
+  - sudo make install
+  - cd ..
 
 # install kinetic-cpp-client
   - git clone https://github.com/Kinetic/kinetic-cpp-client
-  - cd kinetic-cpp-client && cmake . && make -j 4 install
-
-#install isa-l library
-  - git clone https://github.com/plensing/isal-cmake
-  - cd isal-cmake && cmake . && make -j 4 install
+  - cd kinetic-cpp-client
+  - cmake .
+  - sudo make install
+  - cd ..
 
 install:
   - cmake -DBUILD_TEST=ON .
   - make -j 4
+
 script:
-  - ./kio-test
+  - ./kio-test -debug
   - ./kio-test-dynamic-load

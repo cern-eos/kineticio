@@ -14,10 +14,10 @@
  ************************************************************************/
 
 #include <unistd.h>
-#include "catch.hpp"
 #include "KineticAdminCluster.hh"
 #include "SimulatorController.h"
 #include "Utility.hh"
+#include "catch.hpp"
 
 using std::shared_ptr;
 using std::string;
@@ -98,7 +98,7 @@ SCENARIO("Admin integration test.", "[Admin]")
         key = utility::makeAttributeKey(clusterId, "key", "attribute");
         type = KeyType::Metadata;
       }
-      else if (i == 2) {
+      else {
         target = AdminClusterInterface::OperationTarget::METADATA;
         key = utility::makeMetadataKey(clusterId, "key");
         type = KeyType::Metadata;
