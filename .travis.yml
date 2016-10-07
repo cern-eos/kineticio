@@ -1,0 +1,25 @@
+language: cpp
+compiler:
+  - gcc
+  - clang
+os:
+  - linux
+
+before_install:
+#install standard dependencies
+  - sudo apt-get install -y protobuf-compiler libprotobuf-dev libjson-c-dev libjson-c2 libuuid1 uuid-dev
+
+# install kinetic-cpp-client
+  - git clone https://github.com/Kinetic/kinetic-cpp-client
+  - cd kinetic-cpp-client && cmake . && make -j 4 install
+
+#install isa-l library
+  - git clone https://github.com/plensing/isal-cmake
+  - cd isal-cmake && cmake . && make -j 4 install
+
+install:
+  - cmake -DBUILD_TEST=ON .
+  - make -j 4
+script:
+  - ./kio-test
+  - ./kio-test-dynamic-load
