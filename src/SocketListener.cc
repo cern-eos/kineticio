@@ -72,7 +72,7 @@ void listener_thread(int main_fd, bool* shutdown)
       }
     }
   }
-  kio_notice("listener thread exiting.");
+  kio_debug("listener thread exiting.");
 }
 
 SocketListener::SocketListener() :
@@ -96,7 +96,6 @@ SocketListener::SocketListener() :
 
 SocketListener::~SocketListener()
 {
-  kio_notice("entering destructor");
   int pipefd[2];
   pipe(pipefd);
 
@@ -119,7 +118,6 @@ SocketListener::~SocketListener()
   close(pipefd[1]);
   close(listener_fd);
   listener_fd=0;
-  kio_notice("leaving destructor");
 }
 
 

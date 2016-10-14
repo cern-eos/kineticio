@@ -31,7 +31,7 @@
 #define RESET "\033[0m"
 
 bool tshouldLog(const char *name, int level){
-  return level < LOG_DEBUG;
+  return level <= LOG_DEBUG;
 }
 
 static void tlog(const char* func, const char* file, int line, int priority, const char *msg)

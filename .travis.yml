@@ -38,5 +38,7 @@ install:
   - make -j 4
 
 script:
-  - ./kio-test -debug
+  - ./kio-test
   - ./kio-test-dynamic-load
+  - ./kio-test [Io] -debug
+  - ./kio-tet [DataBlock] -debug
