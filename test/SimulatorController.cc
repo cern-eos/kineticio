@@ -59,14 +59,15 @@ void SimulatorController::startSimulators(size_t capacity)
   /* original process */
   else {
     kio_debug("Starting Simulator in process with pid ", pid, " using simulator directory ", TESTSIMULATOR_LOCATION);
-
+    printf("Starting Simulators...\n");
     /* Wait for simulators to come up before continuing... */
-    for(int i=0; i<10; i++){
+    for(int i=0; i<30; i++){
+      /* wait a second */
+      usleep(1000*1000);
       if(reset(capacity-1)){
+        printf("Simulators up and running.\n");
         return;
       }
-      /* retry in a second */
-      usleep(1000*1000);
     }
     throw std::runtime_error("Failed starting simulators.");
   }

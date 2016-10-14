@@ -72,7 +72,7 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> KineticClusterOperation
   /* Timeout any unfinished request. We do not assume entire connection to be in error state because of a timeout */
   for (size_t i = 0; i < operations.size(); i++) {
     if (!operations[i].callback->finished()) {
-      kio_warning("Network timeout for connection ", operations[i].connection->getName(), "timeout period is", timeout);
+      kio_warning("Network timeout (", timeout, ") for connection ", operations[i].connection->getName());
       cons[i]->RemoveHandler(hkeys[i]);
       operations[i].callback->OnResult(KineticStatus(StatusCode::CLIENT_IO_ERROR, "Network timeout"));
     }

@@ -129,7 +129,7 @@ void SocketListener::subscribe(int fd, kio::KineticAutoConnection* connection)
   struct kevent e[2];
   EV_SET(&e[0], fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, connection);
   EV_SET(&e[1], fd, EVFILT_READ, EV_ADD, 0, 0, connection);
-  rtn = kevent(listener_fd, &e[1], 1, 0, 0, 0);
+  rtn = kevent(listener_fd, &e[0], 2, 0, 0, 0);
 #else
   /* EPOLLIN: Ready to read
    * EPOLLOUT: Ready to write
@@ -156,7 +156,7 @@ void SocketListener::unsubscribe(int fd)
   struct kevent e[2];
   EV_SET(&e[0], fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
   EV_SET(&e[1], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-  rtn = kevent(listener_fd, &e[1], 1, 0, 0, 0);
+  rtn = kevent(listener_fd, &e[0], 2, 0, 0, 0);
 #else
   struct epoll_event ev;
   rtn = epoll_ctl(listener_fd, EPOLL_CTL_DEL, fd, &ev);
