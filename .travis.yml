@@ -4,7 +4,7 @@ compiler:
   - gcc
   - clang
 os:
-  - linux
+ # - linux
   - osx
 
 sudo: required
@@ -14,7 +14,7 @@ before_install:
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo apt-get install -y libprotobuf-dev protobuf-compiler yasm uuid-dev libjson-c-dev libgflags-dev libgoogle-glog-dev autoconf automake libtool; fi
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then export CC=`which $CC`; fi
   - if [ "$TRAVIS_OS_NAME" == "osx" ]; then brew update; fi
-  - if [ "$TRAVIS_OS_NAME" == "osx" ]; then brew install json-c ossp-uuid yasm libtool automake protobuf gflags glog; fi
+  - if [ "$TRAVIS_OS_NAME" == "osx" ]; then brew install gdb json-c ossp-uuid yasm libtool automake protobuf gflags glog; fi
 
 #install isa-l library
   - git clone https://github.com/01org/isa-l
@@ -39,7 +39,8 @@ install:
 
 script:
   - ./kio-test [Listen] -debug
+  - gdb -batch -ex "run" -ex "bt" ./kio-test
   - ./kio-test
   - ./kio-test-dynamic-load
   - ./kio-test [Io] -s -debug
-  - ./kio-tet [Data] -s -debug
+  - ./kio-test [Data] -s -debug
