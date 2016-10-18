@@ -44,7 +44,6 @@ FileIo::FileIo(const std::string& url) :
 
 FileIo::~FileIo()
 {
-  printf("FileIo destructor\n");
   /* In case fileIo object is destroyed without having been closed, throw cache data out the window. If
    * object has been closed, cache will have already been dropped. */
   kio().cache().drop(this, true);
