@@ -39,7 +39,7 @@ install:
 
 script:
   - ./kio-test [Listen] -debug
-  - gdb -batch -ex "run" -ex "bt" ./kio-test
+  - sudo gdb -batch -ex "run" -ex "bt" ./kio-test
   - ./kio-test
   - ./kio-test-dynamic-load
   - ./kio-test [Io] -s -debug
