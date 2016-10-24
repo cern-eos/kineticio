@@ -193,7 +193,7 @@ void DataBlock::write(const char* const buffer, size_t offset, size_t length)
 {
   std::lock_guard<std::mutex> lock(mutex);
   if (buffer == NULL || offset + length > cluster->limits(KeyType::Data).max_value_size){
-    kio_warning("Invalid argument. buffer=",buffer, " offset=", offset, " length=", length);
+    kio_warning("Invalid argument. ", buffer ? "" : "No buffer supplied!"," offset=", offset, " length=", length);
     throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
 
