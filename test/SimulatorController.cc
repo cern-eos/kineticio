@@ -144,7 +144,10 @@ SimulatorController::SimulatorController()
 
 SimulatorController::~SimulatorController()
 {
+  /* Don't stop simulators manually to prevent problems on OSX...
+   * should be done automatically when process exists
   if(pid) {
     stopSimulators();
   }
+  */
 }
