@@ -551,24 +551,26 @@ void FileIo::Statfs(struct statfs* sfs)
     throw std::system_error(std::make_error_code(std::errc::io_error));
   }
 
-  /* Minimal allocated block size. Set to 4K because that's the
-   * maximum accepted value by Linux. */
-  sfs->f_frsize = 4096;
+  #ifdef _STATFS_F_FRSIZE
+    /* Minimal allocated block size. Set to 4K because that's the
+     * maximum accepted value by Linux. */
+    sfs->f_frsize = 4096;
+  #endif
   /* Preferred file system block size for I/O requests. This is sometimes
    * evaluated as the actual block size (e.g. by EOS). We set the bsize equal
    * to the frsize to avoid confusion. This approach is also taken by all
    * kernel level file systems. */
-  sfs->f_bsize = sfs->f_frsize;
+  sfs->f_bsize = 4096;
   /* Blocks on FS in units of f_frsize */
-  sfs->f_blocks = (fsblkcnt_t) (s.bytes_total / sfs->f_frsize);
+  sfs->f_blocks = (fsblkcnt_t) (s.bytes_total / sfs->f_bsize);
   /* Free blocks */
-  sfs->f_bavail = (fsblkcnt_t) (s.bytes_free / sfs->f_frsize);
+  sfs->f_bavail = (fsblkcnt_t) (s.bytes_free / sfs->f_bsize);
   /* Free blocks available to non root user */
   sfs->f_bfree = sfs->f_bavail;
   /* Total inodes */
-  sfs->f_files = (size_t) (s.bytes_total / sfs->f_frsize);
+  sfs->f_files = (size_t) (s.bytes_total / sfs->f_bsize);
   /* Free inodes */
-  sfs->f_ffree = (size_t) (s.bytes_free / sfs->f_frsize);
+  sfs->f_ffree = (size_t) (s.bytes_free / sfs->f_bsize);
 }
 
 std::vector<std::string> FileIo::ListFiles(std::string subtree, size_t max)

@@ -4,9 +4,9 @@ project(kineticio CXX C)
 execute_process(
         COMMAND git log --oneline
         COMMAND wc -l
+        COMMAND tr -d [:space:]
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         OUTPUT_VARIABLE GIT_COMMITS
-        OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 set(PROJECT_VERSION_MAJOR 1)
 set(PROJECT_VERSION_MINOR 3)
@@ -39,7 +39,10 @@ endif (CMAKE_COMPILER_IS_GNUCXX)
 
 ################################################################################
 # Set CXX flags and preprocessor definitions
-set(CMAKE_CXX_FLAGS "--std=c++0x -pthread -g -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Werror")
+set(CMAKE_CXX_FLAGS "--std=c++0x -pthread -g -Wall -Wextra -Wno-unused-function -Wno-unused-parameter")
+if(NOT APPLE) # don't error on warning for OSX
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+endif()
 add_definitions(-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64)
 
 ################################################################################
@@ -51,6 +54,7 @@ find_package(uuid REQUIRED)
 find_package(kinetic-c++ REQUIRED)
 find_package(isal REQUIRED)
 find_package(Git REQUIRED)
+find_package(Threads REQUIRED)
 
 ################################################################################
 # Compile main project 
@@ -88,6 +92,7 @@ set(kineticio_LIB
         ${UUID_LIBRARIES}
         ${ISAL_LIBRARIES}
         ${KINETIC-C++_LIBRARIES}
+        ${CMAKE_THREAD_LIBS_INIT}
         )
 
 add_library(kineticio SHARED ${kineticio_SRC})
@@ -114,7 +119,6 @@ target_link_libraries(kineticio-admin ${kineticio_LIB} ${CMAKE_THREAD_LIBS_INIT}
 install(TARGETS kineticio LIBRARY DESTINATION lib${LIBSUFFIX} COMPONENT library)
 install(DIRECTORY ${kineticio_SOURCE_DIR}/include/kio DESTINATION include COMPONENT devel)
 install(TARGETS kineticio-admin RUNTIME DESTINATION bin COMPONENT tools)
-
 
 ################################################################################
 # Compile test & test dependencies if requested
@@ -168,7 +172,7 @@ if (BUILD_TEST)
     add_dependencies(kio-test catch kinetic-simulator)
 
     add_executable(kio-test-dynamic-load test/DynamicLibraryLoadingTest.cc)
-    target_link_libraries(kio-test-dynamic-load dl)
+    target_link_libraries(kio-test-dynamic-load ${CMAKE_DL_LIBS})
     add_dependencies(kio-test-dynamic-load catch)
 
     add_executable(replay ${kineticio_SRC} test/replay.cc)

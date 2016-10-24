@@ -15,11 +15,11 @@
 
 #include <unistd.h>
 #include <DataBlock.hh>
-#include "catch.hpp"
 #include "KineticCluster.hh"
 #include "SimulatorController.h"
 #include "Utility.hh"
 #include <Logging.hh>
+#include "catch.hpp"
 
 using std::shared_ptr;
 using std::string;

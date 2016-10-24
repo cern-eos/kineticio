@@ -1,4 +1,4 @@
-# kineticio
+# kineticio [![Build Status](https://travis-ci.org/cern-eos/kineticio.svg?branch=master)](https://travis-ci.org/cern-eos/kineticio)
 
 Kineticio is a library providing a file interface for the [Kinetic](https://www.openkinetic.org/) storage technology. 
 
@@ -35,12 +35,14 @@ Cluster health is monitored and a system to identify problematic keys has been i
 
 
 ## Dependencies
- + yum standard packages ``` cmake gcc-c++ json-c json-c-devel libuuid libuuid-devel ```
- + apt-get standard packages ```cmake g++ libjson-c-dev libjson-c2 libuuid1 uuid-dev ```
+ + Available by package managers:
+    + yum ``` cmake gcc-c++ json-c json-c-devel libuuid libuuid-devel ```
+    + apt-get ```cmake g++ libjson-c-dev uuid-dev ```
+    + brew ``` cmake json-c ossp-uuid ```
  + [isa-l](https://01.org/intel%C2%AE-storage-acceleration-library-open-source-version) intel erasure coding library
  + [kinetic-cpp-client](https://github.com/kinetic/kinetic-cpp-client)
 
-For supported linux distributions, prebuild rpm packages of isa-l and kinetic-cpp-client can be found in the [kineticio-depend](http://dss-ci-repo.web.cern.ch/dss-ci-repo/kinetic/kineticio-depend/) repository. 
+For EOS supported linux distributions, prebuild rpm packages of isa-l and kinetic-cpp-client can be found in the [kineticio-depend](http://dss-ci-repo.web.cern.ch/dss-ci-repo/kinetic/kineticio-depend/) repository. 
 
 ## Compilation
 The build system uses cmake. The implementation uses c++11 / c++0x features available from gcc 4.4 onwards. 
@@ -84,7 +86,6 @@ When using the library with the EOS storage system, the EOS console's `kinetic c
 Alternatively, configuration may be provided by setting the following environment variables, specifying drive location, login details and the cluster configuration (as well as library-wide configuration options) respectively.
 
 ```
-
  KINETIC_DRIVE_LOCATION
  KINETIC_DRIVE_SECURITY 
  KINETIC_CLUSTER_DEFINITION 

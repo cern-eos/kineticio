@@ -13,12 +13,12 @@
  * License for more details.                                            *
  ************************************************************************/
 
-#include "catch.hpp"
 #include "RedundancyProvider.hh"
 #include "Utility.hh"
 #include <fcntl.h>
 #include <unistd.h>
 #include <Logging.hh>
+#include "catch.hpp"
 
 using std::shared_ptr;
 using std::string;

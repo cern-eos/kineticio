@@ -13,13 +13,12 @@
  * License for more details.                                            *
  ************************************************************************/
 
-#include "catch.hpp"
 #include "FileIo.hh"
 #include "Utility.hh"
 #include "SimulatorController.h"
 #include <unistd.h>
 #include <Logging.hh>
-
+#include "catch.hpp"
 
 using namespace kio;
 using namespace kinetic;

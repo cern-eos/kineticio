@@ -15,10 +15,10 @@
 
 #define CATCH_CONFIG_MAIN
 
-#include "catch.hpp"
 #include <kio/KineticIoFactory.hh>
 #include <dlfcn.h>
 #include <system_error>
+#include "catch.hpp"
 
 SCENARIO("Kineticio Dynamic Loading Test", "[Dynload]") {
 
@@ -32,7 +32,11 @@ SCENARIO("Kineticio Dynamic Loading Test", "[Dynload]") {
   setenv("KINETIC_CLUSTER_DEFINITION", TESTJSON_LOCATION, 1);
 
   GIVEN("Kineticio factory creation and destruction methods can be loaded from library.") {
+#ifdef __APPLE__
+    void* handle = dlopen("./libkineticio.dylib", RTLD_NOW);
+#else
     void* handle = dlopen("./libkineticio.so", RTLD_NOW);
+#endif
     REQUIRE(handle);
 
     typedef kio::LoadableKineticIoFactoryInterface* (* function_t)();

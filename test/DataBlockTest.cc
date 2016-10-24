@@ -14,10 +14,10 @@
  ************************************************************************/
 
 #include <unistd.h>
-#include "catch.hpp"
 #include "DataBlock.hh"
 #include "KineticCluster.hh"
 #include "SimulatorController.h"
+#include "catch.hpp"
 
 using namespace kio;
 

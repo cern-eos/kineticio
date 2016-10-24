@@ -20,7 +20,7 @@
  ************************************************************************/
 
 #ifndef  KINETICIO_KINETICCLUSTERSTRIPEOPERATION_HH
-#define  KINETICIO_KIENTICCLUSTERSTRIPEOPERATION_HH
+#define  KINETICIO_KINETICCLUSTERSTRIPEOPERATION_HH
 
 #include <kinetic/kinetic.h>
 #include <functional>

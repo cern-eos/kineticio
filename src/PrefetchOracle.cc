@@ -80,7 +80,7 @@ std::list<int> PrefetchOracle::predict(size_t length, PredictionType type)
   }
   
   /* We are only confident enough to make a prediction if we have a certain distance frequency s*/ 
-  if(distance->second.size() < static_cast<int>(sequence.size() * 0.75))
+  if(distance->second.size() < static_cast<size_t>(sequence.size() * 0.75))
     return prediction;  
   
   /* build prediction list */

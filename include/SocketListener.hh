@@ -67,14 +67,14 @@ public:
   ~SocketListener();
 
 private:
-  //! thread object of epoll listener thread
+  //! thread object for listener thread
   std::thread listener;
 
   //! indicate to the listener thread to shut down
   bool shutdown;
 
-  //! the epoll fd
-  int epoll_fd;
+  //! the epoll or kqueue fd
+  int listener_fd;
 
   //! uncopyable
   SocketListener (const SocketListener&) = delete;

@@ -13,9 +13,9 @@
  * License for more details.                                            *
  ************************************************************************/
 
-#include "catch.hpp"
 #include "KineticAutoConnection.hh"
 #include "SimulatorController.h"
+#include "catch.hpp"
 
 using std::shared_ptr;
 using std::string;

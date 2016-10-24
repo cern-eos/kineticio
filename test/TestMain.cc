@@ -14,11 +14,11 @@
  ************************************************************************/
 
 #define CATCH_CONFIG_RUNNER
-#include "catch.hpp"
 #include <thread>
 #include <sys/syslog.h>
 #include "SimulatorController.h"
 #include "KineticIoFactory.hh"
+#include "catch.hpp"
 
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
@@ -31,7 +31,7 @@
 #define RESET "\033[0m"
 
 bool tshouldLog(const char *name, int level){
-  return true;
+  return level <= LOG_DEBUG;
 }
 
 static void tlog(const char* func, const char* file, int line, int priority, const char *msg)
@@ -44,7 +44,7 @@ static void tlog(const char* func, const char* file, int line, int priority, con
       printf(KBLU "NOTICE ");
       break;
     case LOG_WARNING:
-      printf(KYEL " WARNING ");
+      printf(KYEL "WARNING ");
       break;
     case LOG_ERR:
       printf(KRED "ERROR ");

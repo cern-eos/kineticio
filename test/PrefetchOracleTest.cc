@@ -13,8 +13,8 @@
  * License for more details.                                            *
  ************************************************************************/
 
-#include "catch.hpp"
 #include "PrefetchOracle.hh"
+#include "catch.hpp"
 
 using namespace kio; 
 
