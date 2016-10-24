@@ -74,34 +74,34 @@ void SimulatorController::startSimulators(size_t capacity)
   }
 }
 
-void SimulatorController::stopSimulators()
-{
-  if(pid) {
-    kio_debug("Killing Simulators...");
-    kill(pid, SIGTERM);
-
-    bool died = false;
-    for (int loop = 0; !died && loop < 10; loop++)
-    {
-      int status;
-      if (waitpid(pid, &status, WNOHANG) == pid) {
-        died = true;
-      }
-      else {
-        usleep(500*1000);
-      }
-    }
-
-    if (!died) {
-      kio_debug("Reverting to SIGKILL");
-      kill(pid, SIGKILL);
-      usleep(1000*1000);
-    }
-
-    kio_debug("Killed!");
-    pid = 0;
-  }
-}
+//void SimulatorController::stopSimulators()
+//{
+//  if(pid) {
+//    kio_debug("Killing Simulators...");
+//    kill(pid, SIGTERM);
+//
+//    bool died = false;
+//    for (int loop = 0; !died && loop < 10; loop++)
+//    {
+//      int status;
+//      if (waitpid(pid, &status, WNOHANG) == pid) {
+//        died = true;
+//      }
+//      else {
+//        usleep(500*1000);
+//      }
+//    }
+//
+//    if (!died) {
+//      kio_debug("Reverting to SIGKILL");
+//      kill(pid, SIGKILL);
+//      usleep(1000*1000);
+//    }
+//
+//    kio_debug("Killed!");
+//    pid = 0;
+//  }
+//}
 
 bool SimulatorController::reset(size_t index)
 {
@@ -144,8 +144,8 @@ SimulatorController::SimulatorController()
 
 SimulatorController::~SimulatorController()
 {
-  /* Don't stop simulators manually to prevent problems on OSX...
-   * should be done automatically when process exists
+  /* Don't stop simulators manually to prevent segfault on OSX...
+   * instead rely on automatic termiantion of child processes
   if(pid) {
     stopSimulators();
   }
