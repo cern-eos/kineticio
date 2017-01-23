@@ -217,9 +217,6 @@ protected:
   //! read-ahead
   PrefetchOracle prefetchOracle;
 
-  //! the size_hint attribute that was read in during open
-  int size_hint;
-
   //! the currently last block number
   int eof_blocknumber;
 

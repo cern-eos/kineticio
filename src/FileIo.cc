@@ -64,7 +64,7 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
         KeyType::Metadata);
 
     if (status.ok()) {
-      eof_blocknumber = size_hint = 0;
+      eof_blocknumber = 0;
       eof_verification_time = std::chrono::system_clock::now();
     }
     else if (status.statusCode() == StatusCode::REMOTE_VERSION_MISMATCH) {
@@ -79,15 +79,8 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
         version,
         KeyType::Metadata
     );
-
     if (status.ok()) {
-      try {
-        /* Size hint might be stored in attribute. */
-        eof_blocknumber = size_hint = utility::Convert::toInt(attrGet("sys.kinetic.size_hint"));
-      } catch (const std::system_error& e) {
-        /* no size hint available. not a problem */
-        eof_blocknumber = size_hint = 0;
-      }
+      eof_blocknumber = 0;
       eof_verification_time = std::chrono::system_clock::time_point();
     }
     else if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND) {
@@ -105,17 +98,7 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
 
 void FileIo::Close(uint16_t timeout)
 {
-  /* If we would need more than one cluster::range request in the stat operation to find the correct fill size
-   * create or update the size_hint attribute.
-   * This conditional size_hint attribute will minimize IO for stat but at the same time avoid unnecessary attribute
-   * IO on every close. */
-  size_t hint_difference = std::abs(eof_blocknumber - size_hint);
-  size_t max_request_size = cluster->limits(KeyType::Data).max_range_elements;
-  if (hint_difference > max_request_size) {
-    try { attrSet("sys.kinetic.size_hint", utility::Convert::toString(eof_blocknumber)); } catch (...) { }
-  }
-
-  eof_blocknumber = size_hint = 0;
+  eof_blocknumber = 0;
   opened = false;
 
   Sync(timeout);
@@ -348,24 +331,12 @@ void FileIo::Remove(uint16_t timeout)
 
 int FileIo::get_eof_backend()
 {
-  /* Most likely the currently stored eof block number is correct... so let's start there. */
+  /* Do a reverse get-range to obtain last block number. */
   std::unique_ptr<std::vector<string>> keys;
-  auto start_key = utility::makeDataKey(cluster->id(), path, eof_blocknumber);
-  auto end_key = utility::makeDataKey(cluster->id(), path, std::numeric_limits<int>::max());
-
-  KineticStatus status = cluster->range(start_key, end_key, keys, KeyType::Data);
-
-  /* Found no keys... backend file might have been truncated by another client or writes might
-   * not have been flushed yet. */
-  if (status.ok() && !keys->size()) {
-    keys->push_back(*utility::makeDataKey(cluster->id(), path, 0));
-    do {
-      start_key = make_shared<const string>(keys->back());
-      keys->pop_back();
-      status = cluster->range(start_key, end_key, keys, KeyType::Data);
-    } while (status.ok() && keys->size() == cluster->limits(KeyType::Data).max_range_elements);
-  }
-
+  auto start_key = utility::makeDataKey(cluster->id(), path, 999999999);
+  auto end_key = utility::makeDataKey(cluster->id(), path, 0);
+  KineticStatus status = cluster->range(start_key, end_key, keys, KeyType::Data, 1);
+  
   if (!status.ok()) {
     kio_error("KeyRange request unexpectedly failed for blocks of path: ", path, ": ", status);
     throw std::system_error(std::make_error_code(std::errc::io_error));
@@ -373,7 +344,7 @@ int FileIo::get_eof_backend()
 
   /* Success: get block number from last key.*/
   if (keys->size() > 0) {
-    std::string key = keys->back();
+    std::string key = keys->front();
     std::string number = key.substr(key.find_last_of('_') + 1, key.length());
     return std::stoi(number);
   }

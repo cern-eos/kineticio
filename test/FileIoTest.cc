@@ -214,11 +214,13 @@ SCENARIO("KineticIo Integration Test", "[Io]")
     }
 
     WHEN("The Io object grows over 100 blocks and is closed") {
-      REQUIRE_NOTHROW(fileio->Truncate(1024*1024*512));
+      size_t size = 1024*1024*512;
+      REQUIRE_NOTHROW(fileio->Truncate(size));
       fileio->Close();
-      THEN("A size_hint will have been generated. ") {
-        auto hint = fileio->attrGet("sys.kinetic.size_hint");
-        REQUIRE((utility::Convert::toInt(hint) == 512));
+      THEN("stat succeeds and returns the correct size") {
+           struct stat stbuf;
+           REQUIRE_NOTHROW(fileio->Stat(&stbuf));
+           REQUIRE(((size_t) stbuf.st_size == size));
       }
     }
 

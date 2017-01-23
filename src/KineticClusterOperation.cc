@@ -145,6 +145,8 @@ ClusterRangeOp::ClusterRangeOp(const std::shared_ptr<const std::string>& start_k
                                std::vector<std::unique_ptr<KineticAutoConnection>>& connections)
     : KineticClusterOperation(connections), maxRequested(maxRequestedPerDrive)
 {
+  bool reverse = *start_key > *end_key; 
+  
   expandOperationVector(connections.size(), 0);
   for (auto o = operations.begin(); o != operations.end(); o++) {
     auto cb = std::make_shared<RangeCallback>(sync);
@@ -157,9 +159,9 @@ ClusterRangeOp::ClusterRangeOp(const std::shared_ptr<const std::string>& start_k
         const shared_ptr<GetKeyRangeCallbackInterface>)>(
         &ThreadsafeNonblockingKineticConnection::GetKeyRange,
         std::placeholders::_1,
-        start_key, true,
-        end_key, true,
-        false,
+        reverse ? end_key : start_key, true,
+        reverse ? start_key : end_key, true,
+        reverse,
         maxRequestedPerDrive,
         cb);
   }

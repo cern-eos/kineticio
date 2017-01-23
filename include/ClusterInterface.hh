@@ -227,7 +227,8 @@ public:
   virtual kinetic::KineticStatus flush() = 0;
 
   //----------------------------------------------------------------------------
-  //! Obtain keys in the supplied range [start,...,end]
+  //! Obtain keys in the supplied range [start,...,end]. If start > end, the
+  //! keys will be returned in reverse lexicographical order.
   //!
   //! @param start  the start point of the requested key range, supplied key
   //!   is included in the range
