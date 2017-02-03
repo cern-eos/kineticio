@@ -96,16 +96,16 @@ SCENARIO("Repair test.", "[Repair]")
           c.reset(i);
         }
         auto repair = cluster->repair(AdminClusterInterface::OperationTarget::DATA);
-        REQUIRE(repair.repaired == 1);     
+        REQUIRE((repair.repaired == 1));     
         
         std::shared_ptr<const std::string> get_value; 
         std::shared_ptr<const std::string> get_version; 
           
         cluster->get(utility::makeDataKey(clusterId, "key", 1), get_version, get_value);
-        REQUIRE(*value == *get_value);
+        REQUIRE((*value == *get_value));
       
         repair = cluster->repair(AdminClusterInterface::OperationTarget::METADATA);
-        REQUIRE(repair.repaired == 1);  
+        REQUIRE((repair.repaired == 1));  
       }
       
       THEN("Keys should not be repairable after resetting nParity+1 drives") {
@@ -113,10 +113,10 @@ SCENARIO("Repair test.", "[Repair]")
           c.reset(i);
         }
         auto repair = cluster->repair(AdminClusterInterface::OperationTarget::METADATA); 
-        REQUIRE(repair.unrepairable == 1);
+        REQUIRE((repair.unrepairable == 1));
         
         repair = cluster->repair(AdminClusterInterface::OperationTarget::DATA);
-        REQUIRE(repair.unrepairable == 1);
+        REQUIRE((repair.unrepairable == 1));
         
       }
       
@@ -125,10 +125,10 @@ SCENARIO("Repair test.", "[Repair]")
           c.reset(i);
         }
         auto repair = cluster->repair(AdminClusterInterface::OperationTarget::METADATA);
-        REQUIRE(repair.removed == 1);     
+        REQUIRE((repair.removed == 1));     
         
         repair = cluster->repair(AdminClusterInterface::OperationTarget::DATA);
-        REQUIRE(repair.removed == 1);     
+        REQUIRE((repair.removed == 1));     
       }
      
     }
