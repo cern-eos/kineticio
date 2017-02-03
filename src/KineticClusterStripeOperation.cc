@@ -176,6 +176,24 @@ void StripeOperation_PUT::fillOperation(size_t index, const shared_ptr<const str
       PersistMode::WRITE_BACK);
 }
 
+bool StripeOperation_PUT::quick_repair(const std::chrono::seconds& timeout, 
+                                       const StripeOperation_GET& drive_versions) 
+{
+  for (size_t opnum = 0; opnum < operations.size(); opnum++) {
+    auto drive_version = drive_versions.getVersionAt(opnum);
+    operations[opnum].callback->OnResult(kinetic::KineticStatus(StatusCode::OK, ""));
+    if(drive_version && *drive_version != *version_new) {
+     fillOperation(opnum, drive_version, kinetic::WriteMode::REQUIRE_SAME_VERSION);
+    }
+  }
+  auto rmap = executeOperationVector(timeout);
+  if(rmap[StatusCode::OK] == operations.size()) {
+    return true; 
+  }
+  kio_notice("Quick repair failed. ", operations.size() - rmap[StatusCode::OK], " chunks could not be written.");
+  return false;   
+}
+
 kinetic::KineticStatus StripeOperation_PUT::execute(const std::chrono::seconds& timeout)
 {
   auto rmap = executeOperationVector(timeout);
@@ -222,7 +240,6 @@ WriteStripeOperation::WriteStripeOperation(
     std::shared_ptr<RedundancyProvider>& redundancy) : KineticClusterStripeOperation(connections, key, redundancy)
 {
 }
-
 
 bool WriteStripeOperation::attemptStripeRepair(const std::chrono::seconds& timeout,
                                                const StripeOperation_GET& drive_versions)
@@ -633,13 +650,11 @@ kinetic::KineticStatus StripeOperation_GET::do_execute(const std::chrono::second
 
 kinetic::KineticStatus StripeOperation_GET::execute(const std::chrono::seconds& timeout)
 {
-  /* Skip attempting to read without parities for replicated keys. Version verification is required to validate result */
-  if (redundancy->numData() > 1) {
-    try {
-      return do_execute(timeout);
-    } catch (std::exception& e) {
-      kio_debug("Failed getting stripe for key ", *key, " without parities: ", e.what());
-    }
+  /* Attempt to read without parities */
+  try {
+    return do_execute(timeout);
+  } catch (std::exception& e) {
+    kio_debug("Failed getting stripe for key ", *key, " without parities: ", e.what());
   }
 
   /* Add parity chunks to get request (already obtained chunks will not be re-fetched). */

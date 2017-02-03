@@ -35,17 +35,17 @@ void append_x(std::shared_ptr<KineticCluster> cluster, int data, int x)
   for (int i = 0; i < x; i++) {
     while (true) {
       auto new_value = make_shared<const string>(*value + strdata);
-      if (cluster->put(key, drive_version, new_value, new_version, KeyType::Data).ok())
+      if (cluster->put(key, drive_version, new_value, new_version).ok())
         break;
 
-      if (!cluster->get(key, drive_version, value, KeyType::Data).ok())
+      if (!cluster->get(key, drive_version, value).ok())
         throw std::runtime_error("Failed getting key.");
     }
   }
 }
 
 
-/* This test case is intended to verify that the target behaves consistently for write_back versioned puts
+/* This test case is intended to verify that a single target behaves consistently for write_back versioned puts
  * (no put_responses incorrectly show fail / success). */
 SCENARIO("Append Concurrency Testing...", "[Append]")
 {
@@ -80,13 +80,12 @@ SCENARIO("Append Concurrency Testing...", "[Append]")
                   1024 * 1024,
                   std::chrono::seconds(10),
                   std::move(connections),
-                  ec, ec
-              )
+                  ec)
           );
         }
 
         /* if the key edxists, just throw it away */
-        clusters[0]->remove(std::make_shared<const string>("key"), KeyType::Data);
+        clusters[0]->remove(std::make_shared<const string>("key"));
 
         int x = 100;
 
@@ -103,7 +102,7 @@ SCENARIO("Append Concurrency Testing...", "[Append]")
         /* Verification! */
         std::shared_ptr<const string> version;
         std::shared_ptr<const string> value;
-        auto status = clusters[0]->get(std::make_shared<const string>("key"), version, value, KeyType::Data);
+        auto status = clusters[0]->get(std::make_shared<const string>("key"), version, value);
 
         REQUIRE(status.ok());
         REQUIRE((value->size() == clusters.size() * numthreads * x));

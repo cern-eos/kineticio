@@ -22,8 +22,9 @@
 class SimulatorController {
 public:
   void startSimulators(size_t capacity);
-  // void stopSimulators();
 
+  bool reset(); 
+  
   bool enable(size_t index);
   bool block(size_t index);
   bool reset(size_t index);
@@ -38,6 +39,7 @@ public:
   ~SimulatorController();
 
 private:
+  size_t capacity;
   int pid;
   SimulatorController();
 };

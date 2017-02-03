@@ -60,8 +60,7 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
         mdkey,
         make_shared<const string>(),
         make_shared<const string>(),
-        version,
-        KeyType::Metadata);
+        version);
 
     if (status.ok()) {
       eof_blocknumber = 0;
@@ -76,8 +75,7 @@ void FileIo::Open(int flags, mode_t mode, const std::string& opaque, uint16_t ti
     shared_ptr<const string> version;
     status = cluster->get(
         mdkey,
-        version,
-        KeyType::Metadata
+        version
     );
     if (status.ok()) {
       eof_blocknumber = 0;
@@ -178,7 +176,7 @@ int64_t FileIo::ReadWrite(long long off, char* buffer,
     }
   }
 
-  const size_t block_capacity = cluster->limits(KeyType::Data).max_value_size;
+  const size_t block_capacity = cluster->limits().max_value_size;
   size_t length_todo = static_cast<size_t>(length);
   size_t off_done = 0;
 
@@ -261,7 +259,7 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
     throw std::system_error(std::make_error_code(std::errc::operation_not_permitted));
   }
 
-  const size_t block_capacity = cluster->limits(KeyType::Data).max_value_size;
+  const size_t block_capacity = cluster->limits().max_value_size;
   int block_number = static_cast<int>(offset / block_capacity);
   size_t block_offset = offset - block_number * block_capacity;
 
@@ -283,20 +281,20 @@ void FileIo::Truncate(long long offset, uint16_t timeout)
     KineticStatus status = cluster->range(
         utility::makeDataKey(cluster->id(), path, offset ? block_number + 1 : 0),
         utility::makeDataKey(cluster->id(), path, std::numeric_limits<int>::max()),
-        keys, KeyType::Data);
+        keys);
     if (!status.ok()) {
       kio_error("KeyRange request unexpectedly failed for path ", path, ": ", status);
       throw std::system_error(std::make_error_code(std::errc::io_error));
     };
 
     for (auto iter = keys->begin(); iter != keys->end(); ++iter) {
-      status = cluster->remove(make_shared<string>(*iter), KeyType::Data);
+      status = cluster->remove(make_shared<string>(*iter));
       if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND) {
         kio_error("Deleting block ", *iter, " failed: ", status);
         throw std::system_error(std::make_error_code(std::errc::io_error));
       }
     }
-  } while (keys->size() == cluster->limits(KeyType::Data).max_range_elements);
+  } while (keys->size() == cluster->limits().max_range_elements);
 
   /* Set last block number */
   eof_blocknumber = block_number;
@@ -313,7 +311,7 @@ void FileIo::Remove(uint16_t timeout)
 
   KineticStatus status(StatusCode::CLIENT_INTERNAL_ERROR, "");
   for (auto iter = attributes.cbegin(); iter != attributes.cend(); ++iter) {
-    status = cluster->remove(utility::makeAttributeKey(cluster->id(), path, *iter), KeyType::Metadata);
+    status = cluster->remove(utility::makeAttributeKey(cluster->id(), path, *iter));
     if (!status.ok()) {
       kio_error("Deleting attribute ", *iter, " failed: ", status);
       throw std::system_error(std::make_error_code(std::errc::io_error));
@@ -321,7 +319,7 @@ void FileIo::Remove(uint16_t timeout)
   }
 
   Truncate(0);
-  status = cluster->remove(utility::makeMetadataKey(cluster->id(), path), KeyType::Metadata);
+  status = cluster->remove(utility::makeMetadataKey(cluster->id(), path));
   if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND) {
     kio_error("Could not delete metdata key for path", path, ": ", status);
     throw std::system_error(std::make_error_code(std::errc::io_error));
@@ -335,7 +333,7 @@ int FileIo::get_eof_backend()
   std::unique_ptr<std::vector<string>> keys;
   auto start_key = utility::makeDataKey(cluster->id(), path, 999999999);
   auto end_key = utility::makeDataKey(cluster->id(), path, 0);
-  KineticStatus status = cluster->range(start_key, end_key, keys, KeyType::Data, 1);
+  KineticStatus status = cluster->range(start_key, end_key, keys, 1);
   
   if (!status.ok()) {
     kio_error("KeyRange request unexpectedly failed for blocks of path: ", path, ": ", status);
@@ -353,7 +351,7 @@ int FileIo::get_eof_backend()
      the existence of the metadata key. */
   shared_ptr<const string> version;
   auto mdkey = utility::makeMetadataKey(cluster->id(), path);
-  if (cluster->get(mdkey, version, KeyType::Metadata).ok()) {
+  if (cluster->get(mdkey, version).ok()) {
     return 0;
   }
   kio_warning("File does not exist: ", path);
@@ -395,12 +393,12 @@ void FileIo::Stat(struct stat* buf, uint16_t timeout)
   auto last_block = kio().cache().getDataKey(this, eof_blocknumber, DataBlock::Mode::STANDARD);
 
   memset(buf, 0, sizeof(struct stat));
-  buf->st_blksize = cluster->limits(KeyType::Data).max_value_size;
+  buf->st_blksize = cluster->limits().max_value_size;
   buf->st_blocks = eof_blocknumber + 1;
   buf->st_size = eof_blocknumber * buf->st_blksize + last_block->size();
 
   kio_debug("Reported file size is ", buf->st_size, " bytes. Reasoning: ",
-            "Stripe capacity = ", cluster->limits(KeyType::Data).max_value_size, " bytes. ",
+            "Stripe capacity = ", cluster->limits().max_value_size, " bytes. ",
             "Number of stripes = ", eof_blocknumber+1, ". ",
             "Size of last stripe = ", last_block->size(), " bytes."
   );
@@ -447,7 +445,7 @@ std::string FileIo::attrGet(std::string name)
   std::shared_ptr<const string> version;
   auto status = cluster->get(
       utility::makeAttributeKey(cluster->id(), path, name),
-      version, value, KeyType::Metadata);
+      version, value);
   if (status.ok()) {
     return *value;
   }
@@ -468,8 +466,7 @@ void FileIo::attrSet(std::string name, std::string value)
   auto status = cluster->put(
       utility::makeAttributeKey(cluster->id(), path, name),
       std::make_shared<const string>(value),
-      empty,
-      KeyType::Metadata
+      empty
   );
 
   if (!status.ok()) {
@@ -481,9 +478,7 @@ void FileIo::attrSet(std::string name, std::string value)
 void FileIo::attrDelete(std::string name)
 {
   auto empty = std::make_shared<const string>();
-  auto status = cluster->remove(
-      utility::makeAttributeKey(cluster->id(), path, name), KeyType::Metadata
-  );
+  auto status = cluster->remove( utility::makeAttributeKey(cluster->id(), path, name) );
   if (!status.ok()) {
     kio_error("Failed getting attribute ", name, " due to: ", status);
     throw std::system_error(std::make_error_code(std::errc::io_error));
@@ -499,7 +494,7 @@ std::vector<std::string> FileIo::attrList()
   auto end = utility::makeAttributeKey(cluster->id(), path, "~");
 
   do {
-    auto status = cluster->range(start, end, keys, KeyType::Metadata);
+    auto status = cluster->range(start, end, keys);
     if (!status.ok()) {
       kio_error("KeyRange request unexpectedly failed for path ", path, ": ", status);
       throw std::system_error(std::make_error_code(std::errc::io_error));
@@ -510,7 +505,7 @@ std::vector<std::string> FileIo::attrList()
     if (keys->size()) {
       start = std::make_shared<const string>(keys->back());
     }
-  } while (keys->size() == cluster->limits(KeyType::Metadata).max_range_elements);
+  } while (keys->size() == cluster->limits().max_range_elements);
   return names;
 }
 
@@ -559,7 +554,7 @@ std::vector<std::string> FileIo::ListFiles(std::string subtree, size_t max)
   auto end = utility::makeMetadataKey(cluster->id(), "~");
 
   do {
-    auto status = cluster->range(start, end, keys, KeyType::Metadata);
+    auto status = cluster->range(start, end, keys);
     if (!status.ok()) {
       kio_error("KeyRange request unexpectedly failed for path ", path, ": ", status);
       throw std::system_error(std::make_error_code(std::errc::io_error));
@@ -571,6 +566,6 @@ std::vector<std::string> FileIo::ListFiles(std::string subtree, size_t max)
     if (keys->size()) {
       start = std::make_shared<const string>(keys->back() + " ");
     }
-  } while (names.size() < max && keys->size() == cluster->limits(KeyType::Metadata).max_range_elements);
+  } while (names.size() < max && keys->size() == cluster->limits().max_range_elements);
   return names;
 }

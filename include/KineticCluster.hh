@@ -47,7 +47,7 @@ public:
   const std::string& instanceId() const;
 
   //! See documentation in superclass.
-  const ClusterLimits& limits(KeyType type) const;
+  const ClusterLimits& limits() const;
 
   //! See documentation in superclass.
   ClusterStats stats();
@@ -56,40 +56,34 @@ public:
   kinetic::KineticStatus get(
       const std::shared_ptr<const std::string>& key,
       std::shared_ptr<const std::string>& version,
-      std::shared_ptr<const std::string>& value,
-      KeyType type);
+      std::shared_ptr<const std::string>& value);
 
   //! See documentation in superclass.
   kinetic::KineticStatus get(
       const std::shared_ptr<const std::string>& key,
-      std::shared_ptr<const std::string>& version,
-      KeyType type);
+      std::shared_ptr<const std::string>& version);
 
   //! See documentation in superclass.
   kinetic::KineticStatus put(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
       const std::shared_ptr<const std::string>& value,
-      std::shared_ptr<const std::string>& version_out,
-      KeyType type);
+      std::shared_ptr<const std::string>& version_out);
 
   //! See documentation in superclass.
   kinetic::KineticStatus put(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& value,
-      std::shared_ptr<const std::string>& version_out,
-      KeyType type);
+      std::shared_ptr<const std::string>& version_out);
 
   //! See documentation in superclass.
   kinetic::KineticStatus remove(
       const std::shared_ptr<const std::string>& key,
-      const std::shared_ptr<const std::string>& version,
-      KeyType type);
+      const std::shared_ptr<const std::string>& version);
 
   //! See documentation in superclass.
   kinetic::KineticStatus remove(
-      const std::shared_ptr<const std::string>& key,
-      KeyType type);
+      const std::shared_ptr<const std::string>& key);
 
   kinetic::KineticStatus flush();
 
@@ -98,7 +92,7 @@ public:
       const std::shared_ptr<const std::string>& start_key,
       const std::shared_ptr<const std::string>& end_key,
       std::unique_ptr<std::vector<std::string>>& keys,
-      KeyType type, size_t max_elements = 0);
+      size_t max_elements = 0);
 
   //--------------------------------------------------------------------------
   //! Constructor.
@@ -112,8 +106,7 @@ public:
   explicit KineticCluster(
       std::string id, std::size_t block_size, std::chrono::seconds operation_timeout,
       std::vector<std::unique_ptr<KineticAutoConnection>> connections,
-      std::shared_ptr<RedundancyProvider> rp_data,
-      std::shared_ptr<RedundancyProvider> rp_metadata
+      std::shared_ptr<RedundancyProvider> rp
   );
 
   //--------------------------------------------------------------------------
@@ -129,19 +122,19 @@ protected:
   kinetic::KineticStatus do_remove(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
-      KeyType type, kinetic::WriteMode mode);
+      kinetic::WriteMode mode);
 
   kinetic::KineticStatus do_get(
       const std::shared_ptr<const std::string>& key,
       std::shared_ptr<const std::string>& version,
-      std::shared_ptr<const std::string>& value, KeyType type, bool skip_value);
+      std::shared_ptr<const std::string>& value, bool skip_value);
 
   kinetic::KineticStatus do_put(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
       const std::shared_ptr<const std::string>& value,
       std::shared_ptr<const std::string>& version_out,
-      KeyType type, kinetic::WriteMode mode);
+      kinetic::WriteMode mode);
 
   //--------------------------------------------------------------------------
   //! Update the clusterio statistics, capacity and health information.
@@ -155,7 +148,7 @@ protected:
   //! @return the stripe build from the value 
   //--------------------------------------------------------------------------
   std::vector<std::shared_ptr<const std::string>> valueToStripe(
-      const std::string& value, KeyType type
+      const std::string& value
   );
 
 
@@ -176,10 +169,10 @@ protected:
   std::vector<std::unique_ptr<KineticAutoConnection> > connections;
 
   //! cluster limits are constant over cluster lifetime
-  std::map<KeyType, ClusterLimits, CompareEnum> cluster_limits;
+  ClusterLimits cluster_limits;
 
   //! erasure coding / replication
-  std::map<KeyType, std::shared_ptr<RedundancyProvider>, CompareEnum> redundancy;
+  std::shared_ptr<RedundancyProvider> redundancy;
 
   //! time point the statistic snapshots have been last scheduled to be updated
   std::chrono::system_clock::time_point statistics_scheduled;

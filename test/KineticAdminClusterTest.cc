@@ -18,6 +18,7 @@
 #include "SimulatorController.h"
 #include "Utility.hh"
 #include "catch.hpp"
+#include "KineticIoSingleton.hh"
 
 using std::shared_ptr;
 using std::string;
@@ -31,8 +32,7 @@ bool indicator_exists(std::shared_ptr<ClusterInterface> cluster)
   auto status = cluster->range(
       utility::makeIndicatorKey(""),
       utility::makeIndicatorKey("~"),
-      keys,
-      KeyType::Data);
+      keys);
   REQUIRE(status.ok());
   return !keys->empty();
 }
@@ -43,10 +43,96 @@ bool handoff_exists(std::shared_ptr<ClusterInterface> cluster)
   auto status = cluster->range(
       std::make_shared<const std::string>("hand"),
       std::make_shared<const std::string>("hand~"),
-      keys,
-      KeyType::Data);
+      keys);
   REQUIRE(status.ok());
   return !keys->empty();
+}
+
+SCENARIO("Repair test.", "[Repair]") 
+{
+  auto& c = SimulatorController::getInstance();
+  SocketListener listener;
+
+  GIVEN ("A valid admin cluster") {
+    REQUIRE(c.reset());
+
+    std::string clusterId = "testCluster";
+    std::size_t blocksize = 1024 * 1024;
+
+    std::vector<std::unique_ptr<KineticAutoConnection>> connections;
+    for (int i = 0; i < 10; i++) {
+      std::unique_ptr<KineticAutoConnection> autocon(
+          new KineticAutoConnection(listener, std::make_pair(c.get(i), c.get(i)), std::chrono::seconds(1))
+      );
+      connections.push_back(std::move(autocon));
+    }
+
+    auto cluster = std::make_shared<KineticAdminCluster>(clusterId, blocksize, std::chrono::seconds(10),
+                                                         std::move(connections),
+                                                         std::make_shared<RedundancyProvider>(6, 4)
+    );
+   
+    WHEN("Putting a data and metadata key") {                    
+      shared_ptr<const string> putversion;
+      
+      auto value = make_shared<const string>(cluster->limits().max_value_size, 'v');
+      
+      auto status = cluster->put(
+          utility::makeDataKey(clusterId, "key", 1),
+          value,
+          putversion);
+      REQUIRE(status.ok());
+      REQUIRE(putversion);
+           
+      status = cluster->put(
+          utility::makeMetadataKey(clusterId, "key"),
+          make_shared<const string>(cluster->limits().max_value_size, 'v'),
+          putversion);
+      REQUIRE(status.ok());
+      REQUIRE(putversion);
+            
+      THEN("Keys should be repairable after resetting nParity drives") {
+        for(int i=0; i<4; i++) {
+          c.reset(i);
+        }
+        auto repair = cluster->repair(AdminClusterInterface::OperationTarget::DATA);
+        REQUIRE(repair.repaired == 1);     
+        
+        std::shared_ptr<const std::string> get_value; 
+        std::shared_ptr<const std::string> get_version; 
+          
+        cluster->get(utility::makeDataKey(clusterId, "key", 1), get_version, get_value);
+        REQUIRE(*value == *get_value);
+      
+        repair = cluster->repair(AdminClusterInterface::OperationTarget::METADATA);
+        REQUIRE(repair.repaired == 1);  
+      }
+      
+      THEN("Keys should not be repairable after resetting nParity+1 drives") {
+        for(int i=0; i<5; i++) {
+          c.reset(i);
+        }
+        auto repair = cluster->repair(AdminClusterInterface::OperationTarget::METADATA); 
+        REQUIRE(repair.unrepairable == 1);
+        
+        repair = cluster->repair(AdminClusterInterface::OperationTarget::DATA);
+        REQUIRE(repair.unrepairable == 1);
+        
+      }
+      
+      THEN("Keys should be detected as partial deletes after resetting > (nData+nParity)/2 drives") {
+        for(int i=0; i<6; i++) {
+          c.reset(i);
+        }
+        auto repair = cluster->repair(AdminClusterInterface::OperationTarget::METADATA);
+        REQUIRE(repair.removed == 1);     
+        
+        repair = cluster->repair(AdminClusterInterface::OperationTarget::DATA);
+        REQUIRE(repair.removed == 1);     
+      }
+     
+    }
+  }
 }
 
 
@@ -56,9 +142,7 @@ SCENARIO("Admin integration test.", "[Admin]")
   SocketListener listener;
 
   GIVEN ("A valid admin cluster") {
-    REQUIRE(c.reset(0));
-    REQUIRE(c.reset(1));
-    REQUIRE(c.reset(2));
+    REQUIRE(c.reset());
 
     std::string clusterId = "testCluster";
     std::size_t nData = 2;
@@ -75,8 +159,7 @@ SCENARIO("Admin integration test.", "[Admin]")
 
     auto cluster = std::make_shared<KineticAdminCluster>(clusterId, blocksize, std::chrono::seconds(10),
                                                          std::move(connections),
-                                                         std::make_shared<RedundancyProvider>(nData, nParity),
-                                                         std::make_shared<RedundancyProvider>(1, nParity+1)
+                                                         std::make_shared<RedundancyProvider>(nData, nParity)
     );
 
 
@@ -85,31 +168,27 @@ SCENARIO("Admin integration test.", "[Admin]")
 
       auto target = AdminClusterInterface::OperationTarget::INVALID;
       std::shared_ptr<const std::string> key;
-      KeyType type;
+      
       int i = rand() % 3;
 
       if (i == 0) {
         target = AdminClusterInterface::OperationTarget::DATA;
         key = utility::makeDataKey(clusterId, "key", 1);
-        type = KeyType::Data;
       }
       else if (i == 1) {
         target = AdminClusterInterface::OperationTarget::ATTRIBUTE;
         key = utility::makeAttributeKey(clusterId, "key", "attribute");
-        type = KeyType::Metadata;
       }
       else {
         target = AdminClusterInterface::OperationTarget::METADATA;
         key = utility::makeMetadataKey(clusterId, "key");
-        type = KeyType::Metadata;
       }
 
       shared_ptr<const string> putversion;
       auto status = cluster->put(
           key,
-          make_shared<const string>(cluster->limits(type).max_value_size, 'v'),
-          putversion,
-          type);
+          make_shared<const string>(cluster->limits().max_value_size, 'v'),
+          putversion);
       REQUIRE(status.ok());
       REQUIRE(putversion);
 

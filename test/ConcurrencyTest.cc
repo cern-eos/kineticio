@@ -46,11 +46,11 @@ void delete_x(std::vector<std::shared_ptr<KineticCluster>>& clusters, int x)
     auto cluster = clusters[rand() % clusters.size()];
     std::shared_ptr<const std::string> version;
 
-    auto status = cluster->get(key, version, KeyType::Data);
+    auto status = cluster->get(key, version);
     if (!status.ok() && status.statusCode() != StatusCode::REMOTE_NOT_FOUND)
       throw std::runtime_error("Get: unexpected result.");
     if (version) {
-      status = cluster->remove(key, version, KeyType::Data);
+      status = cluster->remove(key, version);
       if (!status.ok() && status.statusCode() != StatusCode::REMOTE_VERSION_MISMATCH)
         throw std::runtime_error("Remove: unexpected result.");
     }
@@ -68,12 +68,9 @@ SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
   std::size_t blocksize = 1024 * 1024;
 
   auto ec = std::make_shared<RedundancyProvider>(nData, nParity);
-  auto repl = std::make_shared<RedundancyProvider>(1, nParity);
 
   GIVEN ("A valid cluster configuration and empty drives") {
-    c.reset(0);
-    c.reset(1);
-    c.reset(2);
+    c.reset();
 
     for (int instances = 1; instances <= 16; instances *= 4) {
     for (int numblocks = 1; numblocks <= 8; numblocks *= 4) {
@@ -97,8 +94,8 @@ SCENARIO("Kinetic Concurrency Testing...", "[Concurrency]")
 
           clusters.push_back(std::make_shared<KineticCluster>(
               "testcluster", blocksize, std::chrono::seconds(10),
-              std::move(connections), ec, repl
-          ));
+              std::move(connections), ec)
+          );
 
           for (int bl = 0; bl < numblocks; bl++) {
             dblocks.push_back(

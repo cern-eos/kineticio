@@ -122,7 +122,6 @@ private:
   //--------------------------------------------------------------------------
   bool scanKey(
       const std::shared_ptr<const std::string>& key,
-      KeyType keyType,
       KeyCountsInternal& key_counts
   );
 
@@ -134,7 +133,6 @@ private:
   //--------------------------------------------------------------------------
   void repairKey(
       const std::shared_ptr<const std::string>& key,
-      KeyType keyType,
       KeyCountsInternal& key_counts
   );
 

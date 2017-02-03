@@ -1,53 +1,78 @@
 {
-   "location_comment":"Array of drive locations {wwn,inet4,port}, located at $KINETIC_DRIVE_LOCATION",
-   "location":[
-        {"wwn":"WWN1","inet4":["localhost","127.0.0.1"],"port":8123},
-	{"wwn":"WWN2","inet4":["nohost","really"],"port":8123},
-        {"wwn":"WWN3","inet4":["localhost","127.0.0.1"],"port":8124}
-    ],
+  "location_comment":"Array of drive locations {wwn,inet4,port}, located at $KINETIC_DRIVE_LOCATION",
+  "location":[
+    {"wwn":"WWN1","inet4":["localhost","127.0.0.1"],"port":8123},
+    {"wwn":"WWN2","inet4":["nohost","nohost"],"port":8123},
+    {"wwn":"WWN3","inet4":["localhost","127.0.0.1"],"port":8124},
+    {"wwn":"WWN4","inet4":["localhost","127.0.0.1"],"port":8125},
+    {"wwn":"WWN5","inet4":["localhost","127.0.0.1"],"port":8126},
+    {"wwn":"WWN6","inet4":["localhost","127.0.0.1"],"port":8127},
+    {"wwn":"WWN7","inet4":["localhost","127.0.0.1"],"port":8128},
+    {"wwn":"WWN8","inet4":["localhost","127.0.0.1"],"port":8129},
+    {"wwn":"WWN9","inet4":["localhost","127.0.0.1"],"port":8130},
+    {"wwn":"WWN10","inet4":["localhost","127.0.0.1"],"port":8131},
+    {"wwn":"WWN11","inet4":["localhost","127.0.0.1"],"port":8132},
+    {"wwn":"WWN12","inet4":["localhost","127.0.0.1"],"port":8133},
+    {"wwn":"WWN13","inet4":["localhost","127.0.0.1"],"port":8134}
+   ],
 
-   "security_comment":"Array of drive access information {wwn, id, key}, located at $KINETIC_DRIVE_SECURITY ",
-   "security":[
-        {"wwn":"WWN1","userId":1,"key":"asdfasdf"},
-        {"wwn":"WWN2","userId":1,"key":"asdfasdf"},
-        {"wwn":"WWN3","userId":1,"key":"asdfasdf"}
-    ],
+  "security_comment":"Array of drive access information {wwn, id, key}, located at $KINETIC_DRIVE_SECURITY ",
+  "security":[
+    {"wwn":"WWN1","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN2","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN3","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN4","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN5","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN6","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN7","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN8","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN9","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN10","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN11","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN12","userId":1,"key":"asdfasdf"},
+    {"wwn":"WWN13","userId":1,"key":"asdfasdf"}
+   ],
 
   "configuration_comment":"Library wide configuration options",
   "configuration":{
     "cacheCapacityMB":2048,
     "maxBackgroundIoThreads":8,
     "maxBackgroundIoQueue":16,
-    "maxReadaheadWindow":5
+    "maxReadaheadWindow":4
   },
 
-    "cluster_comment":"Array of cluster definitions, located at $KINETIC_CLUSTER_DEFINITION",
-    "cluster":[
-      {"clusterID":"Cluster1",
-        "numData":1,"numParity":1,
-        "chunkSizeKB":1,
-        "timeout":30,"minReconnectInterval":15,
-        "drives":[
-         {"wwn":"WWN1"},
-         {"wwn":"WWN3"}
-        ]
-      },
-      {"clusterID":"Cluster2",
-        "numData":1,"numParity":1,
-        "chunkSizeKB":1024,
-        "timeout":30,"minReconnectInterval":15,
-        "drives":[
-         {"wwn":"WWN1"},
-         {"wwn":"WWN2"}
-        ]
-      },
-      {"clusterID":"Cluster3",
-        "numData":1,"numParity":0,
-        "chunkSizeKB":512,
-        "timeout":30,"minReconnectInterval":15,
-        "drives":[
-         {"wwn":"WWN1"}
-        ]
-      }
-    ]
+  "cluster_comment":"Array of cluster definitions, located at $KINETIC_CLUSTER_DEFINITION",
+  "cluster":[
+    { "clusterID":"Cluster1",
+      "numData":1,"numParity":0,
+      "chunkSizeKB":1,
+      "timeout":30,"minReconnectInterval":15,
+      "drives":[ {"wwn":"WWN1"} ]
+    },
+    { "clusterID":"Cluster2",
+      "numData":2,"numParity":1,
+      "chunkSizeKB":1024,
+      "timeout":30,"minReconnectInterval":15,
+      "drives":[ {"wwn":"WWN1"}, {"wwn":"WWN2"}, {"wwn":"WWN3"}, {"wwn":"WWN4"} ]
+    },
+    { "clusterID":"Cluster3",
+      "numData":8,"numParity":2,
+      "chunkSizeKB":512,
+      "timeout":30,"minReconnectInterval":15,
+      "drives":[
+       {"wwn":"WWN1"}, 
+       {"wwn":"WWN3"}, 
+       {"wwn":"WWN4"}, 
+       {"wwn":"WWN5"}, 
+       {"wwn":"WWN6"}, 
+       {"wwn":"WWN7"}, 
+       {"wwn":"WWN8"}, 
+       {"wwn":"WWN9"}, 
+       {"wwn":"WWN10"}, 
+       {"wwn":"WWN11"}, 
+       {"wwn":"WWN12"}, 
+       {"wwn":"WWN13"}
+      ]
+    }
+  ]
 }

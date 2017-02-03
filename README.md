@@ -23,15 +23,15 @@ The primary use case of this library is to enable Kinetic capability for the [EO
 The main goals are to provide *high performance* and *configurable redundancy* for storing / accessing file data with a file interface (open, read, write, stat, etc.) on top of Kinetic storage devices. 
 
 + **performance** Multiple drives are grouped into a cluster and file data is distributed among all drives of a cluster. 
-+ **redundancy** File data is erasure coded and metadata is replicated within a cluster to meet the configured redundancy level. 
++ **redundancy** Erasure coding within a cluster is supported to meet a configurable redundancy level. 
 
 Each drive may belong multiple logical clusters to allow different redundancy and performance configurations with a limited number of drives. Files are assigned to individual clusters and can be accessed with a url-based naming scheme: `kinetic://clustername/path/filename`. 
 
-Every (replicated or erasure encoded) data chunk is stored with a checksum, providing end-to-end reliability. Data corruption is transparently repaired on access (assuming sufficient redundancy). 
+Every data chunk is stored with a checksum, providing end-to-end reliability. Data corruption is transparently repaired on access (assuming sufficient redundancy). 
 
 Created clusters are independent from one another and static; individual clusters cannot grow / shrink (though drives may be replaced). This property allows key placement within a cluster to be permanent and not require additional metadata. The implementation is correspondingly simple and avoids all complexity inherent to dynamic placement strategies. If a federated namespace for all clusters is required a higher-level namespace implementation, such as provided by EOS, can be employed on top of the kineticio library. 
 
-Cluster health is monitored and a system to identify problematic keys has been implemented to allow repair processes to target specific keys instead of requiring a complete cluster scan. 
+Cluster health is monitored and problematic keys are marked to allow a targeted repair processes instead of requiring a complete cluster scan. 
 
 
 ## Dependencies
@@ -107,7 +107,7 @@ In the following, the individual configuration options will be presented.
 | --- | --- |
 | clusterID | The cluster identifier. As the drive wwn it can be freely chosen but has to be unique. It may **not** contain the ':' or '/' symbols. |
 | numData | The number of data chunks that will be stored in a data stripe (required to be >=1). |
-| numParity | Defines the redundancy level of this cluster (required to be >=0). Metadata and attribute keys will be stored with numParity replication. Data will be stored in (numData,numParity) erasure coded stripes (unless numData is defined as 1 in which case replication will be used). |
+| numParity | Defines the redundancy level of this cluster (required to be <numData). If set to > 0, all data is stored in (numData,numParity) erasure coded stripes. |
 | chunkSizeKB | The maximum size of data chunks in KB (required to be min. 1 and max. 1024). A value of 1024 is optimal for Kinetic drive performance. |
 | timeout | Network timeout for cluster operations in seconds. |
 | minReconnectInterval | The minimum time / rate limit in seconds between reconnection attempts. |

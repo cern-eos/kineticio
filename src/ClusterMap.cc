@@ -72,21 +72,20 @@ std::shared_ptr<ClusterInterface> ClusterMap::getCluster(const std::string& id)
     connections.push_back(std::move(autocon));
   }
 
-  /* Get data and metadata redundancy providers */
-  auto rpDataName = utility::Convert::toString(ki.numData, "-", ki.numParity);
-  auto rpMetadataName = utility::Convert::toString("1-", ki.numParity);
-  if (!rpCache.count(rpDataName)) {
-    rpCache.insert(std::make_pair(rpDataName, std::make_shared<RedundancyProvider>(ki.numData, ki.numParity)));
+  /* Get redundancy providers */
+  if(ki.numData <= ki.numParity) {
+    kio_warning("#data chunks must be > #parity chunks. Configured: (", ki.numData, "-", ki.numParity, ")");
+    throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
-  if (!rpCache.count(rpMetadataName)) {
-    rpCache.insert(std::make_pair(rpMetadataName, std::make_shared<RedundancyProvider>(1, ki.numParity)));
+  auto rpName = utility::Convert::toString(ki.numData, "-", ki.numParity);
+  if (!rpCache.count(rpName)) {
+    rpCache.insert(std::make_pair(rpName, std::make_shared<RedundancyProvider>(ki.numData, ki.numParity)));
   }
 
   clusterCache.insert(
       std::make_pair(id,
                      std::make_shared<KineticAdminCluster>(
-                         id, ki.blockSize, ki.operation_timeout, std::move(connections),
-                         rpCache.at(rpDataName), rpCache.at(rpMetadataName)
+                         id, ki.blockSize, ki.operation_timeout, std::move(connections), rpCache.at(rpName)
                      ))
   );
 

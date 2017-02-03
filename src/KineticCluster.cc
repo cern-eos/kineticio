@@ -29,13 +29,10 @@ using namespace kio;
 KineticCluster::KineticCluster(
     std::string id, std::size_t block_size, std::chrono::seconds op_timeout,
     std::vector<std::unique_ptr<KineticAutoConnection>> cons,
-    std::shared_ptr<RedundancyProvider> rp_data,
-    std::shared_ptr<RedundancyProvider> rp_metadata
+    std::shared_ptr<RedundancyProvider> rp
 ) : identity(id), instanceIdentity(utility::uuidGenerateString()), chunkCapacity(block_size),
-    operation_timeout(op_timeout), connections(std::move(cons)), dmutex(std::make_shared<DestructionMutex>())
+    operation_timeout(op_timeout), connections(std::move(cons)), redundancy(rp), dmutex(std::make_shared<DestructionMutex>())
 {
-  redundancy[KeyType::Data] = rp_data;
-  redundancy[KeyType::Metadata] = rp_metadata;
 
   /* Attempt to get cluster limits from _any_ drive in the cluster */
   for (size_t off = 0; off < connections.size(); off++) {
@@ -49,14 +46,10 @@ KineticCluster::KineticCluster(
         kio_error("block size of ", block_size, "is bigger than maximum drive block size of ", l.max_value_size);
         throw std::system_error(std::make_error_code(std::errc::invalid_argument));
       }
-      ClusterLimits dl, mdl;
-      dl.max_range_elements = mdl.max_range_elements = 100;
-      dl.max_key_size = mdl.max_key_size = l.max_key_size;
-      dl.max_version_size = mdl.max_version_size = l.max_version_size;
-      dl.max_value_size = block_size * redundancy[KeyType::Data]->numData();
-      mdl.max_value_size = block_size * redundancy[KeyType::Metadata]->numData();
-      cluster_limits[KeyType::Data] = dl;
-      cluster_limits[KeyType::Metadata] = mdl;
+      cluster_limits.max_range_elements = 100;
+      cluster_limits.max_key_size = l.max_key_size;
+      cluster_limits.max_version_size = l.max_version_size;
+      cluster_limits.max_value_size = block_size * redundancy->numData();
       break;
     }
     if (off == connections.size()) {
@@ -68,7 +61,7 @@ KineticCluster::KineticCluster(
   /* Set initial values for cluster statistics and schedule an update. */
   auto& h = statistics_snapshot.health;
   h.drives_total = static_cast<uint32_t>(connections.size());
-  h.redundancy_factor = static_cast<uint32_t>(std::min(rp_data->numParity(), rp_metadata->numParity()));
+  h.redundancy_factor = static_cast<uint32_t>(redundancy->numParity());
   statistics_snapshot.bytes_total = 1;
   kio().threadpool().try_run(std::bind(&KineticCluster::updateSnapshot, this, dmutex));
 }
@@ -78,9 +71,9 @@ KineticCluster::~KineticCluster()
   dmutex->setDestructed();
 }
 
-const ClusterLimits& KineticCluster::limits(KeyType type) const
+const ClusterLimits& KineticCluster::limits() const
 {
-  return cluster_limits.at(type);
+  return cluster_limits;
 }
 
 const std::string& KineticCluster::instanceId() const
@@ -109,26 +102,26 @@ ClusterStats KineticCluster::stats()
 KineticStatus KineticCluster::flush()
 {
   ClusterFlushOp flushOp(connections);
-  auto status = flushOp.execute(operation_timeout, connections.size() - redundancy.begin()->second->numParity());
+  auto status = flushOp.execute(operation_timeout, connections.size() - redundancy->numParity());
   kio_debug("Flush request for cluster ", id(), "completed with status ", status);
   return status;
 }
 
 KineticStatus KineticCluster::range(const std::shared_ptr<const std::string>& start_key,
                                     const std::shared_ptr<const std::string>& end_key,
-                                    std::unique_ptr<std::vector<std::string>>& keys, KeyType type, size_t max_elements)
+                                    std::unique_ptr<std::vector<std::string>>& keys, size_t max_elements)
 {
   if (!start_key || !end_key) {
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
   }
 
   if (!max_elements) {
-    max_elements = cluster_limits[type].max_range_elements;
+    max_elements = cluster_limits.max_range_elements;
   }
 
   ClusterRangeOp rangeop(start_key, end_key, max_elements, connections);
 
-  auto status = rangeop.execute(operation_timeout, connections.size() - redundancy[type]->numParity());
+  auto status = rangeop.execute(operation_timeout, connections.size() - redundancy->numParity());
   if (status.ok()) {
     rangeop.getKeys(keys);
   }
@@ -138,13 +131,13 @@ KineticStatus KineticCluster::range(const std::shared_ptr<const std::string>& st
 
 KineticStatus KineticCluster::do_remove(const std::shared_ptr<const std::string>& key,
                                         const std::shared_ptr<const std::string>& version,
-                                        KeyType type, WriteMode wmode)
+                                        WriteMode wmode)
 {
   if (!key || !version) {
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input.");
   }
 
-  StripeOperation_DEL delOp(key, version, wmode, connections, redundancy[type], redundancy[type]->size());
+  StripeOperation_DEL delOp(key, version, wmode, connections, redundancy, redundancy->size());
   auto status = delOp.execute(operation_timeout);
   if (delOp.needsIndicator()) {
     delOp.putIndicatorKey();
@@ -153,22 +146,21 @@ KineticStatus KineticCluster::do_remove(const std::shared_ptr<const std::string>
   return status;
 }
 
-KineticStatus KineticCluster::remove(const std::shared_ptr<const std::string>& key, KeyType type)
+KineticStatus KineticCluster::remove(const std::shared_ptr<const std::string>& key)
 {
-  return do_remove(key, make_shared<const string>(), type, WriteMode::IGNORE_VERSION);
+  return do_remove(key, make_shared<const string>(), WriteMode::IGNORE_VERSION);
 }
 
 KineticStatus KineticCluster::remove(const std::shared_ptr<const std::string>& key,
-                                     const std::shared_ptr<const std::string>& version,
-                                     KeyType type)
+                                     const std::shared_ptr<const std::string>& version)
 {
-  return do_remove(key, version, type, WriteMode::REQUIRE_SAME_VERSION);
+  return do_remove(key, version, WriteMode::REQUIRE_SAME_VERSION);
 }
 
-std::vector<std::shared_ptr<const std::string>> KineticCluster::valueToStripe(const std::string& value, KeyType type)
+std::vector<std::shared_ptr<const std::string>> KineticCluster::valueToStripe(const std::string& value)
 {
   if (!value.length()) {
-    return std::vector<std::shared_ptr<const string>>(redundancy[type]->size(), std::make_shared<const string>());
+    return std::vector<std::shared_ptr<const string>>(redundancy->size(), std::make_shared<const string>());
   }
 
   std::vector<std::shared_ptr<const string>> stripe;
@@ -177,7 +169,7 @@ std::vector<std::shared_ptr<const std::string>> KineticCluster::valueToStripe(co
   std::shared_ptr<std::string> zero;
 
   /* Set data chunks of the stripe. If value < stripe size, fill in with 0ed strings. */
-  for (size_t i = 0; i < redundancy[type]->numData(); i++) {
+  for (size_t i = 0; i < redundancy->numData(); i++) {
     if (i * chunkSize < value.length()) {
       auto chunk = std::make_shared<string>(value.substr(i * chunkSize, chunkSize));
       chunk->resize(chunkSize);
@@ -192,14 +184,14 @@ std::vector<std::shared_ptr<const std::string>> KineticCluster::valueToStripe(co
     }
   }
   /* Set empty strings for parities */
-  for (size_t i = 0; i < redundancy[type]->numParity(); i++) {
+  for (size_t i = 0; i < redundancy->numParity(); i++) {
     stripe.push_back(std::make_shared<const string>());
   }
   /* Compute redundancy */
-  redundancy[type]->compute(stripe);
+  redundancy->compute(stripe);
 
   /* We don't actually want to write the 0ed data chunks used for redundancy computation. So get rid of them. */
-  for (size_t index = (value.size() + chunkSize - 1) / chunkSize; index < redundancy[type]->numData(); index++) {
+  for (size_t index = (value.size() + chunkSize - 1) / chunkSize; index < redundancy->numData(); index++) {
     stripe[index] = std::make_shared<const string>();
   }
 
@@ -211,7 +203,6 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
                                      const std::shared_ptr<const std::string>& version,
                                      const std::shared_ptr<const std::string>& value,
                                      std::shared_ptr<const std::string>& version_out,
-                                     KeyType type,
                                      kinetic::WriteMode mode)
 {
   if (!key || !version || !value) {
@@ -221,7 +212,7 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
   /* Compute Stripe */
   std::vector<std::shared_ptr<const string>> stripe;
   try {
-    stripe = valueToStripe(*value, type);
+    stripe = valueToStripe(*value);
   } catch (const std::exception& e) {
     kio_error("Failed building data stripe for key ", *key, ": ", e.what());
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, e.what());
@@ -230,7 +221,7 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
   /* Do not use version_out variable directly in case the client uses the same pointer for version and version_out. */
   auto version_new = utility::uuidGenerateEncodeSize(value->size());
 
-  StripeOperation_PUT putOp(key, version_new, version, stripe, mode, connections, redundancy[type]);
+  StripeOperation_PUT putOp(key, version_new, version, stripe, mode, connections, redundancy);
 
   auto status = putOp.execute(operation_timeout);
   if (putOp.needsIndicator()) {
@@ -245,10 +236,9 @@ KineticStatus KineticCluster::do_put(const std::shared_ptr<const std::string>& k
 
 kinetic::KineticStatus KineticCluster::put(const std::shared_ptr<const std::string>& key,
                                            const std::shared_ptr<const std::string>& value,
-                                           std::shared_ptr<const std::string>& version_out,
-                                           KeyType type)
+                                           std::shared_ptr<const std::string>& version_out)
 {
-  auto status = do_put(key, make_shared<const string>(), value, version_out, type, WriteMode::IGNORE_VERSION);
+  auto status = do_put(key, make_shared<const string>(), value, version_out, WriteMode::IGNORE_VERSION);
   kio_debug("Forced put request for key ", *key, " completed with status: ", status);
   return status;
 }
@@ -256,11 +246,11 @@ kinetic::KineticStatus KineticCluster::put(const std::shared_ptr<const std::stri
 kinetic::KineticStatus KineticCluster::put(const std::shared_ptr<const std::string>& key,
                                            const std::shared_ptr<const std::string>& version,
                                            const std::shared_ptr<const std::string>& value,
-                                           std::shared_ptr<const std::string>& version_out,
-                                           KeyType type)
+                                           std::shared_ptr<const std::string>& version_out)
 {
-  auto status = do_put(key, version ? version : make_shared<const string>(), value, version_out, type,
-                       WriteMode::REQUIRE_SAME_VERSION);
+  auto status = do_put(key, version ? version : make_shared<const string>(), 
+          value, version_out, WriteMode::REQUIRE_SAME_VERSION);
+  
   kio_debug("Versioned put request for key ", *key, " completed with status: ", status);
   return status;
 }
@@ -286,12 +276,12 @@ bool operator!=(const StripeOperation_GET::VersionCount& lhs, const StripeOperat
 
 kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::string>& key,
                                               std::shared_ptr<const std::string>& version,
-                                              std::shared_ptr<const std::string>& value, KeyType type, bool skip_value)
+                                              std::shared_ptr<const std::string>& value, bool skip_value)
 {
   if (!key) {
     return KineticStatus(StatusCode::CLIENT_INTERNAL_ERROR, "invalid input, key has to be supplied.");;
   }
-  StripeOperation_GET getop(key, skip_value, connections, redundancy[type]);
+  StripeOperation_GET getop(key, skip_value, connections, redundancy);
 
   auto status = getop.execute(operation_timeout);
 
@@ -302,11 +292,11 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
     auto start_time = std::chrono::system_clock::now();
     do {
       usleep(200 * 1000);
-      StripeOperation_GET getop_concurrency_check(key, skip_value, connections, redundancy[type]);
+      StripeOperation_GET getop_concurrency_check(key, skip_value, connections, redundancy);
       getop_concurrency_check.execute(operation_timeout);
       if (getop.mostFrequentVersion() != getop_concurrency_check.mostFrequentVersion()) {
         kio_warning("Concurrent write detected. Re-starting get operation for key ", *key, ".");
-        return do_get(key, version, value, type, skip_value);
+        return do_get(key, version, value, skip_value);
       }
     } while (std::chrono::system_clock::now() < start_time + operation_timeout);
     kio_warning("No concurrent write: Both pre and post timeout most frequent version is ",
@@ -325,19 +315,19 @@ kinetic::KineticStatus KineticCluster::do_get(const std::shared_ptr<const std::s
 }
 
 kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::string>& key,
-                                           std::shared_ptr<const std::string>& version, KeyType type)
+                                           std::shared_ptr<const std::string>& version)
 {
   std::shared_ptr<const string> value;
-  auto status = do_get(key, version, value, type, true);
+  auto status = do_get(key, version, value, true);
   kio_debug("Get VERSION request of key ", *key, " completed with status: ", status);
   return status;
 }
 
 kinetic::KineticStatus KineticCluster::get(const std::shared_ptr<const std::string>& key,
                                            std::shared_ptr<const std::string>& version,
-                                           std::shared_ptr<const std::string>& value, KeyType type)
+                                           std::shared_ptr<const std::string>& value)
 {
-  auto status = do_get(key, version, value, type, false);
+  auto status = do_get(key, version, value, false);
   if (status.ok())
     kio_debug("Get DATA request of key ", *key, " completed with status: ", status);
   return status;
@@ -352,9 +342,7 @@ void KineticCluster::updateSnapshot(std::shared_ptr<DestructionMutex> dm)
   auto indicator_start = utility::makeIndicatorKey(id());
   auto indicator_end = utility::makeIndicatorKey(id() + "~");
   ClusterRangeOp rangeop(indicator_start, indicator_end, 1, connections);
-  auto indicator_status = rangeop.execute(operation_timeout,
-                                          connections.size() - redundancy[KeyType::Data]->numParity()
-  );
+  auto indicator_status = rangeop.execute(operation_timeout, connections.size() - redundancy->numParity());
   bool indicator = false;
   if (indicator_status.ok()) {
     std::unique_ptr<std::vector<std::string>> keys;

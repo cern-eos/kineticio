@@ -22,12 +22,13 @@
 
 
 
-void SimulatorController::startSimulators(size_t capacity)
-{
+void SimulatorController::startSimulators(size_t cap)
+{ 
   if(pid) {
     throw std::runtime_error("Simulators already started.");
   }
-
+  capacity = cap; 
+  
   pid = fork();
 
   if (pid < 0) {
@@ -74,34 +75,15 @@ void SimulatorController::startSimulators(size_t capacity)
   }
 }
 
-//void SimulatorController::stopSimulators()
-//{
-//  if(pid) {
-//    kio_debug("Killing Simulators...");
-//    kill(pid, SIGTERM);
-//
-//    bool died = false;
-//    for (int loop = 0; !died && loop < 10; loop++)
-//    {
-//      int status;
-//      if (waitpid(pid, &status, WNOHANG) == pid) {
-//        died = true;
-//      }
-//      else {
-//        usleep(500*1000);
-//      }
-//    }
-//
-//    if (!died) {
-//      kio_debug("Reverting to SIGKILL");
-//      kill(pid, SIGKILL);
-//      usleep(1000*1000);
-//    }
-//
-//    kio_debug("Killed!");
-//    pid = 0;
-//  }
-//}
+bool SimulatorController::reset()
+{
+  for(size_t i=0; i<capacity; i++) {
+    if(!reset(i)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 bool SimulatorController::reset(size_t index)
 {
@@ -145,9 +127,6 @@ SimulatorController::SimulatorController()
 SimulatorController::~SimulatorController()
 {
   /* Don't stop simulators manually to prevent segfault on OSX...
-   * instead rely on automatic termiantion of child processes
-  if(pid) {
-    stopSimulators();
-  }
-  */
+   * instead rely on automatic termination of child processes
+   */
 }

@@ -27,9 +27,7 @@ SCENARIO("KineticIo Integration Test", "[Io]")
 {
 
   auto& c = SimulatorController::getInstance();
-  REQUIRE(c.reset(0));
-  REQUIRE(c.reset(1));
-  REQUIRE(c.reset(2));
+  REQUIRE(c.reset());
 
   int buf_size = 64;
   char write_buf[] = "rcPOa12L3nhN5Cgvsa6Jlr3gn58VhazjA6oSpKacLFYqZBEu0khRwbWtEjge3BUA";
@@ -195,14 +193,14 @@ SCENARIO("KineticIo Integration Test", "[Io]")
       struct stat stbuf;
       REQUIRE_NOTHROW(fileio->Stat(&stbuf));
       REQUIRE((stbuf.st_blocks == 1));
-      REQUIRE((stbuf.st_blksize == 1024 * 1024));
+      REQUIRE((stbuf.st_blksize == 2 * 1024 * 1024));
       REQUIRE((stbuf.st_size == 0));
     }
 
     WHEN("Truncate is called to change the file size.") {
-      for (int chunk = 3; chunk >= 0; chunk--) {
+      for (int block = 3; block >= 0; block--) {
         for (int odd = 0; odd <= 1; odd++) {
-          size_t size = 1024 * 1024 * chunk + odd;
+          size_t size = 2 * 1024 * 1024 * block + odd;
           REQUIRE_NOTHROW(fileio->Truncate(size));
           THEN("stat succeeds and returns the truncated size") {
             struct stat stbuf;
@@ -214,7 +212,7 @@ SCENARIO("KineticIo Integration Test", "[Io]")
     }
 
     WHEN("The Io object grows over 100 blocks and is closed") {
-      size_t size = 1024*1024*512;
+      size_t size = 2*1024*1024*512;
       REQUIRE_NOTHROW(fileio->Truncate(size));
       fileio->Close();
       THEN("stat succeeds and returns the correct size") {
@@ -241,8 +239,8 @@ SCENARIO("KineticIo Integration Test", "[Io]")
       }
     }
 
-    AND_WHEN("Writing data across multiple chunks.") {
-      const size_t capacity = 1024 * 1024;
+    AND_WHEN("Writing data across multiple blocks.") {
+      const size_t capacity = 2 * 1024 * 1024;
       REQUIRE((fileio->Write(capacity - 32, write_buf, buf_size) == buf_size));
 
       THEN("IO object can be synced.") {
@@ -291,9 +289,7 @@ SCENARIO("KineticIo Integration Test", "[Io]")
 SCENARIO("FileIo Attribute Integration Test", "[Attr]")
 {
   auto& c = SimulatorController::getInstance();
-  REQUIRE(c.reset(0));
-  REQUIRE(c.reset(1));
-  REQUIRE(c.reset(2));
+  REQUIRE(c.reset());
 
   GIVEN("A file is created.") {
     std::string base_url("kinetic://Cluster2/");

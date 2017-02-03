@@ -29,12 +29,6 @@
 #include <kinetic/kinetic.h>
 #include <kio/AdminClusterInterface.hh>
 
-/* TODO: Do not use kinetic::KineticStatus directly, as it can't
- * represent cluster error states. Would also allow to decouple ClusterInterface
- * from kinetic/kinetic.h
- *
- */
-
 namespace kio {
 
 struct ClusterLimits {
@@ -65,10 +59,6 @@ struct ClusterStats {
 
     /* Cluster health as defined in AdminClusterInterface */
     ClusterStatus health;
-};
-
-enum class KeyType {
-  Data, Metadata
 };
 
 class CompareEnum {
@@ -110,10 +100,9 @@ public:
   //! some of the key-space might be reserved for cluster internal metadata.
   //! Limits remain constant during the cluster lifetime.
   //!
-  //! @param type limits may differ for data / metadata keys
   //! @return cluster limits
   //----------------------------------------------------------------------------
-  virtual const ClusterLimits& limits(KeyType type) const = 0;
+  virtual const ClusterLimits& limits() const = 0;
 
   //----------------------------------------------------------------------------
   //! Obtain maximum key / version / value sizes and maximum number of
@@ -134,14 +123,12 @@ public:
   //! @param key the key
   //! @param version stores the version upon success, not modified on error
   //! @param value stores the value upon success, not modified on error
-  //! @param type cluster may handle key types differently (e.g. redundancy)
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus get(
       const std::shared_ptr<const std::string>& key,
       std::shared_ptr<const std::string>& version,
-      std::shared_ptr<const std::string>& value,
-      KeyType type) = 0;
+      std::shared_ptr<const std::string>& value) = 0;
 
   //----------------------------------------------------------------------------
   //! Get the version associated with the supplied key. Value will not be
@@ -149,13 +136,11 @@ public:
   //
   //! @param key the key
   //! @param version stores the version upon success, not modified on error
-  //! @param type cluster may handle key types differently (e.g. redundancy)
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus get(
       const std::shared_ptr<const std::string>& key,
-      std::shared_ptr<const std::string>& version,
-      KeyType type) = 0;
+      std::shared_ptr<const std::string>& version) = 0;
 
   //----------------------------------------------------------------------------
   //! Write the supplied key-value pair to the cluster. Put is conditional on
@@ -165,15 +150,13 @@ public:
   //! @param version existing version expected in the cluster, empty for none.
   //! @param value value to store
   //! @param version_out contains new key version on success
-  //! @param type cluster may handle key types differently (e.g. redundancy)
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus put(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
       const std::shared_ptr<const std::string>& value,
-      std::shared_ptr<const std::string>& version_out,
-      KeyType type) = 0;
+      std::shared_ptr<const std::string>& version_out) = 0;
 
 
   //----------------------------------------------------------------------------
@@ -183,14 +166,12 @@ public:
   //! @param key the key
   //! @param value value to store
   //! @param version_out contains new key version on success
-  //! @param type cluster may handle key types differently (e.g. redundancy)
   //! @return status of operation
   //----------------------------------------------------------------------------
   virtual kinetic::KineticStatus put(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& value,
-      std::shared_ptr<const std::string>& version_out,
-      KeyType type) = 0;
+      std::shared_ptr<const std::string>& version_out) = 0;
 
   //----------------------------------------------------------------------------
   //! Delete the key on the cluster, conditional on supplied version matching
@@ -198,24 +179,20 @@ public:
   //!
   //! @param key     the key
   //! @param version existing version expected in the cluster
-  //! @param type cluster may handle key types differently (e.g. redundancy)
   //! @return status of operation
   //---------------------------------------------------------------------------
   virtual kinetic::KineticStatus remove(
       const std::shared_ptr<const std::string>& key,
-      const std::shared_ptr<const std::string>& version,
-      KeyType type) = 0;
+      const std::shared_ptr<const std::string>& version) = 0;
 
   //----------------------------------------------------------------------------
   //! Force delete the key on the cluster.
   //!
   //! @param key     the key
-  //! @param type cluster may handle key types differently (e.g. redundancy)
   //! @return status of operation
   //---------------------------------------------------------------------------
   virtual kinetic::KineticStatus remove(
-      const std::shared_ptr<const std::string>& key,
-      KeyType type) = 0;
+      const std::shared_ptr<const std::string>& key) = 0;
 
   //----------------------------------------------------------------------------
   //! Flush all connections associated with this cluster. A successful flush
@@ -235,7 +212,6 @@ public:
   //! @param end    the end point of the requested key range, supplied key is
   //!   included in the range
   //! @param keys   on success, contains existing key names in supplied range.
-  //! @param type cluster may handle key types differently (e.g. redundancy)
   //! @param max_elements the maximum number of elements to return. 0 signifies
   //!   the max_range_elements of the cluster.
   //! @return status of operation
@@ -244,7 +220,7 @@ public:
       const std::shared_ptr<const std::string>& start_key,
       const std::shared_ptr<const std::string>& end_key,
       std::unique_ptr<std::vector<std::string>>& keys,
-      KeyType type, std::size_t max_elements = 0) = 0;
+      std::size_t max_elements = 0) = 0;
 
   //----------------------------------------------------------------------------
   //! Destructor.

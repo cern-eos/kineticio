@@ -282,9 +282,18 @@ public:
   //! results. Will throw if a partial stripe write is detected.
   //!
   //! @param timeout the network timeout
-  //! @param redundancy nData & nParity information
   //--------------------------------------------------------------------------
   kinetic::KineticStatus execute(const std::chrono::seconds& timeout);
+  
+  //--------------------------------------------------------------------------
+  //! Only do a targeted repair operation based on the supplied get operation
+  //! instead of executing the operation vector set up in the constructor. 
+  //! This function is only called by the AdminCluster repair functionality.
+  //!
+  //! @param timeout the network timeout
+  //! @param drive_versions chunk versions expected on the drives 
+  //--------------------------------------------------------------------------
+  bool quick_repair(const std::chrono::seconds& timeout, const StripeOperation_GET& drive_versions);
 
   //--------------------------------------------------------------------------
   //! Constructor, sets up the operation vector.

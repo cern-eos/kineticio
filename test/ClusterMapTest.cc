@@ -21,8 +21,10 @@ using namespace kio;
 SCENARIO("KineticClusterMap Public API.", "[ClusterMap]"){
   GIVEN("A valid path."){
     auto& kcm = kio::kio().cmap();
-    THEN("An existing id returns a cluster."){
+    THEN("Existing cluster ids return a cluster."){
         REQUIRE_NOTHROW(kcm.getCluster("Cluster1"));
+        REQUIRE_NOTHROW(kcm.getCluster("Cluster2"));
+        REQUIRE_NOTHROW(kcm.getCluster("Cluster3"));
     }
     THEN("A nonexisting cluster id returns ENODEV."){
         REQUIRE_THROWS(kcm.getCluster("nonExistingID"));

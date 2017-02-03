@@ -36,7 +36,7 @@ public:
     return _id;
   }
 
-  const ClusterLimits& limits(KeyType type) const
+  const ClusterLimits& limits() const
   {
     return _limits;
   };
@@ -49,8 +49,7 @@ public:
   kinetic::KineticStatus get(
       const std::shared_ptr<const std::string>& key,
       std::shared_ptr<const std::string>& version,
-      std::shared_ptr<const std::string>& value,
-      KeyType type)
+      std::shared_ptr<const std::string>& value)
   {
     version = _version;
     value = _value;
@@ -59,8 +58,7 @@ public:
 
   kinetic::KineticStatus get(
       const std::shared_ptr<const std::string>& key,
-      std::shared_ptr<const std::string>& version,
-      KeyType type)
+      std::shared_ptr<const std::string>& version)
   {
     version = _version;
     return KineticStatus(StatusCode::OK, "");
@@ -70,8 +68,7 @@ public:
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& version,
       const std::shared_ptr<const std::string>& value,
-      std::shared_ptr<const std::string>& version_out,
-      KeyType type)
+      std::shared_ptr<const std::string>& version_out)
   {
     version_out = _version;
     return KineticStatus(StatusCode::OK, "");
@@ -80,8 +77,7 @@ public:
   kinetic::KineticStatus put(
       const std::shared_ptr<const std::string>& key,
       const std::shared_ptr<const std::string>& value,
-      std::shared_ptr<const std::string>& version_out,
-      KeyType type)
+      std::shared_ptr<const std::string>& version_out)
   {
     version_out = _version;
     return KineticStatus(StatusCode::OK, "");
@@ -89,16 +85,14 @@ public:
 
   kinetic::KineticStatus remove(
       const std::shared_ptr<const std::string>& key,
-      const std::shared_ptr<const std::string>& version,
-      KeyType type)
+      const std::shared_ptr<const std::string>& version)
   {
     return KineticStatus(StatusCode::OK, "");
   }
 
   //! See documentation in superclass.
   kinetic::KineticStatus remove(
-      const std::shared_ptr<const std::string>& key,
-      KeyType type)
+      const std::shared_ptr<const std::string>& key)
   {
     return KineticStatus(StatusCode::OK, "");
   }
@@ -112,7 +106,7 @@ public:
       const std::shared_ptr<const std::string>& start_key,
       const std::shared_ptr<const std::string>& end_key,
       std::unique_ptr<std::vector<std::string>>& keys,
-      KeyType type, size_t elements)
+      size_t elements)
   {
     return KineticStatus(StatusCode::OK, "");
   }
@@ -155,8 +149,6 @@ public:
 
 SCENARIO("Cache Performance Test.", "[Cache]")
 {
-  auto& c = SimulatorController::getInstance();
-
   GIVEN("A Cache Object and a mocked FileIo object") {
 
     THEN("go ~") {

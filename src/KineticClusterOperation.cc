@@ -49,6 +49,12 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> KineticClusterOperation
 
   /* Call functions on connections. */
   for (size_t i = 0; i < operations.size(); i++) {
+    
+    /* Skip operations that are already finished. This is most frequently the case in a 2phase get. */
+    if(operations[i].callback->finished()) {
+      continue;
+    }
+    
     try {
       cons[i] = operations[i].connection->get();
     }
@@ -69,7 +75,7 @@ std::map<kinetic::StatusCode, size_t, CompareStatusCode> KineticClusterOperation
   std::chrono::system_clock::time_point timeout_time = std::chrono::system_clock::now() + timeout;
   sync->wait_until(timeout_time);
 
-  /* Timeout any unfinished request. We do not assume entire connection to be in error state because of a timeout */
+  /* Timeout any unfinished request. We do not assume connection to be in error state because of a timeout */
   for (size_t i = 0; i < operations.size(); i++) {
     if (!operations[i].callback->finished()) {
       kio_warning("Network timeout (", timeout, ") for connection ", operations[i].connection->getName());

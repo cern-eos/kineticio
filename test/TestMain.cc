@@ -84,7 +84,7 @@ int main( int argc, char const* argv[] )
     argc--;
   }
 
-  SimulatorController::getInstance().startSimulators(3);
+  SimulatorController::getInstance().startSimulators(12);
   int result = Catch::Session().run( argc, argv );
 
   /* Reset environment variables back to the initial values. */
