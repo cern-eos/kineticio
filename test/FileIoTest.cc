@@ -359,8 +359,6 @@ SCENARIO("FileIo Attribute Integration Test", "[Attr]")
 
     THEN("We can use the attr interface to request health stats") {
       auto health = fileio->attrGet("sys.health");
-      // Using Cluster2: one drive unreachable
-      REQUIRE((health.find("indicator=1") != std::string::npos));
       REQUIRE((health.find("drives_failed=1") != std::string::npos));
       REQUIRE((health.find("redundancy_factor=1") != std::string::npos));
     }
