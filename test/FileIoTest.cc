@@ -28,6 +28,7 @@ SCENARIO("KineticIo Integration Test", "[Io]")
 
   auto& c = SimulatorController::getInstance();
   REQUIRE(c.reset());
+  kio::KineticIoFactory::reloadConfiguration();
 
   int buf_size = 64;
   char write_buf[] = "rcPOa12L3nhN5Cgvsa6Jlr3gn58VhazjA6oSpKacLFYqZBEu0khRwbWtEjge3BUA";
@@ -290,6 +291,7 @@ SCENARIO("FileIo Attribute Integration Test", "[Attr]")
 {
   auto& c = SimulatorController::getInstance();
   REQUIRE(c.reset());
+  kio::KineticIoFactory::reloadConfiguration();
 
   GIVEN("A file is created.") {
     std::string base_url("kinetic://Cluster2/");

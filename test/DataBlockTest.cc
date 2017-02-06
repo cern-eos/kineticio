@@ -28,6 +28,7 @@ SCENARIO("DataBlock integration test.", "[Data]")
 {
   std::list<std::string> clusternames = {"Cluster1", "Cluster2", "Cluster3"};
   auto& c = SimulatorController::getInstance();
+  kio::KineticIoFactory::reloadConfiguration();
   
   for(auto it = clusternames.begin(); it != clusternames.end(); it++) {
     REQUIRE(c.reset());
